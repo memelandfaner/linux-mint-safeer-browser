@@ -15,7 +15,7 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "virtual_keyboard_enabled": False,  # Privzeto izklopljeno kot zahtevano
     "sidebar_enabled": True,            # Trajni vklop/izklop stranske vrstice
-    "sidebar_width": 420,
+    "sidebar_width": 680,
     "search_engine": "google",
     "adblock_enabled": True,
     "homepage": "safeer://home",
@@ -29,7 +29,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         },
         "gmail": {
             "name": "Gmail",
-            "url": "https://mail.google.com",
+            "url": "https://mail.google.com/mail/",
             "icon": "✉️",
             "enabled": True,
             "color": "#ea4335"

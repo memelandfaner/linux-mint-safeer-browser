@@ -436,6 +436,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.sidebar_webview = WebKit2.WebView.new_with_context(self.web_context)
         self.setup_webview_settings(self.sidebar_webview)
         self.sidebar_webview.connect("create", self.on_create_webview)
+        self.sidebar_webview.connect("decide-policy", self.on_decide_policy)
 
         self.sidebar_drawer.pack_start(self.sidebar_webview, True, True, 0)
 
@@ -547,14 +548,40 @@ class SafeerMintBrowser(Gtk.Window):
             if 350 <= drawer_w <= 950:
                 self.config.set("sidebar_width", drawer_w)
 
-    def on_create_webview(self, webview, action):
-        """Preusmeri nova okna/povezave v glavno okno brskalnika."""
-        nav_action = action.get_navigation_action()
-        request = nav_action.get_request()
-        uri = request.get_uri()
-        if uri:
-            self.webview.load_uri(uri)
+    def on_create_webview(self, webview, navigation_action):
+        """Obravnava klice window.open ali povezave target=_blank."""
+        try:
+            req = navigation_action.get_request()
+            uri = req.get_uri() if req else ""
+            if uri:
+                if webview == self.sidebar_webview:
+                    self.sidebar_webview.load_uri(uri)
+                else:
+                    self.webview.load_uri(uri)
+        except Exception as e:
+            print(f"[Create WebView] Napaka: {e}")
         return None
+
+    def on_decide_policy(self, webview, decision, decision_type):
+        """Obravnava zahteve za nova okna (target=_blank) in navigacijo."""
+        if decision_type == WebKit2.PolicyDecisionType.NEW_WINDOW_ACTION:
+            try:
+                nav_action = decision.get_navigation_action()
+                req = nav_action.get_request()
+                uri = req.get_uri() if req else ""
+                if uri:
+                    if webview == self.sidebar_webview:
+                        self.sidebar_webview.load_uri(uri)
+                    else:
+                        self.webview.load_uri(uri)
+                decision.ignore()
+                return True
+            except Exception as e:
+                print(f"[Policy] Napaka pri novem oknu: {e}")
+        elif decision_type == WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
+            decision.use()
+            return True
+        return False
 
     def open_add_page_dialog(self):
         """Dialog za hitro dodajanje nove strani v stransko orodno vrstico."""
@@ -730,6 +757,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.webview.connect("notify::title", self.on_title_changed)
         self.webview.connect("notify::uri", self.on_uri_changed)
         self.webview.connect("create", self.on_create_webview)
+        self.webview.connect("decide-policy", self.on_decide_policy)
 
         # Connect JavaScript Message Handlers
         content_mgr = self.webview.get_user_content_manager()
