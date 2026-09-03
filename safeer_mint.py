@@ -1877,7 +1877,9 @@ class SafeerMintBrowser(Gtk.Window):
             transient_for=self,
             flags=0
         )
-        dialog.set_default_size(720, 520)
+        dialog.set_default_size(880, 640)
+        dialog.set_resizable(True)
+        dialog.set_position(Gtk.WindowPosition.CENTER)
         dialog.add_button("Zapri", Gtk.ResponseType.CLOSE)
 
         content = dialog.get_content_area()
@@ -1888,28 +1890,30 @@ class SafeerMintBrowser(Gtk.Window):
         content.set_margin_right(12)
 
         notebook = Gtk.Notebook()
+        notebook.set_vexpand(True)
+        notebook.set_hexpand(True)
         content.pack_start(notebook, True, True, 0)
 
         # -------------------------------------------------------------
-        # ZAVIHEK 1: 🎨 Teme & Videz
+        # ZAVIHEK 1: 🎨 Teme & Barve
         # -------------------------------------------------------------
-        themes_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        themes_box.set_margin_top(12)
-        themes_box.set_margin_bottom(12)
-        themes_box.set_margin_left(12)
-        themes_box.set_margin_right(12)
+        themes_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        themes_box.set_margin_top(16)
+        themes_box.set_margin_bottom(16)
+        themes_box.set_margin_start(16)
+        themes_box.set_margin_end(16)
 
-        lbl_theme = Gtk.Label(label="<b>Izbira barvne teme brskalnika:</b>")
+        lbl_theme = Gtk.Label(label="<b>Izberite barvno temo brskalnika:</b>")
         lbl_theme.set_use_markup(True)
         lbl_theme.set_xalign(0.0)
         themes_box.pack_start(lbl_theme, False, False, 0)
 
         # Theme Radio Buttons
         cur_theme = self.config.get("theme", "midnight")
-        radio_midnight = Gtk.RadioButton.new_with_label(None, "🌙 Firefox Midnight (Eleganten temen videz)")
-        radio_mint = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "🍃 Linux Mint Emerald (Zeleni poudarki)")
-        radio_neon = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "⚡ Cyberpunk Neon (Cian & Vijolična)")
-        radio_amoled = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "🖤 Pure AMOLED Black (Globoka črna)")
+        radio_midnight = Gtk.RadioButton.new_with_label(None, "🌙 Firefox Midnight — Eleganten temen videz z mehkim kontrastom (privzeto)")
+        radio_mint = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "🍃 Linux Mint Emerald — Značilni sveži zeleni poudarki v slogu Linux Mint namizja")
+        radio_neon = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "⚡ Cyberpunk Neon — Futuristična tema s cian modro in neonsko vijolično barvo")
+        radio_amoled = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "🖤 Pure AMOLED Black — Globoka čista črna barva (#000000) za maksimalen kontrast")
 
         if cur_theme == "mint":
             radio_mint.set_active(True)
@@ -1930,41 +1934,122 @@ class SafeerMintBrowser(Gtk.Window):
         radio_neon.connect("toggled", on_theme_changed, "neon")
         radio_amoled.connect("toggled", on_theme_changed, "amoled")
 
-        themes_box.pack_start(radio_midnight, False, False, 2)
-        themes_box.pack_start(radio_mint, False, False, 2)
-        themes_box.pack_start(radio_neon, False, False, 2)
-        themes_box.pack_start(radio_amoled, False, False, 2)
+        themes_box.pack_start(radio_midnight, False, False, 4)
+        themes_box.pack_start(radio_mint, False, False, 4)
+        themes_box.pack_start(radio_neon, False, False, 4)
+        themes_box.pack_start(radio_amoled, False, False, 4)
 
-        sep_css = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        themes_box.pack_start(sep_css, False, False, 6)
+        theme_info = Gtk.Label(label="<i>Izbrana barvna tema se takoj v živo uveljavi po vseh odprtih zavihkih in oknih brskalnika.</i>")
+        theme_info.set_use_markup(True)
+        theme_info.set_xalign(0.0)
+        themes_box.pack_start(theme_info, False, False, 10)
 
-        lbl_css = Gtk.Label(label="<b>Lasten CSS slog (userChrome.css za napredne uporabnike):</b>")
-        lbl_css.set_use_markup(True)
-        lbl_css.set_xalign(0.0)
-        themes_box.pack_start(lbl_css, False, False, 0)
+        notebook.append_page(themes_box, Gtk.Label(label="🎨 Barvne Teme"))
 
+        # -------------------------------------------------------------
+        # ZAVIHEK 2: 🖌️ Lasten CSS (userChrome.css) - VELIK IN PROSTOREN!
+        # -------------------------------------------------------------
+        css_page_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        css_page_box.set_margin_top(14)
+        css_page_box.set_margin_bottom(14)
+        css_page_box.set_margin_start(16)
+        css_page_box.set_margin_end(16)
+        css_page_box.set_vexpand(True)
+        css_page_box.set_hexpand(True)
+
+        css_header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        lbl_css_title = Gtk.Label(label="<b>Lasten CSS slog (userChrome.css za napredne uporabnike):</b>")
+        lbl_css_title.set_use_markup(True)
+        lbl_css_title.set_xalign(0.0)
+        css_header_box.pack_start(lbl_css_title, True, True, 0)
+        css_page_box.pack_start(css_header_box, False, False, 0)
+
+        lbl_css_desc = Gtk.Label(label="Tukaj imate neomejen prostor za vnos CSS-ja za prilagoditev barv, robov, pisav ali videza katerega koli elementa.")
+        lbl_css_desc.set_xalign(0.0)
+        css_page_box.pack_start(lbl_css_desc, False, False, 0)
+
+        # Snippets Bar
+        snippets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        lbl_snip = Gtk.Label(label="Hitri vzorci:")
+        snippets_box.pack_start(lbl_snip, False, False, 0)
+
+        btn_snip_rounded = Gtk.Button(label="+ Zaobljeni zavihki")
+        btn_snip_rounded.get_style_context().add_class("nav-btn")
+        btn_snip_font = Gtk.Button(label="+ Večja pisava")
+        btn_snip_font.get_style_context().add_class("nav-btn")
+        btn_snip_glow = Gtk.Button(label="+ Cian sijaj")
+        btn_snip_glow.get_style_context().add_class("nav-btn")
+        btn_snip_compact = Gtk.Button(label="+ Kompaktna vrstica")
+        btn_snip_compact.get_style_context().add_class("nav-btn")
+
+        snippets_box.pack_start(btn_snip_rounded, False, False, 0)
+        snippets_box.pack_start(btn_snip_font, False, False, 0)
+        snippets_box.pack_start(btn_snip_glow, False, False, 0)
+        snippets_box.pack_start(btn_snip_compact, False, False, 0)
+        css_page_box.pack_start(snippets_box, False, False, 2)
+
+        # Spacious Scrolled Code Editor
         css_scroll = Gtk.ScrolledWindow()
         css_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        css_scroll.set_min_content_height(140)
+        css_scroll.set_vexpand(True)
+        css_scroll.set_hexpand(True)
+        css_scroll.set_min_content_height(320)
 
         css_tv = Gtk.TextView()
         css_tv.get_style_context().add_class("code-editor")
-        css_buf = css_tv.get_buffer()
-        css_buf.set_text(self.config.get("custom_css", ""))
-        css_scroll.add(css_tv)
-        themes_box.pack_start(css_scroll, True, True, 0)
+        css_tv.set_monospace(True)
+        css_tv.set_vexpand(True)
+        css_tv.set_hexpand(True)
+        css_tv.set_left_margin(14)
+        css_tv.set_right_margin(14)
+        css_tv.set_top_margin(12)
+        css_tv.set_bottom_margin(12)
 
-        btn_apply_css = Gtk.Button(label="💾 Shrani in uveljavi lasten CSS")
+        css_buf = css_tv.get_buffer()
+        existing_css = self.config.get("custom_css", "")
+        if not existing_css:
+            existing_css = "/* Safeer Browser — Uporabniški lasten CSS (userChrome.css)\n   Primeri pravil, ki jih lahko spremenite:\n\n   .firefox-tab { border-radius: 14px 14px 0 0; }\n   .ff-url-entry { font-size: 17.5px; }\n   .ff-url-container { border-radius: 12px; }\n*/\n"
+        css_buf.set_text(existing_css)
+        css_scroll.add(css_tv)
+        css_page_box.pack_start(css_scroll, True, True, 0)
+
+        # Snippet insertion logic
+        def insert_snippet(code):
+            end_iter = css_buf.get_end_iter()
+            css_buf.insert(end_iter, "\n" + code + "\n")
+            css_tv.grab_focus()
+
+        btn_snip_rounded.connect("clicked", lambda b: insert_snippet(".firefox-tab {\n    border-radius: 14px 14px 0 0;\n}"))
+        btn_snip_font.connect("clicked", lambda b: insert_snippet(".ff-url-entry {\n    font-size: 18px;\n    font-weight: 700;\n}"))
+        btn_snip_glow.connect("clicked", lambda b: insert_snippet(".ff-url-container:focus-within {\n    border-color: #00ddff;\n    box-shadow: 0 0 12px rgba(0, 221, 255, 0.5);\n}"))
+        btn_snip_compact.connect("clicked", lambda b: insert_snippet(".tab-toolbar, .nav-toolbar {\n    padding: 2px 8px;\n    min-height: 34px;\n}"))
+
+        # Bottom Actions Bar
+        css_actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        btn_apply_css = Gtk.Button(label="💾 Shrani in takoj uveljavi lasten CSS")
         btn_apply_css.get_style_context().add_class("nav-btn")
         def on_save_css(b):
             start, end = css_buf.get_bounds()
             custom_code = css_buf.get_text(start, end, True)
             self.config.set("custom_css", custom_code)
             self.apply_css()
+            btn_apply_css.set_label("✅ Uspešno uveljavljeno!")
+            GLib.timeout_add(1800, lambda: btn_apply_css.set_label("💾 Shrani in takoj uveljavi lasten CSS"))
         btn_apply_css.connect("clicked", on_save_css)
-        themes_box.pack_start(btn_apply_css, False, False, 0)
+        css_actions_box.pack_start(btn_apply_css, False, False, 0)
 
-        notebook.append_page(themes_box, Gtk.Label(label="🎨 Teme & Lasten CSS"))
+        btn_clear_css = Gtk.Button(label="🗑️ Počisti kodo")
+        btn_clear_css.get_style_context().add_class("btn-delete")
+        def on_clear_css(b):
+            css_buf.set_text("")
+            self.config.set("custom_css", "")
+            self.apply_css()
+        btn_clear_css.connect("clicked", on_clear_css)
+        css_actions_box.pack_end(btn_clear_css, False, False, 0)
+
+        css_page_box.pack_start(css_actions_box, False, False, 0)
+
+        notebook.append_page(css_page_box, Gtk.Label(label="🖌️ Lasten CSS"))
 
         # -------------------------------------------------------------
         # ZAVIHEK 2: 🧩 Uporabniške skripte (UserScripts)
