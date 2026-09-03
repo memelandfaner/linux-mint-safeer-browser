@@ -48,8 +48,13 @@ DOCK_WIDTH = 54
 
 class SafeerMintBrowser(Gtk.Window):
     def __init__(self, initial_url=None):
-        super().__init__(title="Safeer Browser — Linux Mint Edition")
+        super().__init__()
         self.config = ConfigManager()
+
+        # Initialize configured interface language
+        configured_lang = self.config.get("language", "auto")
+        set_language(configured_lang)
+        self.set_title(f"{t('app_title')} — Linux Mint Edition")
 
         # Restore remembered window geometry or use 1280x820
         win_w = self.config.get("window_width", 1280)
@@ -748,7 +753,7 @@ class SafeerMintBrowser(Gtk.Window):
         # New Tab Button (+)
         self.btn_new_tab = Gtk.Button(label="+")
         self.btn_new_tab.get_style_context().add_class("new-tab-btn")
-        self.btn_new_tab.set_tooltip_text("Odpri nov zavihek (Ctrl + T)")
+        self.btn_new_tab.set_tooltip_text(f"{t('new_tab')} (Ctrl + T)")
         self.btn_new_tab.connect("clicked", lambda b: self.new_tab())
         self.tab_bar.pack_start(self.btn_new_tab, False, False, 0)
 
@@ -761,28 +766,28 @@ class SafeerMintBrowser(Gtk.Window):
         # Sidebar button (▤)
         self.btn_sidebar = Gtk.Button(label="▤")
         self.btn_sidebar.get_style_context().add_class("ff-nav-btn")
-        self.btn_sidebar.set_tooltip_text("Stranska orodna vrstica (F4)")
+        self.btn_sidebar.set_tooltip_text(f"{t('sidebar_display')} (F4)")
         self.btn_sidebar.connect("clicked", lambda b: self.toggle_sidebar_visibility())
         self.nav_bar.pack_start(self.btn_sidebar, False, False, 0)
 
         # Back (←)
         self.btn_back = Gtk.Button(label="←")
         self.btn_back.get_style_context().add_class("ff-nav-btn")
-        self.btn_back.set_tooltip_text("Nazaj (Alt + Levo)")
+        self.btn_back.set_tooltip_text(f"{t('back')} (Alt + ←)")
         self.btn_back.connect("clicked", lambda b: self.get_active_webview() and self.get_active_webview().go_back())
         self.nav_bar.pack_start(self.btn_back, False, False, 0)
 
         # Forward (→)
         self.btn_forward = Gtk.Button(label="→")
         self.btn_forward.get_style_context().add_class("ff-nav-btn")
-        self.btn_forward.set_tooltip_text("Naprej (Alt + Desno)")
+        self.btn_forward.set_tooltip_text(f"{t('forward')} (Alt + →)")
         self.btn_forward.connect("clicked", lambda b: self.get_active_webview() and self.get_active_webview().go_forward())
         self.nav_bar.pack_start(self.btn_forward, False, False, 0)
 
         # Reload (↻)
         self.btn_reload = Gtk.Button(label="↻")
         self.btn_reload.get_style_context().add_class("ff-nav-btn")
-        self.btn_reload.set_tooltip_text("Osveži stran (F5 / Ctrl + R)")
+        self.btn_reload.set_tooltip_text(f"{t('reload')} (F5 / Ctrl + R)")
         self.btn_reload.connect("clicked", lambda b: self.get_active_webview() and self.get_active_webview().reload())
         self.nav_bar.pack_start(self.btn_reload, False, False, 0)
 
@@ -793,7 +798,7 @@ class SafeerMintBrowser(Gtk.Window):
         # Tracking protection shield inside URL bar
         self.btn_shield = Gtk.Button(label="🛡️")
         self.btn_shield.get_style_context().add_class("ff-shield-btn")
-        self.btn_shield.set_tooltip_text("Safeer Cyber Shield: Aktivna zaščita pred sledilci in oglasom")
+        self.btn_shield.set_tooltip_text(f"{t('app_title')} Cyber Shield: {t('adblock_active')}")
         self.btn_shield.connect("clicked", lambda b: self.show_shield_status_dialog())
         self.url_box.pack_start(self.btn_shield, False, False, 0)
 
@@ -805,7 +810,7 @@ class SafeerMintBrowser(Gtk.Window):
         # Clean URL Entry with large Ubuntu font
         self.url_entry = Gtk.Entry()
         self.url_entry.get_style_context().add_class("ff-url-entry")
-        self.url_entry.set_placeholder_text("Iščite ali vnesite naslov spletnega mesta...")
+        self.url_entry.set_placeholder_text(t('search_placeholder'))
         self.url_entry.connect("activate", self.on_url_activate)
         self.url_entry.connect("focus-in-event", self.on_url_focus_in)
         self.url_entry.connect("focus-out-event", self.on_url_focus_out)
@@ -819,28 +824,28 @@ class SafeerMintBrowser(Gtk.Window):
         self.btn_dark_mode.get_style_context().add_class("ff-nav-btn")
         if is_dark:
             self.btn_dark_mode.get_style_context().add_class("active")
-        self.btn_dark_mode.set_tooltip_text("Prisili temni način (Force Dark Mode) — " + ("Vklopljen" if is_dark else "Izklopljen"))
+        self.btn_dark_mode.set_tooltip_text(f"{t('force_dark_mode')}")
         self.btn_dark_mode.connect("clicked", self.toggle_dark_mode)
         self.nav_bar.pack_start(self.btn_dark_mode, False, False, 0)
 
         # Downloads Button (📥)
         self.btn_downloads = Gtk.Button(label="📥")
         self.btn_downloads.get_style_context().add_class("ff-nav-btn")
-        self.btn_downloads.set_tooltip_text("Prenosi datotek (Ctrl + J)")
+        self.btn_downloads.set_tooltip_text(f"{t('downloads')} (Ctrl + J)")
         self.btn_downloads.connect("clicked", lambda b: self.open_downloads_dialog())
         self.nav_bar.pack_start(self.btn_downloads, False, False, 0)
 
         # History Button (🕒)
         self.btn_history = Gtk.Button(label="🕒")
         self.btn_history.get_style_context().add_class("ff-nav-btn")
-        self.btn_history.set_tooltip_text("Zgodovina brskanja (Ctrl + H)")
+        self.btn_history.set_tooltip_text(f"{t('history')} (Ctrl + H)")
         self.btn_history.connect("clicked", lambda b: self.open_history_dialog())
         self.nav_bar.pack_start(self.btn_history, False, False, 0)
 
         # Customizer & Scripts Button (🧩)
         self.btn_customizer = Gtk.Button(label="🧩")
         self.btn_customizer.get_style_context().add_class("ff-nav-btn")
-        self.btn_customizer.set_tooltip_text("Prilagoditev videza & Uporabniške skripte (Tampermonkey)")
+        self.btn_customizer.set_tooltip_text(f"{t('customizer_title')}")
         self.btn_customizer.connect("clicked", lambda b: self.open_customizer_dialog())
         self.nav_bar.pack_start(self.btn_customizer, False, False, 0)
 
@@ -1220,8 +1225,7 @@ class SafeerMintBrowser(Gtk.Window):
             sel_id = cb.get_active_id() or "auto"
             self.config.set("language", sel_id)
             set_language(sel_id)
-            self.update_tab_titles_for_language()
-            self.broadcast_language_update()
+            self.update_ui_language()
 
         combo_lang.connect("changed", on_lang_changed)
         box.pack_start(combo_lang, False, False, 0)
@@ -1743,10 +1747,13 @@ class SafeerMintBrowser(Gtk.Window):
                 if t["id"] == tab_id:
                     t["uri"] = uri
                     if "ui/home.html" in uri:
-                        t["title"] = "Safeer Domača Stran"
+                        h_title = t("home_title")
+                        t["title"] = h_title
                         t["icon"] = "🍃"
-                        t["title_label"].set_text("Safeer Domača Stran")
-                        t["icon_label"].set_text("🍃")
+                        if "title_label" in t and t["title_label"]:
+                            t["title_label"].set_text(h_title)
+                        if "icon_label" in t and t["icon_label"]:
+                            t["icon_label"].set_text("🍃")
                         # Inject live custom portals into home.html
                         portals = self.config.get_portals()
                         portals_json = json.dumps(portals)
@@ -3056,8 +3063,7 @@ class SafeerMintBrowser(Gtk.Window):
                 lang = data.get("language", "sl")
                 self.config.set("language", lang)
                 set_language(lang)
-                self.update_tab_titles_for_language()
-                self.broadcast_language_update()
+                self.update_ui_language()
             elif action == "open_sidebar":
                 service = data.get("service")
                 if service == "settings":
@@ -3072,6 +3078,47 @@ class SafeerMintBrowser(Gtk.Window):
                     self.toggle_sidebar_panel(service)
         except Exception as e:
             print(f"[IPC] Napaka: {e}")
+
+    def update_ui_language(self):
+        """Posodobi celotno orodno vrstico, orodne namige, naslove in zavihke ob menjavi jezika."""
+        self.set_title(f"{t('app_title')} — Linux Mint Edition")
+
+        if hasattr(self, 'btn_new_tab'):
+            self.btn_new_tab.set_tooltip_text(f"{t('new_tab')} (Ctrl + T)")
+        if hasattr(self, 'btn_sidebar'):
+            self.btn_sidebar.set_tooltip_text(f"{t('sidebar_display')} (F4)")
+        if hasattr(self, 'btn_back'):
+            self.btn_back.set_tooltip_text(f"{t('back')} (Alt + ←)")
+        if hasattr(self, 'btn_forward'):
+            self.btn_forward.set_tooltip_text(f"{t('forward')} (Alt + →)")
+        if hasattr(self, 'btn_reload'):
+            self.btn_reload.set_tooltip_text(f"{t('reload')} (F5 / Ctrl + R)")
+        if hasattr(self, 'btn_shield'):
+            self.btn_shield.set_tooltip_text(f"{t('app_title')} Cyber Shield: {t('adblock_active')}")
+        if hasattr(self, 'url_entry'):
+            self.url_entry.set_placeholder_text(t('search_placeholder'))
+        if hasattr(self, 'btn_dark_mode'):
+            self.btn_dark_mode.set_tooltip_text(f"{t('force_dark_mode')}")
+        if hasattr(self, 'btn_downloads'):
+            self.btn_downloads.set_tooltip_text(f"{t('downloads')} (Ctrl + J)")
+        if hasattr(self, 'btn_history'):
+            self.btn_history.set_tooltip_text(f"{t('history')} (Ctrl + H)")
+        if hasattr(self, 'btn_customizer'):
+            self.btn_customizer.set_tooltip_text(f"{t('customizer_title')}")
+        if hasattr(self, 'btn_keyboard'):
+            self.btn_keyboard.set_tooltip_text(f"{t('tab_themes')}")
+
+        if hasattr(self, 'btn_back_drawer'):
+            self.btn_back_drawer.set_tooltip_text(f"{t('back')}")
+        if hasattr(self, 'btn_reload_drawer'):
+            self.btn_reload_drawer.set_tooltip_text(f"{t('reload')}")
+        if hasattr(self, 'btn_popout'):
+            self.btn_popout.set_tooltip_text(t('open_file'))
+        if hasattr(self, 'btn_close_drawer'):
+            self.btn_close_drawer.set_tooltip_text(t('close'))
+
+        self.update_tab_titles_for_language()
+        self.broadcast_language_update()
 
     def update_tab_titles_for_language(self):
         """Posodobi naslove zavihkov in okna v skladu z novim jezikom."""
