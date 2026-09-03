@@ -197,6 +197,70 @@ ABUSE_CH_BLOCKED_DOMAINS = {
     "lumma-stealer-delivery.top"
 }
 
+MESSENGER_SIDEBAR_SCRIPT = """
+/* 🛡️ Safeer Linux Mint - Adaptive Sidebar Layout for Messenger */
+(function() {
+    if (window._safeer_msg_adapter) return;
+    window._safeer_msg_adapter = true;
+
+    var style = document.createElement('style');
+    style.id = 'safeer-messenger-responsive-style';
+    (document.head || document.documentElement).appendChild(style);
+
+    function adaptMessenger() {
+        var isMessenger = window.location.hostname.indexOf('messenger.com') !== -1 || window.location.pathname.indexOf('/messages') !== -1;
+        if (!isMessenger) return;
+
+        var width = window.innerWidth;
+        var isChatOpen = window.location.pathname.indexOf('/t/') !== -1;
+
+        if (width >= 640) {
+            if (style.textContent !== '') style.textContent = '';
+            var existingBackBtn = document.getElementById('safeer-msg-back-btn');
+            if (existingBackBtn) existingBackBtn.style.display = 'none';
+            return;
+        }
+
+        // Narrow mode (< 640px): 1-column responsive layout
+        if (isChatOpen) {
+            style.textContent = [
+                'div[role="navigation"], [aria-label="Klepeti"], [aria-label="Chats"], div[data-pagelet="LeftRail"] { display: none !important; }',
+                'div[role="main"] { width: 100vw !important; min-width: 100vw !important; max-width: 100vw !important; flex: 1 1 100% !important; display: flex !important; }',
+                '#safeer-msg-back-btn { display: flex !important; }'
+            ].join(' ');
+        } else {
+            style.textContent = [
+                'div[role="navigation"], [aria-label="Klepeti"], [aria-label="Chats"], div[data-pagelet="LeftRail"] { width: 100vw !important; min-width: 100vw !important; max-width: 100vw !important; flex: 1 1 100% !important; display: flex !important; }',
+                'div[role="main"] { display: none !important; }',
+                '#safeer-msg-back-btn { display: none !important; }'
+            ].join(' ');
+        }
+
+        if (isChatOpen) {
+            var btn = document.getElementById('safeer-msg-back-btn');
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.id = 'safeer-msg-back-btn';
+                btn.textContent = '◀ Klepeti';
+                btn.style.cssText = 'position:fixed; top:12px; left:12px; z-index:999999; background:rgba(13,21,39,0.92); color:#00d2ff; border:1px solid rgba(0,210,255,0.4); border-radius:8px; padding:6px 12px; font-weight:700; font-size:12px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.6); backdrop-filter:blur(8px);';
+                btn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.location.href = 'https://www.messenger.com/';
+                };
+                document.body.appendChild(btn);
+            } else {
+                btn.style.display = 'flex';
+            }
+        }
+    }
+
+    setInterval(adaptMessenger, 250);
+    window.addEventListener('resize', adaptMessenger);
+    window.addEventListener('popstate', adaptMessenger);
+})();
+"""
+
 
 def is_threat_domain(url: str) -> bool:
     """Checks if the given URL belongs to a known malicious C2, malware, or phishing domain."""
@@ -205,3 +269,4 @@ def is_threat_domain(url: str) -> bool:
         if threat in url_lower:
             return True
     return False
+

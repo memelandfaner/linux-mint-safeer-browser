@@ -27,6 +27,7 @@ from core.config import ConfigManager
 from core.adblock import (
     YOUTUBE_ADBLOCK_SCRIPT,
     GENERIC_COSMETIC_SCRIPT,
+    MESSENGER_SIDEBAR_SCRIPT,
     is_threat_domain
 )
 
@@ -412,6 +413,13 @@ class SafeerMintBrowser(Gtk.Window):
         btn_popout.connect("clicked", self.popout_sidebar_to_main)
         self.drawer_header.pack_start(btn_popout, False, False, 0)
 
+        # Expand / Shrink drawer width toggle (↔️)
+        self.btn_expand_drawer = Gtk.Button(label="↔️")
+        self.btn_expand_drawer.set_tooltip_text("Razširi predal (720px) za sočasen celovit pogled klepeta ali skrči (420px)")
+        self.btn_expand_drawer.get_style_context().add_class("nav-btn")
+        self.btn_expand_drawer.connect("clicked", self.toggle_drawer_width)
+        self.drawer_header.pack_start(self.btn_expand_drawer, False, False, 0)
+
         # Close button in drawer
         btn_close_drawer = Gtk.Button(label="✕")
         btn_close_drawer.set_tooltip_text("Zapri stranski zavihek")
@@ -425,6 +433,18 @@ class SafeerMintBrowser(Gtk.Window):
         self.sidebar_webview = WebKit2.WebView.new_with_context(self.web_context)
         self.setup_webview_settings(self.sidebar_webview)
         self.sidebar_webview.connect("create", self.on_create_webview)
+
+        # Inject Messenger adaptive 1-column/2-column layout script
+        sidebar_content_mgr = self.sidebar_webview.get_user_content_manager()
+        msg_script = WebKit2.UserScript(
+            MESSENGER_SIDEBAR_SCRIPT,
+            WebKit2.UserContentInjectedFrames.ALL_FRAMES,
+            WebKit2.UserScriptInjectionTime.END,
+            ["*://*.messenger.com/*", "*://*.facebook.com/*"],
+            None
+        )
+        sidebar_content_mgr.add_script(msg_script)
+
         self.sidebar_drawer.pack_start(self.sidebar_webview, True, True, 0)
 
         self.sidebar_box.pack_start(self.sidebar_drawer, True, True, 0)
@@ -475,6 +495,18 @@ class SafeerMintBrowser(Gtk.Window):
         if uri:
             self.webview.load_uri(uri)
             self.close_sidebar_panel()
+
+    def toggle_drawer_width(self, widget=None):
+        """Preklopi med kompaktno (420px) in razširjeno (740px) širino predala."""
+        current_w = self.config.get("sidebar_width", 420)
+        if current_w < 550:
+            new_w = 740
+            self.btn_expand_drawer.set_label("◀▶")
+        else:
+            new_w = 420
+            self.btn_expand_drawer.set_label("↔️")
+        self.config.set("sidebar_width", new_w)
+        self.content_paned.set_position(DOCK_WIDTH + new_w)
 
     def toggle_sidebar_panel(self, service_id: str):
         # If clicking the currently open service, toggle it closed
