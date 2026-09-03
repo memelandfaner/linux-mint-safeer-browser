@@ -176,34 +176,39 @@ class SafeerMintBrowser(Gtk.Window):
         .tab-toolbar {
             background-color: #1c1b22;
             background: #1c1b22;
-            padding: 4px 10px 0px 10px;
-            min-height: 38px;
+            padding: 5px 12px 0px 12px;
+            min-height: 40px;
         }
         .firefox-tab {
             background-color: #2b2a33;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-bottom: none;
             border-radius: 8px 8px 0 0;
-            padding: 4px 12px;
-            min-width: 170px;
+            padding: 6px 14px;
+            min-width: 220px;
             transition: all 120ms ease;
         }
+        .tab-icon {
+            font-size: 16px;
+            color: #ffffff;
+            margin-right: 4px;
+        }
         .tab-title {
-            color: #fbfbfe;
-            font-size: 13px;
-            font-weight: 500;
-            margin: 0 6px;
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0 4px;
         }
         .tab-close-btn {
             background: transparent;
             border: none;
             border-radius: 4px;
             color: #9ca3af;
-            padding: 1px 4px;
-            font-size: 11px;
+            padding: 2px 6px;
+            font-size: 13px;
         }
         .tab-close-btn:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.18);
             color: #ffffff;
         }
         .new-tab-btn {
@@ -211,9 +216,10 @@ class SafeerMintBrowser(Gtk.Window):
             border: none;
             border-radius: 6px;
             color: #cfcfd8;
-            padding: 2px 9px;
-            font-size: 18px;
-            margin-left: 4px;
+            padding: 2px 10px;
+            font-size: 20px;
+            font-weight: 500;
+            margin-left: 6px;
         }
         .new-tab-btn:hover {
             background: rgba(255, 255, 255, 0.1);
@@ -225,28 +231,28 @@ class SafeerMintBrowser(Gtk.Window):
             background-color: #1c1b22;
             background: #1c1b22;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 4px 10px 7px 10px;
-            min-height: 42px;
+            padding: 6px 12px 8px 12px;
+            min-height: 48px;
         }
         .ff-nav-btn {
             background: transparent;
             border: none;
             border-radius: 6px;
             color: #cfcfd8;
-            padding: 5px 9px;
-            margin-right: 2px;
-            font-size: 15px;
+            padding: 6px 10px;
+            margin-right: 3px;
+            font-size: 18px;
             font-weight: 500;
-            min-height: 32px;
-            min-width: 32px;
+            min-height: 38px;
+            min-width: 38px;
             transition: all 120ms ease;
         }
         .ff-nav-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background-color: rgba(255, 255, 255, 0.1);
             color: #ffffff;
         }
         .ff-nav-btn.active {
-            background: rgba(255, 255, 255, 0.15);
+            background-color: rgba(255, 255, 255, 0.15);
             color: #00ddff;
         }
 
@@ -254,41 +260,45 @@ class SafeerMintBrowser(Gtk.Window):
         .ff-url-container {
             background-color: #2b2a33;
             background: #2b2a33;
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 8px;
-            padding: 2px 10px;
+            padding: 2px 12px;
+            min-height: 42px;
             transition: all 150ms ease;
         }
         .ff-url-container:focus-within {
             border-color: #00ddff;
             background-color: #1c1b22;
-            box-shadow: 0 0 0 2px rgba(0, 221, 255, 0.3);
+            box-shadow: 0 0 0 2px rgba(0, 221, 255, 0.35);
         }
         .ff-url-entry {
             background: transparent;
+            background-color: transparent;
             border: none;
             box-shadow: none;
-            color: #fbfbfe;
-            font-family: "Ubuntu", -apple-system, sans-serif;
-            font-size: 14px;
-            font-weight: 400;
-            padding: 5px 6px;
+            color: #ffffff;
+            font-family: "Ubuntu", "Ubuntu Sans", -apple-system, sans-serif;
+            font-size: 16.5px;
+            font-weight: 600;
+            padding: 6px 8px;
+            min-height: 36px;
         }
         .ff-shield-btn {
             background: transparent;
             border: none;
-            padding: 2px 6px;
+            padding: 4px 8px;
             color: #00ddff;
-            font-size: 14px;
-            border-radius: 4px;
+            font-size: 17px;
+            border-radius: 6px;
         }
         .ff-shield-btn:hover {
             background: rgba(0, 221, 255, 0.15);
         }
         .ff-security-icon {
-            color: #9ca3af;
-            font-size: 13px;
-            margin-right: 4px;
+            color: #a3a3b2;
+            font-size: 16px;
+            margin-right: 8px;
+            margin-left: 4px;
         }
 
         /* Left Dock Bar */
@@ -367,14 +377,16 @@ class SafeerMintBrowser(Gtk.Window):
         # Active Tab (matches Mozilla screenshot: Favicon + Title + Close x)
         self.active_tab = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.active_tab.get_style_context().add_class("firefox-tab")
+        self.active_tab.set_size_request(240, 36)
 
         self.tab_icon = Gtk.Label(label="🌐")
+        self.tab_icon.get_style_context().add_class("tab-icon")
         self.active_tab.pack_start(self.tab_icon, False, False, 2)
 
         self.tab_title_label = Gtk.Label(label="Safeer Domača Stran")
         self.tab_title_label.get_style_context().add_class("tab-title")
         self.tab_title_label.set_ellipsize(Pango.EllipsizeMode.END)
-        self.tab_title_label.set_max_width_chars(25)
+        self.tab_title_label.set_xalign(0.0)
         self.active_tab.pack_start(self.tab_title_label, True, True, 2)
 
         self.tab_close_btn = Gtk.Button(label="✕")
@@ -395,7 +407,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.top_bar.pack_start(self.tab_bar, False, False, 0)
 
         # 2. Tier 2: Firefox Navigation Bar
-        self.nav_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.nav_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.nav_bar.get_style_context().add_class("nav-toolbar")
 
         # Sidebar button (▤)
@@ -427,7 +439,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.nav_bar.pack_start(self.btn_reload, False, False, 0)
 
         # 3. Firefox Awesomebar / URL Box
-        self.url_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.url_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.url_box.get_style_context().add_class("ff-url-container")
 
         # Tracking protection shield inside URL bar
@@ -442,11 +454,13 @@ class SafeerMintBrowser(Gtk.Window):
         self.security_icon.get_style_context().add_class("ff-security-icon")
         self.url_box.pack_start(self.security_icon, False, False, 0)
 
-        # Clean URL Entry with Ubuntu font
+        # Clean URL Entry with large Ubuntu font
         self.url_entry = Gtk.Entry()
         self.url_entry.get_style_context().add_class("ff-url-entry")
         self.url_entry.set_placeholder_text("Iščite ali vnesite naslov spletnega mesta...")
         self.url_entry.connect("activate", self.on_url_activate)
+        self.url_entry.connect("focus-in-event", self.on_url_focus_in)
+        self.url_entry.connect("focus-out-event", self.on_url_focus_out)
         self.url_box.pack_start(self.url_entry, True, True, 0)
 
         self.nav_bar.pack_start(self.url_box, True, True, 4)
@@ -1057,6 +1071,35 @@ class SafeerMintBrowser(Gtk.Window):
         dialog.run()
         dialog.destroy()
 
+    def format_clean_url(self, uri):
+        """Pretvori tehnični URL v čist, velik in jasno viden naslov kot v Mozilli Firefox."""
+        if not uri or "ui/home.html" in uri:
+            return "safeer://home"
+        try:
+            parsed = urllib.parse.urlparse(uri)
+            if parsed.scheme in ("http", "https"):
+                path = parsed.path if parsed.path and parsed.path != "/" else ""
+                query = f"?{parsed.query}" if parsed.query else ""
+                return f"{parsed.netloc}{path}{query}"
+        except Exception:
+            pass
+        return uri
+
+    def on_url_focus_in(self, entry, event):
+        """Ob kliku v URL vrstico prikaži polni naslov in označi vse besedilo za urejanje."""
+        cur_uri = self.webview.get_uri() or ""
+        if "ui/home.html" not in cur_uri and cur_uri:
+            entry.set_text(cur_uri)
+            GLib.idle_add(entry.select_region, 0, -1)
+        return False
+
+    def on_url_focus_out(self, entry, event):
+        """Ko uporabnik klikne ven, vrni jasen, čist in berljiv naslov kot v Firefoxu."""
+        cur_uri = self.webview.get_uri() or ""
+        if "ui/home.html" not in cur_uri and cur_uri:
+            entry.set_text(self.format_clean_url(cur_uri))
+        return False
+
     def on_load_changed(self, webview, event):
         if event == WebKit2.LoadEvent.FINISHED:
             uri = webview.get_uri() or ""
@@ -1066,7 +1109,7 @@ class SafeerMintBrowser(Gtk.Window):
                 self.tab_icon.set_text("🍃")
                 self.security_icon.set_text("🎚️")
             else:
-                self.url_entry.set_text(uri)
+                self.url_entry.set_text(self.format_clean_url(uri))
                 parsed = urllib.parse.urlparse(uri)
                 if parsed.scheme == "https":
                     self.security_icon.set_text("🔒")
@@ -1093,7 +1136,8 @@ class SafeerMintBrowser(Gtk.Window):
     def on_uri_changed(self, webview, prop):
         uri = webview.get_uri()
         if uri and "ui/home.html" not in uri:
-            self.url_entry.set_text(uri)
+            if not self.url_entry.is_focus():
+                self.url_entry.set_text(self.format_clean_url(uri))
 
     def on_js_message(self, content_mgr, js_result):
         try:
