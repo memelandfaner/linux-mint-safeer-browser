@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
 Safeer Browser for Linux Mint - Configuration Manager
-Manages user preferences, sidebar integrations, and virtual keyboard settings.
+Manages user preferences, modular sidebar integrations, and virtual keyboard settings.
 """
 
 import os
 import json
+import uuid
 from typing import Dict, Any
 
 CONFIG_DIR = os.path.expanduser("~/.config/safeer-mint")
@@ -13,7 +14,7 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "virtual_keyboard_enabled": False,  # Privzeto izklopljeno kot zahtevano
-    "sidebar_enabled": True,
+    "sidebar_enabled": True,            # Trajni vklop/izklop stranske vrstice
     "sidebar_width": 420,
     "search_engine": "google",
     "adblock_enabled": True,
@@ -32,17 +33,11 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
             "icon": "✉️",
             "enabled": True,
             "color": "#ea4335"
-        },
-        "youtube": {
-            "name": "YouTube",
-            "url": "https://www.youtube.com",
-            "icon": "📺",
-            "enabled": True,
-            "color": "#ff0000"
         }
     },
     "custom_portals": [
         {"title": "Xplore TV", "url": "https://www.xploretv.si/livetv", "color": "#e31837"},
+        {"title": "YouTube", "url": "https://www.youtube.com", "color": "#cc0000"},
         {"title": "24ur.com", "url": "https://www.24ur.com", "color": "#1256a8"},
         {"title": "RTV SLO", "url": "https://www.rtvslo.si", "color": "#0284c7"},
         {"title": "Filmi", "url": "https://hydrahd.ws/", "color": "#0277a3"},
@@ -69,9 +64,11 @@ class ConfigManager:
             try:
                 with open(self.config_file, "r", encoding="utf-8") as f:
                     user_settings = json.load(f)
-                    # Merge with defaults
                     merged = DEFAULT_SETTINGS.copy()
                     merged.update(user_settings)
+                    # If youtube was previously in integrations, remove it as requested
+                    if "integrations" in merged and "youtube" in merged["integrations"]:
+                        del merged["integrations"]["youtube"]
                     return merged
             except Exception as e:
                 print(f"[Config] Napaka pri branju nastavitev: {e}")
@@ -104,10 +101,46 @@ class ConfigManager:
         self.save_settings()
         return new_state
 
+    def toggle_sidebar_permanent(self) -> bool:
+        """Trajno vklopi ali izklopi prikaz stranske vrstice."""
+        cur = self.settings.get("sidebar_enabled", True)
+        self.settings["sidebar_enabled"] = not cur
+        self.save_settings()
+        return not cur
+
     def toggle_integration(self, integration_id: str) -> bool:
         if "integrations" in self.settings and integration_id in self.settings["integrations"]:
             cur = self.settings["integrations"][integration_id].get("enabled", True)
             self.settings["integrations"][integration_id]["enabled"] = not cur
             self.save_settings()
             return not cur
+        return False
+
+    def add_integration(self, name: str, url: str, icon: str = "🌐") -> str:
+        """Doda poljubno novo spletno stran v stransko orodno vrstico."""
+        if not name or not url:
+            return ""
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+
+        item_id = "custom_" + str(uuid.uuid4())[:8]
+        if "integrations" not in self.settings:
+            self.settings["integrations"] = {}
+
+        self.settings["integrations"][item_id] = {
+            "name": name.strip(),
+            "url": url.strip(),
+            "icon": icon.strip() if icon.strip() else "🌐",
+            "enabled": True,
+            "color": "#00d2ff"
+        }
+        self.save_settings()
+        return item_id
+
+    def remove_integration(self, integration_id: str) -> bool:
+        """Odstrani spletno stran iz stranske orodne vrstice."""
+        if "integrations" in self.settings and integration_id in self.settings["integrations"]:
+            del self.settings["integrations"][integration_id]
+            self.save_settings()
+            return True
         return False
