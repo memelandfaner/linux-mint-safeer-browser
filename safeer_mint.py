@@ -8,8 +8,12 @@ YouTube Zero-Ad & Background Audio engine, Cyber Threat Shield, and Persistent S
 import os
 import sys
 import json
+import warnings
 import urllib.parse
 import gi
+
+# Suppress GTK deprecation and driver warnings for clean, smooth console output
+warnings.filterwarnings("ignore")
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('WebKit2', '4.1')
@@ -36,13 +40,21 @@ DOCK_WIDTH = 54
 
 
 class SafeerMintBrowser(Gtk.Window):
-    def __init__(self):
+    def __init__(self, initial_url=None):
         super().__init__(title="Safeer Browser — Linux Mint Edition")
-        self.set_default_size(1280, 820)
+        self.config = ConfigManager()
+
+        # Restore remembered window geometry or use 1280x820
+        win_w = self.config.get("window_width", 1280)
+        win_h = self.config.get("window_height", 820)
+        self.set_default_size(win_w, win_h)
         self.set_position(Gtk.WindowPosition.CENTER)
 
         # Set WM_CLASS so Linux Mint panel associates the window with safeer-browser.desktop
-        self.set_wmclass("safeer-browser", "safeer-browser")
+        try:
+            self.set_wmclass("safeer-browser", "safeer-browser")
+        except Exception:
+            pass
 
         # Set official window & taskbar icon using system theme name and direct fallback file
         Gtk.Window.set_default_icon_name("safeer-browser")
@@ -55,7 +67,6 @@ class SafeerMintBrowser(Gtk.Window):
             except Exception as e:
                 print(f"[Icon] Opozorilo pri nalaganju ikone: {e}")
 
-        self.config = ConfigManager()
         self.active_sidebar_service = None
         self.dock_buttons = {}
 
@@ -66,11 +77,24 @@ class SafeerMintBrowser(Gtk.Window):
         settings = Gtk.Settings.get_default()
         settings.set_property("gtk-application-prefer-dark-theme", True)
 
-        self.setup_ui()
+        self.setup_ui(initial_url=initial_url)
         self.apply_css()
 
         # Connect F4 keyboard shortcut to toggle sidebar
         self.connect("key-press-event", self.on_global_key_press)
+        # Connect delete-event to remember window size on exit
+        self.connect("delete-event", self.on_delete_event)
+
+    def on_delete_event(self, widget, event):
+        """Zapomni si velikost okna ob zaprtju za gladek ponovni zagon."""
+        try:
+            w, h = self.get_size()
+            if w >= 800 and h >= 600:
+                self.config.set("window_width", w)
+                self.config.set("window_height", h)
+        except Exception:
+            pass
+        return False
 
     def setup_persistent_storage(self):
         """Omogoči trajne seje, LocalStorage in IndexedDB za Messenger, Gmail, YouTube itd."""
@@ -94,7 +118,7 @@ class SafeerMintBrowser(Gtk.Window):
             print(f"[Storage] Opozorilo pri nastavitvi shrambe: {e}")
             self.web_context = WebKit2.WebContext.get_default()
 
-    def setup_ui(self):
+    def setup_ui(self, initial_url=None):
         # Main Vertical Box
         self.main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(self.main_vbox)
@@ -130,8 +154,11 @@ class SafeerMintBrowser(Gtk.Window):
         # Connect paned divider moved signal to remember custom width
         self.content_paned.connect("notify::position", self.on_paned_moved)
 
-        # Load initial start page
-        self.load_homepage()
+        # Load initial start page or CLI passed URL
+        if initial_url:
+            self.webview.load_uri(initial_url)
+        else:
+            self.load_homepage()
 
     def apply_css(self):
         css_provider = Gtk.CssProvider()
@@ -363,7 +390,9 @@ class SafeerMintBrowser(Gtk.Window):
             self.sidebar_box.show()
             self.icon_dock.show_all()
             if self.active_sidebar_service:
-                self.sidebar_drawer.show_all()
+                self.sidebar_drawer.show()
+                for c in self.sidebar_drawer.get_children():
+                    c.show_all()
                 drawer_w = self.config.get("sidebar_width", 420)
                 if drawer_w > 650 or drawer_w < 300:
                     drawer_w = 420
@@ -387,6 +416,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.sidebar_drawer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.sidebar_drawer.get_style_context().add_class("drawer-box")
         self.sidebar_drawer.set_size_request(380, -1)
+        self.sidebar_drawer.set_no_show_all(True)
         self.sidebar_drawer.hide()
 
         # Drawer Header
@@ -521,7 +551,9 @@ class SafeerMintBrowser(Gtk.Window):
                 self.sidebar_webview.load_uri(target_url)
 
             # Show drawer and expand divider to comfortable desktop width
-            self.sidebar_drawer.show_all()
+            self.sidebar_drawer.show()
+            for c in self.sidebar_drawer.get_children():
+                c.show_all()
             drawer_w = self.config.get("sidebar_width", 680)
             if drawer_w < 550:
                 drawer_w = 680
@@ -956,20 +988,21 @@ class SafeerMintBrowser(Gtk.Window):
 
 
 def main():
-    app = SafeerMintBrowser()
+    target_url = None
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+        target_url = sys.argv[1]
+
+    app = SafeerMintBrowser(initial_url=target_url)
     app.connect("destroy", Gtk.main_quit)
+
+    # Clean atomic show
     app.show_all()
 
-    # Respect startup settings
     if not app.config.get("sidebar_enabled", True):
         app.sidebar_box.hide()
         app.content_paned.set_position(0)
     else:
-        app.sidebar_drawer.hide()
         app.content_paned.set_position(DOCK_WIDTH)
-
-    if not app.config.get("virtual_keyboard_enabled", False):
-        app.keyboard_box.hide()
 
     Gtk.main()
 
