@@ -27,7 +27,6 @@ from core.config import ConfigManager
 from core.adblock import (
     YOUTUBE_ADBLOCK_SCRIPT,
     GENERIC_COSMETIC_SCRIPT,
-    MESSENGER_SIDEBAR_SCRIPT,
     is_threat_domain
 )
 
@@ -141,89 +140,92 @@ class SafeerMintBrowser(Gtk.Window):
         .top-toolbar {
             background: linear-gradient(180deg, #0f172a 0%, #090d1a 100%);
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 8px 14px;
+            padding: 10px 18px;
+            min-height: 56px;
         }
         .mint-badge {
             color: #87cf3e;
             font-weight: 800;
-            font-size: 13px;
-            padding: 4px 10px;
-            border-radius: 8px;
-            background: rgba(135, 207, 62, 0.12);
-            border: 1px solid rgba(135, 207, 62, 0.25);
-            margin-right: 6px;
+            font-size: 14.5px;
+            padding: 7px 15px;
+            border-radius: 10px;
+            background: rgba(135, 207, 62, 0.14);
+            border: 1px solid rgba(135, 207, 62, 0.3);
+            margin-right: 8px;
         }
         .nav-btn {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 9px;
-            color: #cbd5e1;
-            padding: 6px 13px;
-            margin-right: 4px;
-            font-size: 13px;
-            font-weight: 600;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: #f1f5f9;
+            padding: 8px 16px;
+            margin-right: 5px;
+            font-size: 14.5px;
+            font-weight: 700;
+            min-height: 42px;
             transition: all 180ms ease-in-out;
         }
         .nav-btn:hover {
-            background: rgba(135, 207, 62, 0.18);
+            background: rgba(135, 207, 62, 0.2);
             border-color: #87cf3e;
             color: #ffffff;
-            box-shadow: 0 0 10px rgba(135, 207, 62, 0.2);
+            box-shadow: 0 0 12px rgba(135, 207, 62, 0.25);
         }
         .nav-btn.active {
-            background: rgba(135, 207, 62, 0.25);
+            background: rgba(135, 207, 62, 0.28);
             border-color: #87cf3e;
             color: #87cf3e;
         }
         .nav-btn-shield {
-            background: rgba(0, 210, 255, 0.1);
-            border: 1px solid rgba(0, 210, 255, 0.3);
+            background: rgba(0, 210, 255, 0.12);
+            border: 1px solid rgba(0, 210, 255, 0.35);
             color: #00d2ff;
         }
         .nav-btn-shield:hover {
-            background: rgba(0, 210, 255, 0.2);
+            background: rgba(0, 210, 255, 0.25);
             border-color: #00d2ff;
-            box-shadow: 0 0 12px rgba(0, 210, 255, 0.35);
+            box-shadow: 0 0 14px rgba(0, 210, 255, 0.4);
         }
         .url-entry {
             background: #050811;
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 999px;
             color: #ffffff;
-            padding: 7px 18px;
-            font-size: 13.5px;
+            padding: 8px 22px;
+            font-size: 14.5px;
+            min-height: 42px;
             transition: all 180ms ease-in-out;
         }
         .url-entry:focus {
             border-color: #87cf3e;
-            box-shadow: 0 0 12px rgba(135, 207, 62, 0.3);
+            box-shadow: 0 0 14px rgba(135, 207, 62, 0.35);
         }
         .dock-bar {
             background-color: #070a14;
             border-right: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 8px 4px;
-            min-width: 52px;
+            padding: 10px 5px;
+            min-width: 58px;
         }
         .dock-btn {
             background: transparent;
             border: none;
             border-left: 3px solid transparent;
-            border-radius: 10px;
-            padding: 10px 8px;
-            margin: 3px 2px;
+            border-radius: 12px;
+            padding: 12px 10px;
+            margin: 4px 2px;
             color: #94a3b8;
-            font-size: 20px;
+            font-size: 22px;
             transition: all 150ms ease;
         }
         .dock-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.1);
             color: #ffffff;
         }
         .dock-btn.active {
-            background: rgba(135, 207, 62, 0.18);
+            background: rgba(135, 207, 62, 0.2);
             border-left: 3px solid #87cf3e;
             color: #87cf3e;
-            box-shadow: 0 0 12px rgba(135, 207, 62, 0.25);
+            box-shadow: 0 0 14px rgba(135, 207, 62, 0.3);
         }
         .drawer-box {
             background-color: #0a0f1d;
@@ -232,7 +234,8 @@ class SafeerMintBrowser(Gtk.Window):
         .drawer-header-bar {
             background: #0d1527;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 8px 12px;
+            padding: 10px 16px;
+            min-height: 52px;
         }
         .btn-delete {
             background: rgba(239, 68, 68, 0.15);
@@ -434,17 +437,6 @@ class SafeerMintBrowser(Gtk.Window):
         self.setup_webview_settings(self.sidebar_webview)
         self.sidebar_webview.connect("create", self.on_create_webview)
 
-        # Inject Messenger adaptive 1-column/2-column layout script
-        sidebar_content_mgr = self.sidebar_webview.get_user_content_manager()
-        msg_script = WebKit2.UserScript(
-            MESSENGER_SIDEBAR_SCRIPT,
-            WebKit2.UserContentInjectedFrames.ALL_FRAMES,
-            WebKit2.UserScriptInjectionTime.END,
-            ["*://*.messenger.com/*", "*://*.facebook.com/*"],
-            None
-        )
-        sidebar_content_mgr.add_script(msg_script)
-
         self.sidebar_drawer.pack_start(self.sidebar_webview, True, True, 0)
 
         self.sidebar_box.pack_start(self.sidebar_drawer, True, True, 0)
@@ -497,14 +489,14 @@ class SafeerMintBrowser(Gtk.Window):
             self.close_sidebar_panel()
 
     def toggle_drawer_width(self, widget=None):
-        """Preklopi med kompaktno (420px) in razširjeno (740px) širino predala."""
-        current_w = self.config.get("sidebar_width", 420)
-        if current_w < 550:
-            new_w = 740
-            self.btn_expand_drawer.set_label("◀▶")
-        else:
+        """Preklopi med polno (680px) in kompaktno (420px) širino predala."""
+        current_w = self.config.get("sidebar_width", 680)
+        if current_w >= 600:
             new_w = 420
             self.btn_expand_drawer.set_label("↔️")
+        else:
+            new_w = 680
+            self.btn_expand_drawer.set_label("◀▶")
         self.config.set("sidebar_width", new_w)
         self.content_paned.set_position(DOCK_WIDTH + new_w)
 
@@ -525,11 +517,11 @@ class SafeerMintBrowser(Gtk.Window):
             if target_url and (cur_uri != target_url and not cur_uri.startswith(target_url)):
                 self.sidebar_webview.load_uri(target_url)
 
-            # Show drawer and expand divider
+            # Show drawer and expand divider to comfortable desktop width
             self.sidebar_drawer.show_all()
-            drawer_w = self.config.get("sidebar_width", 420)
-            if drawer_w > 650 or drawer_w < 300:
-                drawer_w = 420
+            drawer_w = self.config.get("sidebar_width", 680)
+            if drawer_w < 550:
+                drawer_w = 680
             target_width = DOCK_WIDTH + drawer_w
             self.content_paned.set_position(target_width)
             self.active_sidebar_service = service_id
@@ -552,7 +544,7 @@ class SafeerMintBrowser(Gtk.Window):
         pos = paned.get_position()
         if self.sidebar_drawer.is_visible() and pos > DOCK_WIDTH + 100:
             drawer_w = pos - DOCK_WIDTH
-            if 300 <= drawer_w <= 650:
+            if 350 <= drawer_w <= 950:
                 self.config.set("sidebar_width", drawer_w)
 
     def on_create_webview(self, webview, action):
