@@ -14,6 +14,18 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "force_dark_mode": False,           # Prisili temni način na vseh spletnih straneh
+    "theme": "midnight",                # "midnight", "mint", "neon", "amoled"
+    "custom_css": "",                   # Lasten CSS slog uporabnika
+    "user_scripts": [
+        {
+            "id": "sample_banner_cleaner",
+            "name": "Primer: Konzola obvestilo",
+            "pattern": "*",
+            "code": "// Safeer Uporabniška skripta (Tampermonkey slog)\nconsole.log('🛡️ Safeer Custom Script teče na: ' + window.location.href);",
+            "enabled": True,
+            "run_at": "end"
+        }
+    ],
     "virtual_keyboard_enabled": False,  # Privzeto izklopljeno kot zahtevano
     "sidebar_enabled": True,            # Trajni vklop/izklop stranske vrstice
     "sidebar_width": 680,
@@ -152,3 +164,62 @@ class ConfigManager:
             self.save_settings()
             return True
         return False
+
+    def get_user_scripts(self):
+        """Vrne seznam vseh uporabniških skript."""
+        return self.settings.get("user_scripts", [])
+
+    def save_user_scripts(self, scripts):
+        """Shrani posodobljen seznam uporabniških skript."""
+        self.settings["user_scripts"] = scripts
+        self.save_settings()
+
+    def add_user_script(self, name: str, pattern: str, code: str, run_at: str = "end") -> str:
+        """Doda novo uporabniško skripto (Greasemonkey slog)."""
+        script_id = "script_" + str(uuid.uuid4())[:8]
+        new_script = {
+            "id": script_id,
+            "name": name.strip() or "Brez imena",
+            "pattern": pattern.strip() or "*",
+            "code": code,
+            "enabled": True,
+            "run_at": run_at
+        }
+        scripts = self.get_user_scripts()
+        scripts.append(new_script)
+        self.save_user_scripts(scripts)
+        return script_id
+
+    def update_user_script(self, script_id: str, name: str, pattern: str, code: str, enabled: bool, run_at: str = "end") -> bool:
+        """Posodobi obstoječo uporabniško skripto."""
+        scripts = self.get_user_scripts()
+        for s in scripts:
+            if s["id"] == script_id:
+                s["name"] = name.strip()
+                s["pattern"] = pattern.strip()
+                s["code"] = code
+                s["enabled"] = enabled
+                s["run_at"] = run_at
+                self.save_user_scripts(scripts)
+                return True
+        return False
+
+    def delete_user_script(self, script_id: str) -> bool:
+        """Izbriše uporabniško skripto."""
+        scripts = self.get_user_scripts()
+        new_scripts = [s for s in scripts if s["id"] != script_id]
+        if len(new_scripts) != len(scripts):
+            self.save_user_scripts(new_scripts)
+            return True
+        return False
+
+    def toggle_user_script(self, script_id: str) -> bool:
+        """Vklopi ali izklopi uporabniško skripto."""
+        scripts = self.get_user_scripts()
+        for s in scripts:
+            if s["id"] == script_id:
+                s["enabled"] = not s.get("enabled", True)
+                self.save_user_scripts(scripts)
+                return s["enabled"]
+        return False
+

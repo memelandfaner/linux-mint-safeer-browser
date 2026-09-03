@@ -173,82 +173,115 @@ class SafeerMintBrowser(Gtk.Window):
         self.new_tab(url=initial_url or "safeer://home", switch=True)
 
     def apply_css(self):
-        css_provider = Gtk.CssProvider()
-        css_data = """
-        * {
+        if not hasattr(self, 'css_provider'):
+            self.css_provider = Gtk.CssProvider()
+            Gtk.StyleContext.add_provider_for_screen(
+                Gdk.Screen.get_default(),
+                self.css_provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
+
+        theme = self.config.get("theme", "midnight")
+        if theme == "mint":
+            bg_base = "#141c15"
+            bg_card = "#1c2b1f"
+            bg_tab_active = "#243b28"
+            accent = "#87cf3e"
+            fg_main = "#f0fdf4"
+        elif theme == "neon":
+            bg_base = "#090d16"
+            bg_card = "#111827"
+            bg_tab_active = "#1e293b"
+            accent = "#00d2ff"
+            fg_main = "#f0fdfa"
+        elif theme == "amoled":
+            bg_base = "#000000"
+            bg_card = "#0e0e0e"
+            bg_tab_active = "#181818"
+            accent = "#38bdf8"
+            fg_main = "#ffffff"
+        else: # midnight
+            bg_base = "#1c1b22"
+            bg_card = "#2b2a33"
+            bg_tab_active = "#2b2a33"
+            accent = "#0060df"
+            fg_main = "#fbfbfe"
+
+        css_data = f"""
+        * {{
             font-family: "Ubuntu", "Ubuntu Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        window, paned, box, .view, WebKitWebView {
-            background-color: #1c1b22;
-            background: #1c1b22;
-            color: #fbfbfe;
-        }
+        }}
+        window, paned, box, .view, WebKitWebView {{
+            background-color: {bg_base};
+            background: {bg_base};
+            color: {fg_main};
+        }}
 
         /* 1. Firefox Proton Tab Row */
-        .tab-toolbar {
-            background-color: #1c1b22;
-            background: #1c1b22;
+        .tab-toolbar {{
+            background-color: {bg_base};
+            background: {bg_base};
             padding: 5px 12px 0px 12px;
             min-height: 40px;
-        }
-        .firefox-tab {
+        }}
+        .firefox-tab {{
             border-radius: 8px 8px 0 0;
             padding: 5px 12px;
             min-width: 170px;
             transition: all 120ms ease;
-        }
-        .firefox-tab.active-tab {
-            background-color: #2b2a33;
+        }}
+        .firefox-tab.active-tab {{
+            background-color: {bg_tab_active};
             border: 1px solid rgba(255, 255, 255, 0.14);
             border-bottom: none;
-        }
-        .firefox-tab.inactive-tab {
+        }}
+        .firefox-tab.inactive-tab {{
             background-color: rgba(255, 255, 255, 0.04);
             border: 1px solid transparent;
             border-bottom: none;
-        }
-        .firefox-tab.inactive-tab:hover {
+        }}
+        .firefox-tab.inactive-tab:hover {{
             background-color: rgba(255, 255, 255, 0.08);
-        }
-        .firefox-tab.inactive-tab .tab-title {
+        }}
+        .firefox-tab.inactive-tab .tab-title {{
             color: #9ca3af;
-        }
-        .firefox-tab.active-tab .tab-title {
-            color: #ffffff;
-        }
-        .history-tree {
-            background-color: #181920;
-            color: #fbfbfe;
+        }}
+        .firefox-tab.active-tab .tab-title {{
+            color: {fg_main};
+        }}
+        .history-tree {{
+            background-color: {bg_card};
+            color: {fg_main};
             font-size: 13.5px;
-        }
-        .history-tree:selected {
-            background-color: #0060df;
+        }}
+        .history-tree:selected {{
+            background-color: {accent};
             color: #ffffff;
-        }
-        .tab-icon {
+        }}
+        .tab-icon {{
             font-size: 16px;
-            color: #ffffff;
+            color: {fg_main};
             margin-right: 4px;
-        }
-        .tab-title {
-            color: #ffffff;
+        }}
+        .tab-title {{
+            color: {fg_main};
             font-size: 14px;
             font-weight: 600;
             margin: 0 4px;
-        }
-        .tab-close-btn {
+        }}
+        .tab-close-btn {{
             background: transparent;
             border: none;
             border-radius: 4px;
             color: #9ca3af;
             padding: 2px 6px;
             font-size: 13px;
-        }
-        .tab-close-btn:hover {
+        }}
+        .tab-close-btn:hover {{
             background: rgba(255, 255, 255, 0.18);
             color: #ffffff;
-        }
-        .new-tab-btn {
+        }}
+        .new-tab-btn {{
             background: transparent;
             border: none;
             border-radius: 6px;
@@ -257,125 +290,109 @@ class SafeerMintBrowser(Gtk.Window):
             font-size: 20px;
             font-weight: 500;
             margin-left: 6px;
-        }
-        .new-tab-btn:hover {
+        }}
+        .new-tab-btn:hover {{
             background: rgba(255, 255, 255, 0.1);
             color: #ffffff;
-        }
+        }}
 
-        /* 2. Firefox Proton Nav Row */
-        .nav-toolbar {
-            background-color: #1c1b22;
-            background: #1c1b22;
+        /* 2. Firefox Proton Nav Toolbar */
+        .nav-toolbar {{
+            background-color: {bg_base};
+            background: {bg_base};
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 6px 12px 8px 12px;
-            min-height: 48px;
-        }
-        .ff-nav-btn {
+            padding: 4px 10px 6px 10px;
+        }}
+        .ff-nav-btn {{
             background: transparent;
             border: none;
             border-radius: 6px;
-            color: #cfcfd8;
+            color: #e0e0e6;
             padding: 6px 10px;
-            margin-right: 3px;
-            font-size: 18px;
-            font-weight: 500;
-            min-height: 38px;
-            min-width: 38px;
-            transition: all 120ms ease;
-        }
-        .ff-nav-btn:hover {
-            background-color: rgba(255, 255, 255, 0.1);
+            font-size: 16px;
+            font-weight: 600;
+            margin-right: 2px;
+            transition: all 100ms ease;
+        }}
+        .ff-nav-btn:hover {{
+            background: rgba(255, 255, 255, 0.1);
             color: #ffffff;
-        }
-        .ff-nav-btn.active {
-            background-color: rgba(255, 255, 255, 0.15);
-            color: #00ddff;
-        }
+        }}
+        .ff-nav-btn.active {{
+            background: {accent};
+            color: #ffffff;
+        }}
 
-        /* 3. Firefox Awesomebar (URL Container) */
-        .ff-url-container {
-            background-color: #2b2a33;
-            background: #2b2a33;
-            border: 1px solid rgba(255, 255, 255, 0.18);
+        /* 3. Firefox Awesomebar / URL Entry */
+        .ff-url-container {{
+            background-color: {bg_card};
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 8px;
             padding: 2px 12px;
             min-height: 42px;
-            transition: all 150ms ease;
-        }
-        .ff-url-container:focus-within {
-            border-color: #00ddff;
-            background-color: #1c1b22;
-            box-shadow: 0 0 0 2px rgba(0, 221, 255, 0.35);
-        }
-        .ff-url-entry {
+        }}
+        .ff-url-container:focus-within {{
+            border-color: {accent};
+            box-shadow: 0 0 0 2px rgba(0, 96, 223, 0.4);
+        }}
+        .ff-shield-btn {{
+            background: transparent;
+            border: none;
+            padding: 2px 6px;
+            font-size: 16px;
+        }}
+        .ff-security-icon {{
+            font-size: 15px;
+            color: #38bdf8;
+            margin-right: 4px;
+        }}
+        .ff-url-entry {{
             background: transparent;
             background-color: transparent;
             border: none;
             box-shadow: none;
             color: #ffffff;
-            font-family: "Ubuntu", "Ubuntu Sans", -apple-system, sans-serif;
             font-size: 16.5px;
             font-weight: 600;
             padding: 6px 8px;
-            min-height: 36px;
-        }
-        .ff-shield-btn {
-            background: transparent;
-            border: none;
-            padding: 4px 8px;
-            color: #00ddff;
-            font-size: 17px;
-            border-radius: 6px;
-        }
-        .ff-shield-btn:hover {
-            background: rgba(0, 221, 255, 0.15);
-        }
-        .ff-security-icon {
-            color: #a3a3b2;
-            font-size: 16px;
-            margin-right: 8px;
-            margin-left: 4px;
-        }
+        }}
 
-        /* Left Dock Bar */
-        .dock-bar {
-            background-color: #131217;
+        /* 4. Left Dock and Sidebar */
+        .dock-bar {{
+            background-color: {bg_base};
             border-right: 1px solid rgba(255, 255, 255, 0.08);
             padding: 8px 4px;
-            min-width: 52px;
-        }
-        .dock-btn {
+        }}
+        .dock-btn {{
             background: transparent;
             border: none;
-            border-left: 3px solid transparent;
             border-radius: 8px;
-            padding: 10px 8px;
-            margin: 3px 2px;
-            color: #94a3b8;
-            font-size: 20px;
+            padding: 8px 6px;
+            font-size: 18px;
+            color: #9ca3af;
+            margin-bottom: 4px;
             transition: all 120ms ease;
-        }
-        .dock-btn:hover {
+        }}
+        .dock-btn:hover {{
             background: rgba(255, 255, 255, 0.08);
             color: #ffffff;
-        }
-        .dock-btn.active {
+        }}
+        .dock-btn.active {{
             background: rgba(0, 221, 255, 0.15);
-            border-left: 3px solid #00ddff;
-            color: #00ddff;
-        }
-        .drawer-box {
-            background-color: #1c1b22;
+            border-left: 3px solid {accent};
+            color: {accent};
+        }}
+        .drawer-box {{
+            background-color: {bg_base};
             border-right: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .drawer-header-bar {
-            background: #2b2a33;
+        }}
+        .drawer-header-bar {{
+            background: {bg_card};
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             padding: 8px 14px;
             min-height: 44px;
-        }
-        .btn-delete {
+        }}
+        .btn-delete {{
             background: rgba(239, 68, 68, 0.15);
             border: 1px solid rgba(239, 68, 68, 0.3);
             color: #ef4444;
@@ -383,18 +400,24 @@ class SafeerMintBrowser(Gtk.Window):
             padding: 4px 10px;
             font-size: 12px;
             font-weight: 600;
-        }
-        .btn-delete:hover {
+        }}
+        .btn-delete:hover {{
             background: #ef4444;
             color: #ffffff;
-        }
+        }}
+        .code-editor {{
+            font-family: "JetBrains Mono", "Courier New", monospace;
+            background-color: #11141d;
+            color: #38bdf8;
+            font-size: 13px;
+        }}
         """
-        css_provider.load_from_data(css_data.encode("utf-8"))
-        Gtk.StyleContext.add_provider_for_screen(
-            Gdk.Screen.get_default(),
-            css_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
+
+        custom_css = self.config.get("custom_css", "")
+        if custom_css:
+            css_data += "\n/* Uporabniški lasten CSS */\n" + custom_css
+
+        self.css_provider.load_from_data(css_data.encode("utf-8"))
 
     def on_global_key_press(self, widget, event):
         ctrl = (event.state & Gdk.ModifierType.CONTROL_MASK) != 0
@@ -546,6 +569,13 @@ class SafeerMintBrowser(Gtk.Window):
         self.btn_history.set_tooltip_text("Zgodovina brskanja (Ctrl + H)")
         self.btn_history.connect("clicked", lambda b: self.open_history_dialog())
         self.nav_bar.pack_start(self.btn_history, False, False, 0)
+
+        # Customizer & Scripts Button (🧩)
+        self.btn_customizer = Gtk.Button(label="🧩")
+        self.btn_customizer.get_style_context().add_class("ff-nav-btn")
+        self.btn_customizer.set_tooltip_text("Prilagoditev videza & Uporabniške skripte (Tampermonkey)")
+        self.btn_customizer.connect("clicked", lambda b: self.open_customizer_dialog())
+        self.nav_bar.pack_start(self.btn_customizer, False, False, 0)
 
         # Virtual Keyboard Button (⌨️)
         self.btn_keyboard = Gtk.Button(label="⌨️")
@@ -979,10 +1009,16 @@ class SafeerMintBrowser(Gtk.Window):
         kb_check.connect("toggled", lambda b: self.toggle_virtual_keyboard())
         box.pack_start(kb_check, False, False, 0)
 
+        # 6. Customize Themes & UserScripts Button
+        btn_custom = Gtk.Button(label="🧩 Prilagodi videz, barvne teme in uporabniške skripte")
+        btn_custom.get_style_context().add_class("nav-btn")
+        btn_custom.connect("clicked", lambda b: [dialog.destroy(), self.open_customizer_dialog()])
+        box.pack_start(btn_custom, False, False, 2)
+
         sep3 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         box.pack_start(sep3, False, False, 4)
 
-        # 6. Clear Browsing Data Button (Privacy)
+        # 7. Clear Browsing Data Button (Privacy)
         btn_clear_data = Gtk.Button(label="🧹 Počisti zgodovino, piškotke in predpomnilnik (Ctrl+Shift+Del)")
         btn_clear_data.get_style_context().add_class("btn-delete")
         btn_clear_data.connect("clicked", lambda b: [dialog.destroy(), self.open_clear_data_dialog()])
@@ -1218,6 +1254,25 @@ class SafeerMintBrowser(Gtk.Window):
             ["*://*.google.com/*", "*://*.google.si/*", "*://*.facebook.com/*", "*://*.messenger.com/*", "*://accounts.google.com/*", "*://*.banka.si/*"]
         )
         content_mgr.add_script(gen_script)
+
+        # Custom User Scripts Injection (Tampermonkey Engine)
+        user_scripts = self.config.get_user_scripts()
+        for s in user_scripts:
+            if s.get("enabled", True) and s.get("code"):
+                try:
+                    pattern = s.get("pattern", "*").strip()
+                    whitelist = None if pattern in ("*", "") else [pattern if pattern.startswith("*://") or pattern.startswith("http") else f"*://*.{pattern}/*"]
+                    run_time = WebKit2.UserScriptInjectionTime.START if s.get("run_at") == "start" else WebKit2.UserScriptInjectionTime.END
+                    us = WebKit2.UserScript(
+                        s["code"],
+                        WebKit2.UserContentInjectedFrames.ALL_FRAMES,
+                        run_time,
+                        whitelist,
+                        None
+                    )
+                    content_mgr.add_script(us)
+                except Exception as e:
+                    print(f"[UserScript] Opozorilo pri nalaganju skripte '{s.get('name')}': {e}")
 
         # Force Dark Mode if enabled
         if self.config.get("force_dark_mode", False):
@@ -1815,6 +1870,282 @@ class SafeerMintBrowser(Gtk.Window):
         else:
             dialog.destroy()
 
+    def open_customizer_dialog(self):
+        """Dialog za prilagoditev teme, lastnega CSS-ja in uporabniških skript (Tampermonkey)."""
+        dialog = Gtk.Dialog(
+            title="🧩 Prilagoditev brskalnika & Uporabniške skripte — Safeer",
+            transient_for=self,
+            flags=0
+        )
+        dialog.set_default_size(720, 520)
+        dialog.add_button("Zapri", Gtk.ResponseType.CLOSE)
+
+        content = dialog.get_content_area()
+        content.set_spacing(6)
+        content.set_margin_top(8)
+        content.set_margin_bottom(8)
+        content.set_margin_left(12)
+        content.set_margin_right(12)
+
+        notebook = Gtk.Notebook()
+        content.pack_start(notebook, True, True, 0)
+
+        # -------------------------------------------------------------
+        # ZAVIHEK 1: 🎨 Teme & Videz
+        # -------------------------------------------------------------
+        themes_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        themes_box.set_margin_top(12)
+        themes_box.set_margin_bottom(12)
+        themes_box.set_margin_left(12)
+        themes_box.set_margin_right(12)
+
+        lbl_theme = Gtk.Label(label="<b>Izbira barvne teme brskalnika:</b>")
+        lbl_theme.set_use_markup(True)
+        lbl_theme.set_xalign(0.0)
+        themes_box.pack_start(lbl_theme, False, False, 0)
+
+        # Theme Radio Buttons
+        cur_theme = self.config.get("theme", "midnight")
+        radio_midnight = Gtk.RadioButton.new_with_label(None, "🌙 Firefox Midnight (Eleganten temen videz)")
+        radio_mint = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "🍃 Linux Mint Emerald (Zeleni poudarki)")
+        radio_neon = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "⚡ Cyberpunk Neon (Cian & Vijolična)")
+        radio_amoled = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "🖤 Pure AMOLED Black (Globoka črna)")
+
+        if cur_theme == "mint":
+            radio_mint.set_active(True)
+        elif cur_theme == "neon":
+            radio_neon.set_active(True)
+        elif cur_theme == "amoled":
+            radio_amoled.set_active(True)
+        else:
+            radio_midnight.set_active(True)
+
+        def on_theme_changed(btn, theme_name):
+            if btn.get_active():
+                self.config.set("theme", theme_name)
+                self.apply_css()
+
+        radio_midnight.connect("toggled", on_theme_changed, "midnight")
+        radio_mint.connect("toggled", on_theme_changed, "mint")
+        radio_neon.connect("toggled", on_theme_changed, "neon")
+        radio_amoled.connect("toggled", on_theme_changed, "amoled")
+
+        themes_box.pack_start(radio_midnight, False, False, 2)
+        themes_box.pack_start(radio_mint, False, False, 2)
+        themes_box.pack_start(radio_neon, False, False, 2)
+        themes_box.pack_start(radio_amoled, False, False, 2)
+
+        sep_css = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        themes_box.pack_start(sep_css, False, False, 6)
+
+        lbl_css = Gtk.Label(label="<b>Lasten CSS slog (userChrome.css za napredne uporabnike):</b>")
+        lbl_css.set_use_markup(True)
+        lbl_css.set_xalign(0.0)
+        themes_box.pack_start(lbl_css, False, False, 0)
+
+        css_scroll = Gtk.ScrolledWindow()
+        css_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        css_scroll.set_min_content_height(140)
+
+        css_tv = Gtk.TextView()
+        css_tv.get_style_context().add_class("code-editor")
+        css_buf = css_tv.get_buffer()
+        css_buf.set_text(self.config.get("custom_css", ""))
+        css_scroll.add(css_tv)
+        themes_box.pack_start(css_scroll, True, True, 0)
+
+        btn_apply_css = Gtk.Button(label="💾 Shrani in uveljavi lasten CSS")
+        btn_apply_css.get_style_context().add_class("nav-btn")
+        def on_save_css(b):
+            start, end = css_buf.get_bounds()
+            custom_code = css_buf.get_text(start, end, True)
+            self.config.set("custom_css", custom_code)
+            self.apply_css()
+        btn_apply_css.connect("clicked", on_save_css)
+        themes_box.pack_start(btn_apply_css, False, False, 0)
+
+        notebook.append_page(themes_box, Gtk.Label(label="🎨 Teme & Lasten CSS"))
+
+        # -------------------------------------------------------------
+        # ZAVIHEK 2: 🧩 Uporabniške skripte (UserScripts)
+        # -------------------------------------------------------------
+        scripts_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        scripts_box.set_margin_top(12)
+        scripts_box.set_margin_bottom(12)
+        scripts_box.set_margin_left(12)
+        scripts_box.set_margin_right(12)
+
+        scripts_top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        lbl_scripts = Gtk.Label(label="<b>Nameščene uporabniške skripte (Tampermonkey slog):</b>")
+        lbl_scripts.set_use_markup(True)
+        lbl_scripts.set_xalign(0.0)
+        scripts_top_bar.pack_start(lbl_scripts, True, True, 0)
+
+        btn_add_script = Gtk.Button(label="➕ Dodaj novo skripto")
+        btn_add_script.get_style_context().add_class("nav-btn")
+        scripts_top_bar.pack_start(btn_add_script, False, False, 0)
+        scripts_box.pack_start(scripts_top_bar, False, False, 0)
+
+        # Scrolled scripts container
+        scripts_scroll = Gtk.ScrolledWindow()
+        scripts_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scripts_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        scripts_scroll.add(scripts_vbox)
+        scripts_box.pack_start(scripts_scroll, True, True, 0)
+
+        def populate_scripts():
+            for child in scripts_vbox.get_children():
+                scripts_vbox.remove(child)
+
+            scripts = self.config.get_user_scripts()
+            if not scripts:
+                empty_lbl = Gtk.Label(label="Trenutno nimate dodanih lastnih skript.\nKliknite 'Dodaj novo skripto' za ustvarjanje prve JavaScript razširitve!")
+                empty_lbl.get_style_context().add_class("tab-title")
+                scripts_vbox.pack_start(empty_lbl, True, True, 30)
+            else:
+                for s in scripts:
+                    row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+                    row.get_style_context().add_class("drawer-header-bar")
+
+                    # Enable Switch
+                    sw = Gtk.Switch()
+                    sw.set_active(s.get("enabled", True))
+                    s_id = s["id"]
+                    sw.connect("state-set", lambda widget, state, sid=s_id: self.config.toggle_user_script(sid))
+                    row.pack_start(sw, False, False, 4)
+
+                    # Info
+                    info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+                    title_lbl = Gtk.Label(label=f"<b>{s.get('name', 'Brez imena')}</b>")
+                    title_lbl.set_use_markup(True)
+                    title_lbl.set_xalign(0.0)
+                    info_box.pack_start(title_lbl, False, False, 0)
+
+                    pattern_txt = f"Domena: <code>{s.get('pattern', '*')}</code> • Zagon: {s.get('run_at', 'end').upper()}"
+                    meta_lbl = Gtk.Label(label=pattern_txt)
+                    meta_lbl.set_use_markup(True)
+                    meta_lbl.set_xalign(0.0)
+                    meta_lbl.get_style_context().add_class("tab-title")
+                    info_box.pack_start(meta_lbl, False, False, 0)
+                    row.pack_start(info_box, True, True, 0)
+
+                    # Edit button
+                    btn_edit = Gtk.Button(label="✏️ Uredi")
+                    btn_edit.get_style_context().add_class("nav-btn")
+                    s_copy = s.copy()
+                    btn_edit.connect("clicked", lambda b, script_data=s_copy: [self.open_script_editor_dialog(script_data), populate_scripts()])
+                    row.pack_end(btn_edit, False, False, 0)
+
+                    # Delete button
+                    btn_del = Gtk.Button(label="🗑️")
+                    btn_del.get_style_context().add_class("btn-delete")
+                    btn_del.connect("clicked", lambda b, sid=s_id: [self.config.delete_user_script(sid), populate_scripts()])
+                    row.pack_end(btn_del, False, False, 0)
+
+                    scripts_vbox.pack_start(row, False, False, 0)
+            scripts_vbox.show_all()
+
+        populate_scripts()
+        btn_add_script.connect("clicked", lambda b: [self.open_script_editor_dialog(None), populate_scripts()])
+
+        notebook.append_page(scripts_box, Gtk.Label(label="🧩 Uporabniške skripte (UserScripts)"))
+
+        dialog.show_all()
+        dialog.run()
+        dialog.destroy()
+
+    def open_script_editor_dialog(self, script=None):
+        """Urejevalnik uporabniške JavaScript skripte."""
+        is_edit = script is not None
+        title = "Uredi skripto" if is_edit else "Nova uporabniška skripta"
+        dialog = Gtk.Dialog(title=title, transient_for=self, flags=0)
+        dialog.set_default_size(600, 480)
+        dialog.add_button("Prekliči", Gtk.ResponseType.CANCEL)
+        btn_save = dialog.add_button("💾 Shrani skripto", Gtk.ResponseType.OK)
+        btn_save.get_style_context().add_class("nav-btn")
+
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_left(16)
+        content.set_margin_right(16)
+
+        # Name Entry
+        lbl_name = Gtk.Label(label="Ime skripte:")
+        lbl_name.set_xalign(0.0)
+        content.pack_start(lbl_name, False, False, 0)
+        entry_name = Gtk.Entry()
+        entry_name.set_text(script.get("name", "") if is_edit else "Moja nova skripta")
+        content.pack_start(entry_name, False, False, 0)
+
+        # Match Pattern
+        lbl_pat = Gtk.Label(label="Domena ali vzorec URL-ja (* za vse strani, npr. *youtube.com*):")
+        lbl_pat.set_xalign(0.0)
+        content.pack_start(lbl_pat, False, False, 0)
+        entry_pat = Gtk.Entry()
+        entry_pat.set_text(script.get("pattern", "*") if is_edit else "*")
+        content.pack_start(entry_pat, False, False, 0)
+
+        # Run at
+        lbl_run = Gtk.Label(label="Čas zagona skripte:")
+        lbl_run.set_xalign(0.0)
+        content.pack_start(lbl_run, False, False, 0)
+        combo_run = Gtk.ComboBoxText()
+        combo_run.append("end", "Ko je stran v celoti naložena (END)")
+        combo_run.append("start", "Pred začetkom nalaganja DOM-a (START)")
+        combo_run.set_active_id(script.get("run_at", "end") if is_edit else "end")
+        content.pack_start(combo_run, False, False, 0)
+
+        # Code View
+        lbl_code = Gtk.Label(label="JavaScript koda:")
+        lbl_code.set_xalign(0.0)
+        content.pack_start(lbl_code, False, False, 0)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_min_content_height(180)
+
+        tv = Gtk.TextView()
+        tv.get_style_context().add_class("code-editor")
+        buf = tv.get_buffer()
+        default_code = script.get("code", "") if is_edit else """// Safeer Uporabniška Skripta (Tampermonkey slog)
+(function() {
+    console.log("Safeer skripta teče na:", window.location.href);
+    // Tukaj dodajte svojo JavaScript kodo:
+    
+})();"""
+        buf.set_text(default_code)
+        scroll.add(tv)
+        content.pack_start(scroll, True, True, 0)
+
+        dialog.show_all()
+        resp = dialog.run()
+        if resp == Gtk.ResponseType.OK:
+            s_name = entry_name.get_text().strip() or "Brez imena"
+            s_pat = entry_pat.get_text().strip() or "*"
+            s_run = combo_run.get_active_id() or "end"
+            start, end = buf.get_bounds()
+            s_code = buf.get_text(start, end, True)
+
+            if is_edit:
+                self.config.update_user_script(
+                    script["id"],
+                    name=s_name,
+                    pattern=s_pat,
+                    code=s_code,
+                    enabled=script.get("enabled", True),
+                    run_at=s_run
+                )
+            else:
+                self.config.add_user_script(
+                    name=s_name,
+                    pattern=s_pat,
+                    code=s_code,
+                    run_at=s_run
+                )
+        dialog.destroy()
+
     def on_js_message(self, content_mgr, js_result):
         try:
             val = js_result.get_js_value()
@@ -1831,6 +2162,8 @@ class SafeerMintBrowser(Gtk.Window):
                 service = data.get("service")
                 if service == "settings":
                     self.open_settings_dialog()
+                elif service == "customizer":
+                    self.open_customizer_dialog()
                 else:
                     self.toggle_sidebar_panel(service)
         except Exception as e:
