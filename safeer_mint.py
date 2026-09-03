@@ -163,8 +163,9 @@ class SafeerMintBrowser(Gtk.Window):
     def apply_css(self):
         css_provider = Gtk.CssProvider()
         css_data = """
-        window {
+        window, paned, box, .view, WebKitWebView {
             background-color: #080c16;
+            background: #080c16;
         }
         .top-toolbar {
             background: linear-gradient(180deg, #0f172a 0%, #090d1a 100%);
@@ -830,6 +831,11 @@ class SafeerMintBrowser(Gtk.Window):
         self.webview_container.pack_start(self.webview, True, True, 0)
 
     def setup_webview_settings(self, webview):
+        # Set dark canvas background color instantly to eliminate white flashbang on load
+        dark_bg = Gdk.RGBA()
+        dark_bg.parse("#080c16")
+        webview.set_background_color(dark_bg)
+
         settings = webview.get_settings()
         settings.set_enable_developer_extras(True)
         settings.set_enable_webaudio(True)
