@@ -12,6 +12,34 @@ from typing import Dict, Any
 CONFIG_DIR = os.path.expanduser("~/.config/safeer-mint")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
+SEARCH_ENGINES = {
+    "google": {
+        "name": "Google",
+        "url": "https://www.google.com/search?q=",
+        "icon": "🔍"
+    },
+    "duckduckgo": {
+        "name": "DuckDuckGo",
+        "url": "https://duckduckgo.com/?q=",
+        "icon": "🦆"
+    },
+    "brave": {
+        "name": "Brave Search",
+        "url": "https://search.brave.com/search?q=",
+        "icon": "🦁"
+    },
+    "ecosia": {
+        "name": "Ecosia",
+        "url": "https://www.ecosia.org/search?q=",
+        "icon": "🌲"
+    },
+    "bing": {
+        "name": "Bing",
+        "url": "https://www.bing.com/search?q=",
+        "icon": "🔎"
+    }
+}
+
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "language": "auto",                 # "auto", "en", "sl", "de", "es", "fr", "it"
     "force_dark_mode": False,           # Prisili temni način na vseh spletnih straneh

@@ -1,39 +1,64 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Safeer Browser - Linux Mint One-Click Installer
+# Safeer Browser — Linux Mint & Ubuntu One-Click Installer
+# Full XDG integration: App menu, Desktop shortcut, Icons, and 'safeer' CLI
 # ==============================================================================
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_DIR="$HOME/.local/share/safeer-mint"
+BIN_DIR="$HOME/.local/bin"
 DESKTOP_DIR="$HOME/.local/share/applications"
-AUTOSTART_DIR="$HOME/Namizje"
+ICON_BASE="$HOME/.local/share/icons/hicolor"
 
 echo "=========================================================="
 echo "🛡️ NAMEŠČANJE: Safeer Browser za Linux Mint"
 echo "=========================================================="
 
-# 1. Ensure permissions
+# 1. Ensure execute permissions
 chmod +x "$DIR/safeer_mint.py"
 chmod +x "$DIR/safeer-mint.sh"
 chmod +x "$DIR/safeer-browser.desktop"
 
-# 2. Install to ~/.local/share/applications so it appears in Linux Mint Menu
-mkdir -p "$DESKTOP_DIR"
-cp "$DIR/safeer-browser.desktop" "$DESKTOP_DIR/safeer-browser.desktop"
+# 2. Install executable into ~/.local/bin so user can run 'safeer' from anywhere
+mkdir -p "$BIN_DIR"
+ln -sf "$DIR/safeer-mint.sh" "$BIN_DIR/safeer"
+ln -sf "$DIR/safeer-mint.sh" "$BIN_DIR/safeer-browser"
 
-# 3. Create shortcut on Desktop
-if [[ -d "$AUTOSTART_DIR" ]]; then
-    cp "$DIR/safeer-browser.desktop" "$AUTOSTART_DIR/safeer-browser.desktop"
-    chmod +x "$AUTOSTART_DIR/safeer-browser.desktop"
-    gio set "$AUTOSTART_DIR/safeer-browser.desktop" metadata::trusted true 2>/dev/null || true
+# Ensure ~/.local/bin is in PATH for current session if not already
+export PATH="$BIN_DIR:$PATH"
+
+# 3. Install App Icon to standard hicolor directory
+if [[ -f "$DIR/assets/icon.png" ]]; then
+    for size in 256x256 128x128 64x64 48x48 32x32; do
+        mkdir -p "$ICON_BASE/$size/apps"
+        cp "$DIR/assets/icon.png" "$ICON_BASE/$size/apps/safeer-browser.png"
+    done
+    mkdir -p "$HOME/.local/share/pixmaps"
+    cp "$DIR/assets/icon.png" "$HOME/.local/share/pixmaps/safeer-browser.png"
 fi
 
-# 4. Update desktop database
+# 4. Install .desktop file to application menu
+mkdir -p "$DESKTOP_DIR"
+sed -e "s|Exec=safeer-browser|Exec=$BIN_DIR/safeer-browser|g" \
+    "$DIR/safeer-browser.desktop" > "$DESKTOP_DIR/safeer-browser.desktop"
+chmod +x "$DESKTOP_DIR/safeer-browser.desktop"
+
+# 5. Create Desktop shortcut if Desktop or Namizje exists
+for d in "$HOME/Namizje" "$HOME/Desktop"; do
+    if [[ -d "$d" ]]; then
+        cp "$DESKTOP_DIR/safeer-browser.desktop" "$d/safeer-browser.desktop"
+        chmod +x "$d/safeer-browser.desktop"
+        gio set "$d/safeer-browser.desktop" metadata::trusted true 2>/dev/null || true
+    fi
+done
+
+# 6. Update desktop and icon caches
 update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+gtk-update-icon-cache -f -t "$ICON_BASE" 2>/dev/null || true
 
 echo "✅ Safeer Browser je bil uspešno nameščen!"
-echo "   - Ikona je dodana na vaše Namizje"
-echo "   - Aplikacija je dodana v Linux Mint meni (Internet -> Safeer Browser)"
-echo "   - Zaženite z: $DIR/safeer-mint.sh"
+echo "   - Ukaz v terminalu: 'safeer' ali 'safeer-browser [URL]'"
+echo "   - Bližnjica na namizju: Safeer Browser"
+echo "   - Linux Mint Meni: Internet -> Safeer Browser"
+echo "   - Zagon z enim klikom: $DIR/safeer-mint.sh"
 echo "=========================================================="

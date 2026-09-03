@@ -164,6 +164,8 @@ const searchUrls = {
   google: 'https://www.google.com/search?q=',
   duckduckgo: 'https://duckduckgo.com/?q=',
   brave: 'https://search.brave.com/search?q=',
+  bing: 'https://www.bing.com/search?q=',
+  ecosia: 'https://www.ecosia.org/search?q=',
   youtube: 'https://www.youtube.com/results?search_query='
 };
 
@@ -187,27 +189,42 @@ function updateClock() {
 
 // 2. Search Handler
 function setEngine(engine, btn) {
-  currentEngine = engine;
+  if (searchUrls[engine]) {
+    currentEngine = engine;
+  }
   document.querySelectorAll('.engine-pills .pill').forEach(p => p.classList.remove('active'));
-  if (btn) btn.classList.add('active');
+  if (btn) {
+    btn.classList.add('active');
+  } else {
+    const matchingBtn = document.querySelector(`.engine-pills .pill[data-engine="${engine}"]`);
+    if (matchingBtn) matchingBtn.classList.add('active');
+  }
   
   const input = document.getElementById('searchInput');
   if (input) input.focus();
 }
 
+window.setSearchEngine = function(engine) {
+  setEngine(engine);
+};
+
 function performSearch(event) {
   if (event) event.preventDefault();
   const input = document.getElementById('searchInput');
+  if (!input) return false;
   const query = input.value.trim();
   if (!query) return false;
 
   let targetUrl = '';
-  if (query.startsWith('http://') || query.startsWith('https://')) {
+  if (query.startsWith('http://') || query.startsWith('https://') || query.startsWith('file://')) {
     targetUrl = query;
+  } else if (query.startsWith('localhost:') || query === 'localhost' || query.startsWith('127.0.0.1:') || query === '127.0.0.1') {
+    targetUrl = 'http://' + query;
   } else if (query.includes('.') && !query.includes(' ')) {
     targetUrl = 'https://' + query;
   } else {
-    targetUrl = searchUrls[currentEngine] + encodeURIComponent(query);
+    const baseSearch = searchUrls[currentEngine] || searchUrls.google;
+    targetUrl = baseSearch + encodeURIComponent(query);
   }
 
   // Communicate with Safeer Python Host or direct navigate
@@ -218,6 +235,10 @@ function performSearch(event) {
   }
   return false;
 }
+
+// Global aliases to ensure both form onsubmit="return handleSearch(event)" and programmatic calls work
+window.handleSearch = performSearch;
+window.performSearch = performSearch;
 
 // 3. Portals Grid with Dynamic Synchronization & Management
 const defaultPortals = [

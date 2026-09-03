@@ -9,6 +9,8 @@ import os
 import sys
 import json
 import uuid
+import socket
+import threading
 import subprocess
 import warnings
 import urllib.parse
@@ -30,7 +32,7 @@ GLib.set_application_name("Safeer Browser")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
-from core.config import ConfigManager
+from core.config import ConfigManager, SEARCH_ENGINES
 from core.i18n import t, set_language, get_current_language, SUPPORTED_LANGUAGES
 from core.adblock import (
     YOUTUBE_ADBLOCK_SCRIPT,
@@ -84,10 +86,12 @@ class SafeerMintBrowser(Gtk.Window):
         # Downloads & History state
         self.downloads = []
         self.history_file = os.path.join(self.config.config_dir, "history.json")
+        self._is_fullscreen = False
 
         # Configure Persistent Cookie, LocalStorage & IndexedDB Storage
         self.setup_persistent_storage()
         self.setup_downloads_handling()
+        self.setup_ipc_socket()
 
         # Apply Linux Mint Dark Theme preference
         settings = Gtk.Settings.get_default()
@@ -102,7 +106,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.connect("delete-event", self.on_delete_event)
 
     def on_delete_event(self, widget, event):
-        """Zapomni si velikost okna ob zaprtju za gladek ponovni zagon."""
+        """Zapomni si velikost okna in počisti IPC socket ob zaprtju."""
         try:
             w, h = self.get_size()
             if w >= 800 and h >= 600:
@@ -110,7 +114,56 @@ class SafeerMintBrowser(Gtk.Window):
                 self.config.set("window_height", h)
         except Exception:
             pass
+        try:
+            sock_path = os.path.join(self.config.config_dir, "safeer.sock")
+            if os.path.exists(sock_path):
+                os.remove(sock_path)
+        except Exception:
+            pass
         return False
+
+    def setup_ipc_socket(self):
+        """Lokalni Unix socket za vodenje ene same instance (odpiranje povezav iz drugih aplikacij v novih zavihkih)."""
+        sock_path = os.path.join(self.config.config_dir, "safeer.sock")
+        try:
+            if os.path.exists(sock_path):
+                try:
+                    os.remove(sock_path)
+                except Exception:
+                    pass
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server.bind(sock_path)
+            server.listen(5)
+            self.ipc_server_sock = server
+
+            def socket_listener():
+                while True:
+                    try:
+                        conn, _ = server.accept()
+                        raw_data = conn.recv(4096).decode("utf-8", errors="ignore").strip()
+                        if raw_data:
+                            parts = raw_data.split(" ", 1)
+                            cmd = parts[0]
+                            arg = parts[1] if len(parts) > 1 else ""
+                            if cmd == "OPEN" and arg:
+                                GLib.idle_add(self.open_url_from_external, arg)
+                            elif cmd == "FOCUS":
+                                GLib.idle_add(self.present)
+                        conn.sendall(b"OK\n")
+                        conn.close()
+                    except Exception:
+                        break
+
+            t = threading.Thread(target=socket_listener, daemon=True)
+            t.start()
+        except Exception as e:
+            print(f"[IPC Socket] Opozorilo pri inicializaciji socketa: {e}")
+
+    def open_url_from_external(self, url):
+        """Odpri povezavo iz zunanjega programa (Thunderbird, Telegram, Terminal) v novem zavihku."""
+        self.present()
+        if url:
+            self.new_tab(url=url, switch=True)
 
     def setup_persistent_storage(self):
         """Omogoči trajne seje, LocalStorage in IndexedDB za Messenger, Gmail, YouTube itd."""
@@ -547,42 +600,138 @@ class SafeerMintBrowser(Gtk.Window):
             self.open_clear_data_dialog()
             return True
 
+        # F11 toggles Fullscreen
+        if event.keyval == Gdk.KEY_F11:
+            self.toggle_fullscreen()
+            return True
+
+        # Ctrl + L or F6 focuses URL bar & selects text (Universal browser standard)
+        if (ctrl and event.keyval in (Gdk.KEY_l, Gdk.KEY_L)) or event.keyval == Gdk.KEY_F6:
+            self.url_entry.grab_focus()
+            self.url_entry.select_region(0, -1)
+            return True
+
+        # Escape while URL bar has focus restores URL and returns focus to webview
+        if event.keyval == Gdk.KEY_Escape and self.url_entry.has_focus():
+            wv = self.get_active_webview()
+            cur_uri = wv.get_uri() if wv else ""
+            self.url_entry.set_text(self.format_clean_url(cur_uri))
+            if wv:
+                wv.grab_focus()
+            return True
+
+        # Zoom in: Ctrl + Plus / Ctrl + = / Ctrl + KP_Add
+        if ctrl and event.keyval in (Gdk.KEY_plus, Gdk.KEY_equal, Gdk.KEY_KP_Add):
+            self.zoom_in()
+            return True
+
+        # Zoom out: Ctrl + Minus / Ctrl + KP_Subtract
+        if ctrl and event.keyval in (Gdk.KEY_minus, Gdk.KEY_KP_Subtract):
+            self.zoom_out()
+            return True
+
+        # Reset zoom: Ctrl + 0 / Ctrl + KP_0
+        if ctrl and event.keyval in (Gdk.KEY_0, Gdk.KEY_KP_0):
+            self.zoom_reset()
+            return True
+
         # F4 toggles sidebar
         if event.keyval == Gdk.KEY_F4:
             self.toggle_sidebar_visibility()
             return True
+
+        # Ctrl + T: New tab
         elif ctrl and event.keyval in (Gdk.KEY_t, Gdk.KEY_T):
             self.new_tab()
             return True
+
+        # Ctrl + W: Close tab
         elif ctrl and event.keyval in (Gdk.KEY_w, Gdk.KEY_W):
             if self.active_tab_id:
                 self.close_tab(self.active_tab_id)
             return True
+
+        # Ctrl + H: History
         elif ctrl and event.keyval in (Gdk.KEY_h, Gdk.KEY_H):
             self.open_history_dialog()
             return True
+
+        # Ctrl + J: Downloads
         elif ctrl and event.keyval in (Gdk.KEY_j, Gdk.KEY_J):
             self.open_downloads_dialog()
             return True
-        elif ctrl and event.keyval in (Gdk.KEY_d, Gdk.KEY_D):
+
+        # Ctrl + Shift + D: Toggle Dark Mode
+        elif ctrl and shift and event.keyval in (Gdk.KEY_d, Gdk.KEY_D):
             self.toggle_dark_mode()
             return True
-        elif ctrl and event.keyval in (Gdk.KEY_r, Gdk.KEY_R) or event.keyval == Gdk.KEY_F5:
+
+        # Ctrl + D: Bookmark current page to Portals / Favorites
+        elif ctrl and not shift and event.keyval in (Gdk.KEY_d, Gdk.KEY_D):
+            self.bookmark_current_page()
+            return True
+
+        # Ctrl + B: Open Portals / Bookmarks dialog
+        elif ctrl and event.keyval in (Gdk.KEY_b, Gdk.KEY_B):
+            self.open_portals_dialog()
+            return True
+
+        # Ctrl + R or F5: Reload
+        elif (ctrl and event.keyval in (Gdk.KEY_r, Gdk.KEY_R)) or event.keyval == Gdk.KEY_F5:
             wv = self.get_active_webview()
             if wv:
                 wv.reload()
             return True
+
+        # Alt + Left: Back
         elif alt and event.keyval == Gdk.KEY_Left:
             wv = self.get_active_webview()
             if wv:
                 wv.go_back()
             return True
+
+        # Alt + Right: Forward
         elif alt and event.keyval == Gdk.KEY_Right:
             wv = self.get_active_webview()
             if wv:
                 wv.go_forward()
             return True
         return False
+
+    def zoom_in(self):
+        wv = self.get_active_webview()
+        if wv:
+            cur = wv.get_zoom_level()
+            wv.set_zoom_level(min(cur + 0.1, 3.0))
+
+    def zoom_out(self):
+        wv = self.get_active_webview()
+        if wv:
+            cur = wv.get_zoom_level()
+            wv.set_zoom_level(max(cur - 0.1, 0.4))
+
+    def zoom_reset(self):
+        wv = self.get_active_webview()
+        if wv:
+            wv.set_zoom_level(1.0)
+
+    def toggle_fullscreen(self):
+        if getattr(self, "_is_fullscreen", False):
+            self.unfullscreen()
+            self._is_fullscreen = False
+        else:
+            self.fullscreen()
+            self._is_fullscreen = True
+
+    def bookmark_current_page(self):
+        wv = self.get_active_webview()
+        if not wv:
+            return
+        uri = wv.get_uri() or ""
+        title = wv.get_title() or "Priljubljena stran"
+        if not uri or "home.html" in uri or uri == "safeer://home":
+            return
+        self.open_portal_editor_dialog(None, prefill={"title": title, "url": uri})
 
     def create_top_bar(self):
         # Master header container (Tabs + Navigation bar in Firefox Proton layout)
@@ -959,6 +1108,20 @@ class SafeerMintBrowser(Gtk.Window):
             except Exception as e:
                 print(f"[Policy] Napaka pri novem oknu: {e}")
         elif decision_type == WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
+            try:
+                nav_action = decision.get_navigation_action()
+                mouse_btn = nav_action.get_mouse_button()
+                modifiers = nav_action.get_modifiers()
+                # Srednji klik (kolešček) ali Ctrl + klik odpre povezavo v novem zavihku v ozadju!
+                if mouse_btn == 2 or (modifiers & Gdk.ModifierType.CONTROL_MASK):
+                    req = nav_action.get_request()
+                    uri = req.get_uri() if req else ""
+                    if uri:
+                        self.new_tab(url=uri, switch=False)
+                    decision.ignore()
+                    return True
+            except Exception:
+                pass
             decision.use()
             return True
         return False
@@ -966,15 +1129,16 @@ class SafeerMintBrowser(Gtk.Window):
     def open_add_page_dialog(self):
         """Dialog za hitro dodajanje nove strani v stransko orodno vrstico."""
         dialog = Gtk.Dialog(
-            title="Dodaj stran v stransko vrstico",
+            title=f"➕ {t('add_portal', 'Dodaj stran')} — Safeer",
             transient_for=self,
             flags=0
         )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            "Dodaj", Gtk.ResponseType.OK
-        )
-        dialog.set_default_size(380, 240)
+        dialog.get_style_context().add_class("customizer-dialog")
+        btn_cancel = dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
+        btn_cancel.get_style_context().add_class("customizer-close-btn")
+        btn_add = dialog.add_button(f"➕ {t('add_portal', 'Dodaj')}", Gtk.ResponseType.OK)
+        btn_add.get_style_context().add_class("btn-primary-glow")
+        dialog.set_default_size(420, 260)
 
         box = dialog.get_content_area()
         box.set_spacing(10)
@@ -1026,8 +1190,10 @@ class SafeerMintBrowser(Gtk.Window):
             transient_for=self,
             flags=0
         )
-        dialog.add_buttons(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
-        dialog.set_default_size(500, 500)
+        dialog.set_default_size(540, 580)
+        dialog.get_style_context().add_class("customizer-dialog")
+        btn_close = dialog.add_button(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
+        btn_close.get_style_context().add_class("customizer-close-btn")
 
         box = dialog.get_content_area()
         box.set_spacing(12)
@@ -1059,6 +1225,27 @@ class SafeerMintBrowser(Gtk.Window):
 
         combo_lang.connect("changed", on_lang_changed)
         box.pack_start(combo_lang, False, False, 0)
+
+        # 0.1. Search Engine Selection
+        title_engine = Gtk.Label(label=f"<b>🔍 {GLib.markup_escape_text(t('search_engine_lbl'))}</b>")
+        title_engine.set_use_markup(True)
+        title_engine.set_halign(Gtk.Align.START)
+        box.pack_start(title_engine, False, False, 0)
+
+        combo_engine = Gtk.ComboBoxText()
+        for eid, einfo in SEARCH_ENGINES.items():
+            combo_engine.append(eid, f"{einfo['icon']} {einfo['name']}")
+
+        cur_engine = self.config.get("search_engine", "google")
+        combo_engine.set_active_id(cur_engine)
+
+        def on_engine_changed(cb):
+            sel_eng = cb.get_active_id() or "google"
+            self.config.set("search_engine", sel_eng)
+            self.broadcast_search_engine_update()
+
+        combo_engine.connect("changed", on_engine_changed)
+        box.pack_start(combo_engine, False, False, 0)
 
         sep0 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         box.pack_start(sep0, False, False, 4)
@@ -1290,11 +1477,17 @@ class SafeerMintBrowser(Gtk.Window):
             self.show_threat_warning(text)
             return
 
-        if not text.startswith("http://") and not text.startswith("https://"):
+        if text.startswith("localhost:") or text == "localhost" or text.startswith("127.0.0.1:") or text == "127.0.0.1":
+            target = "http://" + text
+        elif text.startswith("file://"):
+            target = text
+        elif not text.startswith("http://") and not text.startswith("https://"):
             if "." in text and " " not in text:
                 target = "https://" + text
             else:
-                target = f"https://www.google.com/search?q={urllib.parse.quote_plus(text)}"
+                engine = self.config.get("search_engine", "google")
+                engine_info = SEARCH_ENGINES.get(engine, SEARCH_ENGINES["google"])
+                target = f"{engine_info['url']}{urllib.parse.quote_plus(text)}"
         else:
             target = text
 
@@ -1445,9 +1638,18 @@ class SafeerMintBrowser(Gtk.Window):
         btn_close.connect("clicked", lambda b: self.close_tab(tab_id))
         tab_box.pack_start(btn_close, False, False, 2)
 
+        def on_tab_press(w, ev, tid=tab_id):
+            if ev.button == 2:  # Srednji klik (kolešček) zapre zavihek
+                self.close_tab(tid)
+                return True
+            elif ev.button == 1:
+                self.switch_to_tab(tid)
+                return True
+            return False
+
         tab_event_box = Gtk.EventBox()
         tab_event_box.add(tab_box)
-        tab_event_box.connect("button-press-event", lambda w, ev: self.switch_to_tab(tab_id))
+        tab_event_box.connect("button-press-event", on_tab_press)
 
         self.tabs_box.pack_start(tab_event_box, False, False, 0)
         tab_event_box.show_all()
@@ -1736,25 +1938,27 @@ class SafeerMintBrowser(Gtk.Window):
             self.btn_downloads.get_style_context().remove_class("active")
 
     def open_downloads_dialog(self):
-        dialog = Gtk.Dialog(title="📥 Prenosi — Safeer Browser", transient_for=self, flags=0)
-        dialog.set_default_size(540, 420)
-        dialog.add_button("Zapri", Gtk.ResponseType.CLOSE)
+        dialog = Gtk.Dialog(title=f"📥 {t('downloads_title')} — Safeer Browser", transient_for=self, flags=0)
+        dialog.set_default_size(600, 460)
+        dialog.get_style_context().add_class("customizer-dialog")
+        btn_close = dialog.add_button(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
+        btn_close.get_style_context().add_class("customizer-close-btn")
 
         content = dialog.get_content_area()
         content.set_spacing(10)
-        content.set_margin_top(12)
-        content.set_margin_bottom(12)
+        content.set_margin_top(14)
+        content.set_margin_bottom(14)
         content.set_margin_left(16)
         content.set_margin_right(16)
 
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        lbl_title = Gtk.Label(label="<b>Aktivni in nedavni prenosi</b>")
+        lbl_title = Gtk.Label(label=f"<b><span size='11500'>{GLib.markup_escape_text(t('active_recent_downloads'))}</span></b>")
         lbl_title.set_use_markup(True)
         lbl_title.set_xalign(0.0)
         header_box.pack_start(lbl_title, True, True, 0)
 
-        btn_open_folder = Gtk.Button(label="📁 Odpri mapo Prenosi")
-        btn_open_folder.get_style_context().add_class("nav-btn")
+        btn_open_folder = Gtk.Button(label=t("open_downloads_folder"))
+        btn_open_folder.get_style_context().add_class("btn-primary-glow")
         dl_dir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) or os.path.expanduser("~/Prejemi")
         btn_open_folder.connect("clicked", lambda b: subprocess.Popen(["xdg-open", dl_dir]))
         header_box.pack_start(btn_open_folder, False, False, 0)
@@ -1768,33 +1972,34 @@ class SafeerMintBrowser(Gtk.Window):
         scroll.add(dls_vbox)
 
         if not self.downloads:
-            empty_lbl = Gtk.Label(label="Ni nedavnih prenosov.")
-            empty_lbl.get_style_context().add_class("tab-title")
+            empty_lbl = Gtk.Label(label=t("no_downloads"))
+            empty_lbl.get_style_context().add_class("text-muted")
             dls_vbox.pack_start(empty_lbl, True, True, 20)
         else:
             for dl in self.downloads:
                 row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-                row.get_style_context().add_class("drawer-header-bar")
+                row.get_style_context().add_class("item-card-row")
 
                 icon_lbl = Gtk.Label(label="✅" if dl["status"] == "completed" else ("⬇️" if dl["status"] == "running" else "❌"))
                 row.pack_start(icon_lbl, False, False, 4)
 
                 meta_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-                fname_lbl = Gtk.Label(label=f"<b>{dl['filename']}</b>")
+                fname_lbl = Gtk.Label(label=f"<b>{GLib.markup_escape_text(dl['filename'])}</b>")
                 fname_lbl.set_use_markup(True)
                 fname_lbl.set_xalign(0.0)
                 fname_lbl.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
                 meta_box.pack_start(fname_lbl, False, False, 0)
 
-                status_txt = f"{dl['time']} • " + ("Končano" if dl["status"] == "completed" else (f"Prenašam... {int(dl['progress']*100)}%" if dl["status"] == "running" else "Napaka"))
+                status_name = t("dl_completed") if dl["status"] == "completed" else (f"{t('dl_downloading')} {int(dl['progress']*100)}%" if dl["status"] == "running" else t("dl_failed"))
+                status_txt = f"{dl['time']} • {status_name}"
                 status_lbl = Gtk.Label(label=status_txt)
                 status_lbl.set_xalign(0.0)
-                status_lbl.get_style_context().add_class("tab-title")
+                status_lbl.get_style_context().add_class("text-muted")
                 meta_box.pack_start(status_lbl, False, False, 0)
                 row.pack_start(meta_box, True, True, 0)
 
                 if dl["status"] == "completed" and os.path.exists(dl["path"]):
-                    btn_open = Gtk.Button(label="Odpri")
+                    btn_open = Gtk.Button(label=t("open_file"))
                     btn_open.get_style_context().add_class("nav-btn")
                     p = dl["path"]
                     btn_open.connect("clicked", lambda b, path=p: subprocess.Popen(["xdg-open", path]))
@@ -1843,28 +2048,30 @@ class SafeerMintBrowser(Gtk.Window):
             pass
 
     def open_history_dialog(self):
-        dialog = Gtk.Dialog(title="🕒 Zgodovina brskanja — Safeer Browser", transient_for=self, flags=0)
-        dialog.set_default_size(680, 480)
-        dialog.add_button("Zapri", Gtk.ResponseType.CLOSE)
+        dialog = Gtk.Dialog(title=f"🕒 {t('history_title')} — Safeer Browser", transient_for=self, flags=0)
+        dialog.set_default_size(720, 500)
+        dialog.get_style_context().add_class("customizer-dialog")
+        btn_close = dialog.add_button(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
+        btn_close.get_style_context().add_class("customizer-close-btn")
 
         content = dialog.get_content_area()
         content.set_spacing(10)
-        content.set_margin_top(12)
-        content.set_margin_bottom(12)
+        content.set_margin_top(14)
+        content.set_margin_bottom(14)
         content.set_margin_left(16)
         content.set_margin_right(16)
 
         top_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         search_entry = Gtk.Entry()
-        search_entry.set_placeholder_text("🔍 Išči po zgodovini obiskov...")
+        search_entry.set_placeholder_text(t("search_history_placeholder"))
         search_entry.get_style_context().add_class("ff-url-entry")
         top_box.pack_start(search_entry, True, True, 0)
 
-        btn_clear = Gtk.Button(label="🗑️ Počisti zgodovino")
+        btn_clear = Gtk.Button(label=t("clear_history"))
         btn_clear.get_style_context().add_class("btn-delete")
         top_box.pack_start(btn_clear, False, False, 0)
 
-        btn_clear_cookies = Gtk.Button(label="🍪 Piškotki & Podatki")
+        btn_clear_cookies = Gtk.Button(label=t("cookies_data"))
         btn_clear_cookies.get_style_context().add_class("nav-btn")
         btn_clear_cookies.connect("clicked", lambda b: [dialog.destroy(), self.open_clear_data_dialog()])
         top_box.pack_start(btn_clear_cookies, False, False, 0)
@@ -1890,16 +2097,16 @@ class SafeerMintBrowser(Gtk.Window):
         tree = Gtk.TreeView(model=filter_store)
         tree.get_style_context().add_class("history-tree")
 
-        col_time = Gtk.TreeViewColumn("Čas", Gtk.CellRendererText(), text=0)
+        col_time = Gtk.TreeViewColumn(t("history_time_col"), Gtk.CellRendererText(), text=0)
         col_time.set_min_width(130)
         tree.append_column(col_time)
 
-        col_title = Gtk.TreeViewColumn("Naslov", Gtk.CellRendererText(), text=1)
-        col_title.set_min_width(220)
+        col_title = Gtk.TreeViewColumn(t("history_title_col"), Gtk.CellRendererText(), text=1)
+        col_title.set_min_width(240)
         tree.append_column(col_title)
 
-        col_url = Gtk.TreeViewColumn("URL", Gtk.CellRendererText(), text=2)
-        col_url.set_min_width(260)
+        col_url = Gtk.TreeViewColumn(t("history_url_col"), Gtk.CellRendererText(), text=2)
+        col_url.set_min_width(280)
         tree.append_column(col_url)
 
         def on_row_activated(treeview, path, column):
@@ -1931,13 +2138,15 @@ class SafeerMintBrowser(Gtk.Window):
     def open_clear_data_dialog(self):
         """Dialog za brisanje zgodovine, piškotkov, prijavnih sej in predpomnilnika."""
         dialog = Gtk.Dialog(
-            title="🧹 Počisti podatke brskanja — Safeer Browser",
+            title=f"🧹 {t('clear_data_title')} — Safeer Browser",
             transient_for=self,
             flags=0
         )
-        dialog.set_default_size(460, 320)
-        dialog.add_button("Prekliči", Gtk.ResponseType.CANCEL)
-        btn_confirm = dialog.add_button("Počisti izbrano", Gtk.ResponseType.OK)
+        dialog.set_default_size(500, 340)
+        dialog.get_style_context().add_class("customizer-dialog")
+        btn_cancel = dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
+        btn_cancel.get_style_context().add_class("customizer-close-btn")
+        btn_confirm = dialog.add_button(t("clear_selected_btn"), Gtk.ResponseType.OK)
         btn_confirm.get_style_context().add_class("btn-delete")
 
         content = dialog.get_content_area()
@@ -1947,20 +2156,20 @@ class SafeerMintBrowser(Gtk.Window):
         content.set_margin_left(20)
         content.set_margin_right(20)
 
-        header = Gtk.Label(label="<b>Izberite podatke, ki jih želite odstraniti:</b>")
+        header = Gtk.Label(label=f"<b>{GLib.markup_escape_text(t('clear_data_header'))}</b>")
         header.set_use_markup(True)
         header.set_xalign(0.0)
         content.pack_start(header, False, False, 0)
 
-        check_history = Gtk.CheckButton(label="🕒 Zgodovina brskanja (seznam vseh obiskanih strani)")
+        check_history = Gtk.CheckButton(label=t("clear_history_chk"))
         check_history.set_active(True)
         content.pack_start(check_history, False, False, 2)
 
-        check_cookies = Gtk.CheckButton(label="🍪 Piškotki in prijavne seje (odjavi vas z vseh strani)")
+        check_cookies = Gtk.CheckButton(label=t("clear_cookies_chk"))
         check_cookies.set_active(True)
         content.pack_start(check_cookies, False, False, 2)
 
-        check_cache = Gtk.CheckButton(label="💾 Predpomnilnik in shramba spletnih mest (sprosti disk)")
+        check_cache = Gtk.CheckButton(label=t("clear_cache_chk"))
         check_cache.set_active(True)
         content.pack_start(check_cache, False, False, 2)
 
@@ -1970,12 +2179,9 @@ class SafeerMintBrowser(Gtk.Window):
             do_hist = check_history.get_active()
             do_cookies = check_cookies.get_active()
             do_cache = check_cache.get_active()
-            dialog.destroy()
 
-            msg_parts = []
             if do_hist:
                 self.save_history([])
-                msg_parts.append("Zgodovina")
 
             types_to_clear = 0
             if do_cookies:
@@ -1988,7 +2194,6 @@ class SafeerMintBrowser(Gtk.Window):
                         os.remove(cookie_path)
                     except Exception:
                         pass
-                msg_parts.append("Piškotki")
 
             if do_cache:
                 types_to_clear |= WebKit2.WebsiteDataTypes.DISK_CACHE
@@ -1997,7 +2202,6 @@ class SafeerMintBrowser(Gtk.Window):
                 types_to_clear |= WebKit2.WebsiteDataTypes.INDEXEDDB_DATABASES
                 types_to_clear |= WebKit2.WebsiteDataTypes.WEBSQL_DATABASES
                 types_to_clear |= WebKit2.WebsiteDataTypes.OFFLINE_APPLICATION_CACHE
-                msg_parts.append("Predpomnilnik")
 
             if types_to_clear != 0:
                 try:
@@ -2005,9 +2209,7 @@ class SafeerMintBrowser(Gtk.Window):
                 except Exception as e:
                     print(f"[ClearData] Napaka: {e}")
 
-            dialog.destroy()
-        else:
-            dialog.destroy()
+        dialog.destroy()
 
     def open_customizer_dialog(self):
         """Dialog za prilagoditev teme, lastnega CSS-ja in uporabniških skript (Tampermonkey)."""
@@ -2609,7 +2811,17 @@ class SafeerMintBrowser(Gtk.Window):
             if wv and ("home.html" in uri or uri == "safeer://home"):
                 wv.run_javascript(js, None, None, None)
 
-    def open_portal_editor_dialog(self, portal=None, on_saved=None):
+    def broadcast_search_engine_update(self):
+        """Osveži privzeti iskalnik na vseh odprtih zavihkih z domačo stranjo."""
+        engine = self.config.get("search_engine", "google")
+        js = f"if (window.setSearchEngine) {{ window.setSearchEngine('{engine}'); }}"
+        for t in self.tabs:
+            wv = t.get("webview")
+            uri = t.get("uri", "")
+            if wv and ("home.html" in uri or uri == "safeer://home"):
+                wv.run_javascript(js, None, None, None)
+
+    def open_portal_editor_dialog(self, portal=None, on_saved=None, prefill=None):
         """Dialog za dodajanje ali urejanje priljubljenega portala / strani."""
         is_edit = portal is not None
         title = f"✏️ {t('edit')} {t('tab_portals')}" if is_edit else f"➕ {t('add_portal')}"
@@ -2638,6 +2850,8 @@ class SafeerMintBrowser(Gtk.Window):
         entry_title.set_placeholder_text("YouTube, 24ur, Reddit, GitHub...")
         if is_edit:
             entry_title.set_text(portal.get("title", ""))
+        elif prefill and prefill.get("title"):
+            entry_title.set_text(prefill.get("title"))
         content.pack_start(entry_title, False, False, 0)
 
         lbl_url = Gtk.Label(label=f"<b>{GLib.markup_escape_text(t('portal_url'))}:</b>")
@@ -2648,6 +2862,8 @@ class SafeerMintBrowser(Gtk.Window):
         entry_url.set_placeholder_text("https://...")
         if is_edit:
             entry_url.set_text(portal.get("url", "https://"))
+        elif prefill and prefill.get("url"):
+            entry_url.set_text(prefill.get("url"))
         else:
             entry_url.set_text("https://")
         content.pack_start(entry_url, False, False, 0)
@@ -2873,6 +3089,24 @@ def main():
     target_url = None
     if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
         target_url = sys.argv[1]
+
+    # Preveri, če Safeer že teče – v tem primeru povezavo nemudoma pošlji obstoječi instanci
+    sock_path = os.path.join(os.path.expanduser("~/.config/safeer-mint"), "safeer.sock")
+    if os.path.exists(sock_path):
+        try:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.settimeout(1.5)
+            s.connect(sock_path)
+            cmd = f"OPEN {target_url}" if target_url else "FOCUS"
+            s.sendall(cmd.encode("utf-8"))
+            s.recv(1024)
+            s.close()
+            sys.exit(0)
+        except Exception:
+            try:
+                os.remove(sock_path)
+            except Exception:
+                pass
 
     app = SafeerMintBrowser(initial_url=target_url)
     app.connect("destroy", Gtk.main_quit)
