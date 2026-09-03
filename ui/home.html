@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Safeer Browser - Linux Mint Edition</title>
+  <title>Safeer Browser — Linux Mint Edition</title>
   <link rel="stylesheet" href="home.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="desktop-container">
@@ -12,25 +15,28 @@
     <!-- Top Privacy & Shield Banner -->
     <header class="shield-header">
       <div class="shield-badge">
-        <span class="shield-icon">🛡️</span>
-        <span class="shield-title">Safeer Shield</span>
-        <span class="shield-status">Zaščita aktivna</span>
+        <span class="shield-icon">🍃</span>
+        <div>
+          <div class="shield-title">Safeer Browser</div>
+          <div class="shield-subtitle">Linux Mint Suverena Izdaja</div>
+        </div>
+        <span class="shield-status">🛡️ Zaščita aktivna</span>
       </div>
 
       <div class="shield-metrics">
         <div class="metric-item">
-          <span class="metric-val text-cyan" id="adsCount">1.482</span>
+          <span class="metric-val text-mint" id="adsCount">1.482</span>
           <span class="metric-lbl">Blokirani oglasi</span>
         </div>
         <div class="metric-divider"></div>
         <div class="metric-item">
-          <span class="metric-val text-emerald" id="bandwidthCount">24.8 MB</span>
-          <span class="metric-lbl">Prihranek podatkov</span>
+          <span class="metric-val text-cyan" id="bandwidthCount">0 ms</span>
+          <span class="metric-lbl">Odzivnost</span>
         </div>
         <div class="metric-divider"></div>
         <div class="metric-item">
-          <span class="metric-val text-purple" id="timeCount">2.1 min</span>
-          <span class="metric-lbl">Prihranjen čas</span>
+          <span class="metric-val text-purple" id="timeCount">100%</span>
+          <span class="metric-lbl">Odprta koda</span>
         </div>
       </div>
     </header>
@@ -40,6 +46,7 @@
       <div class="clock-display">
         <h1 class="clock-time" id="clockTime">12:00</h1>
         <p class="clock-date" id="clockDate">Četrtek, 3. September 2026</p>
+        <p class="manifesto-mini-quote">»Kdor nadzoruje brskalnik, nadzoruje splet. Vzemi nadzor v svoje roke.«</p>
       </div>
 
       <!-- Search Box -->
@@ -47,23 +54,31 @@
         <div class="search-bar">
           <span class="search-icon">🔍</span>
           <input type="text" id="searchInput" class="search-input" placeholder="Iščite na spletu ali vnesite naslov URL..." autofocus autocomplete="off">
-          <button type="submit" class="search-submit">→</button>
+          <button type="submit" class="search-submit">Išči</button>
         </div>
 
         <div class="engine-pills">
           <button type="button" class="pill active" data-engine="google" onclick="setEngine('google', this)">Google</button>
           <button type="button" class="pill" data-engine="duckduckgo" onclick="setEngine('duckduckgo', this)">DuckDuckGo</button>
-          <button type="button" class="pill" data-engine="brave" onclick="setEngine('brave', this)">Brave Search</button>
+          <button type="button" class="pill" data-engine="brave" onclick="setEngine('brave', this)">Brave</button>
           <button type="button" class="pill" data-engine="youtube" onclick="setEngine('youtube', this)">YouTube</button>
         </div>
       </form>
     </main>
 
-    <!-- My Portals / Moje Strani (Safeer TV & Mobile DNA) -->
+    <!-- Quick Integrations Bar -->
+    <div class="integrations-quick-bar">
+      <span class="quick-lbl">Hitre stranske integracije:</span>
+      <button class="quick-chip" onclick="openSidebar('messenger')">💬 Facebook Messenger</button>
+      <button class="quick-chip" onclick="openSidebar('gmail')">✉️ Gmail</button>
+      <button class="quick-chip highlight" onclick="openSidebar('settings')">⚙️ Uredi orodno vrstico</button>
+    </div>
+
+    <!-- My Portals / Moje Strani -->
     <section class="portals-section">
       <div class="portals-head">
-        <h2 class="section-title">Priljubljene strani</h2>
-        <button class="btn-subtle" onclick="toggleEditMode()" id="editBtn">Uredi</button>
+        <h2 class="section-title">Priljubljene strani in multimedija</h2>
+        <span class="portals-note">Brez oglasov • Zasebno • Hitro</span>
       </div>
 
       <div class="portals-grid" id="portalsGrid">

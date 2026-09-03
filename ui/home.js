@@ -1,4 +1,4 @@
-// Safeer Browser - Linux Mint Edition Start Page Logic
+// Safeer Browser — Linux Mint Edition Start Page Logic
 
 let currentEngine = 'google';
 
@@ -9,7 +9,7 @@ const searchUrls = {
   youtube: 'https://www.youtube.com/results?search_query='
 };
 
-// 1. Live Clock & Date (Slovenian)
+// 1. Live Clock & Date in Slovenian
 function updateClock() {
   const now = new Date();
   const hours = String(now.getHours()).padStart(2, '0');
@@ -41,7 +41,7 @@ function setEngine(engine, btn) {
 }
 
 function performSearch(event) {
-  event.preventDefault();
+  if (event) event.preventDefault();
   const input = document.getElementById('searchInput');
   const query = input.value.trim();
   if (!query) return false;
@@ -55,7 +55,7 @@ function performSearch(event) {
     targetUrl = searchUrls[currentEngine] + encodeURIComponent(query);
   }
 
-  // Communicate with Safeer Python Host or navigate
+  // Communicate with Safeer Python Host or direct navigate
   if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {
     window.webkit.messageHandlers.safeer.postMessage({ action: 'navigate', url: targetUrl });
   } else {
@@ -64,14 +64,16 @@ function performSearch(event) {
   return false;
 }
 
-// 3. Portals Grid
+// 3. Portals Grid with Modern Visuals
 const defaultPortals = [
-  { title: "Xplore TV", url: "https://www.xploretv.si/livetv", mark: "X", bg: "linear-gradient(145deg, #7a1024, #e31837)" },
-  { title: "24ur.com", url: "https://www.24ur.com", mark: "2", bg: "linear-gradient(145deg, #0a2040, #1256a8)" },
-  { title: "RTV SLO", url: "https://www.rtvslo.si", mark: "R", bg: "linear-gradient(145deg, #04364a, #0284c7)" },
-  { title: "Filmi", url: "https://hydrahd.ws/", mark: "F", bg: "linear-gradient(145deg, #062a38, #0277a3)" },
-  { title: "YouTube", url: "https://www.youtube.com", mark: "Y", bg: "linear-gradient(145deg, #4a0b0b, #cc0000)" },
-  { title: "ChatGPT", url: "https://chatgpt.com", mark: "AI", bg: "linear-gradient(145deg, #063c2f, #10a37f)" }
+  { title: "Xplore TV", url: "https://www.xploretv.si/livetv", mark: "📺", bg: "linear-gradient(145deg, #7a1024, #e31837)" },
+  { title: "YouTube", url: "https://www.youtube.com", mark: "▶️", bg: "linear-gradient(145deg, #4a0b0b, #cc0000)" },
+  { title: "24ur.com", url: "https://www.24ur.com", mark: "📰", bg: "linear-gradient(145deg, #0a2040, #1256a8)" },
+  { title: "RTV SLO", url: "https://www.rtvslo.si", mark: "🇸🇮", bg: "linear-gradient(145deg, #04364a, #0284c7)" },
+  { title: "Filmi & Serije", url: "https://hydrahd.ws/", mark: "🎬", bg: "linear-gradient(145deg, #062a38, #0277a3)" },
+  { title: "ChatGPT AI", url: "https://chatgpt.com", mark: "🤖", bg: "linear-gradient(145deg, #063c2f, #10a37f)" },
+  { title: "CryptoQuant", url: "https://cryptoquant.com", mark: "📊", bg: "linear-gradient(145deg, #3d2303, #d97706)" },
+  { title: "GitHub", url: "https://github.com", mark: "🐙", bg: "linear-gradient(145deg, #1b1f24, #24292e)" }
 ];
 
 function renderPortals() {
@@ -104,15 +106,11 @@ function openSidebar(serviceId) {
   if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {
     window.webkit.messageHandlers.safeer.postMessage({ action: 'open_sidebar', service: serviceId });
   } else {
-    alert(`Odpiram stransko integracijo: ${serviceId}`);
+    console.log(`Open sidebar: ${serviceId}`);
   }
 }
 
-function toggleEditMode() {
-  alert("Urejanje portalov: V nastavitvah brskalnika lahko dodate svoje povezave ali prilagodite vrstni red.");
-}
-
-// Initialize
+// 4. Initialize
 document.addEventListener('DOMContentLoaded', () => {
   updateClock();
   setInterval(updateClock, 1000);
