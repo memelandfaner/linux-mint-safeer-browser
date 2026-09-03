@@ -399,6 +399,12 @@ class SafeerMintBrowser(Gtk.Window):
     def on_global_key_press(self, widget, event):
         ctrl = (event.state & Gdk.ModifierType.CONTROL_MASK) != 0
         alt = (event.state & Gdk.ModifierType.MOD1_MASK) != 0
+        shift = (event.state & Gdk.ModifierType.SHIFT_MASK) != 0
+
+        # Ctrl + Shift + Delete opens Clear Browsing Data dialog (Universal standard)
+        if ctrl and shift and event.keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete):
+            self.open_clear_data_dialog()
+            return True
 
         # F4 toggles sidebar
         if event.keyval == Gdk.KEY_F4:
@@ -972,6 +978,15 @@ class SafeerMintBrowser(Gtk.Window):
         kb_check.set_active(self.config.get("virtual_keyboard_enabled", False))
         kb_check.connect("toggled", lambda b: self.toggle_virtual_keyboard())
         box.pack_start(kb_check, False, False, 0)
+
+        sep3 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        box.pack_start(sep3, False, False, 4)
+
+        # 6. Clear Browsing Data Button (Privacy)
+        btn_clear_data = Gtk.Button(label="🧹 Počisti zgodovino, piškotke in predpomnilnik (Ctrl+Shift+Del)")
+        btn_clear_data.get_style_context().add_class("btn-delete")
+        btn_clear_data.connect("clicked", lambda b: [dialog.destroy(), self.open_clear_data_dialog()])
+        box.pack_start(btn_clear_data, False, False, 2)
 
         dialog.show_all()
         dialog.run()
@@ -1642,6 +1657,11 @@ class SafeerMintBrowser(Gtk.Window):
         btn_clear = Gtk.Button(label="🗑️ Počisti zgodovino")
         btn_clear.get_style_context().add_class("btn-delete")
         top_box.pack_start(btn_clear, False, False, 0)
+
+        btn_clear_cookies = Gtk.Button(label="🍪 Piškotki & Podatki")
+        btn_clear_cookies.get_style_context().add_class("nav-btn")
+        btn_clear_cookies.connect("clicked", lambda b: [dialog.destroy(), self.open_clear_data_dialog()])
+        top_box.pack_start(btn_clear_cookies, False, False, 0)
         content.pack_start(top_box, False, False, 0)
 
         store = Gtk.ListStore(str, str, str)
@@ -1701,6 +1721,99 @@ class SafeerMintBrowser(Gtk.Window):
         dialog.show_all()
         dialog.run()
         dialog.destroy()
+
+    def open_clear_data_dialog(self):
+        """Dialog za brisanje zgodovine, piškotkov, prijavnih sej in predpomnilnika."""
+        dialog = Gtk.Dialog(
+            title="🧹 Počisti podatke brskanja — Safeer Browser",
+            transient_for=self,
+            flags=0
+        )
+        dialog.set_default_size(460, 320)
+        dialog.add_button("Prekliči", Gtk.ResponseType.CANCEL)
+        btn_confirm = dialog.add_button("Počisti izbrano", Gtk.ResponseType.OK)
+        btn_confirm.get_style_context().add_class("btn-delete")
+
+        content = dialog.get_content_area()
+        content.set_spacing(12)
+        content.set_margin_top(16)
+        content.set_margin_bottom(16)
+        content.set_margin_left(20)
+        content.set_margin_right(20)
+
+        header = Gtk.Label(label="<b>Izberite podatke, ki jih želite odstraniti:</b>")
+        header.set_use_markup(True)
+        header.set_xalign(0.0)
+        content.pack_start(header, False, False, 0)
+
+        check_history = Gtk.CheckButton(label="🕒 Zgodovina brskanja (seznam vseh obiskanih strani)")
+        check_history.set_active(True)
+        content.pack_start(check_history, False, False, 2)
+
+        check_cookies = Gtk.CheckButton(label="🍪 Piškotki in prijavne seje (odjavi vas z vseh strani)")
+        check_cookies.set_active(True)
+        content.pack_start(check_cookies, False, False, 2)
+
+        check_cache = Gtk.CheckButton(label="💾 Predpomnilnik in shramba spletnih mest (sprosti disk)")
+        check_cache.set_active(True)
+        content.pack_start(check_cache, False, False, 2)
+
+        dialog.show_all()
+        resp = dialog.run()
+        if resp == Gtk.ResponseType.OK:
+            do_hist = check_history.get_active()
+            do_cookies = check_cookies.get_active()
+            do_cache = check_cache.get_active()
+            dialog.destroy()
+
+            msg_parts = []
+            if do_hist:
+                self.save_history([])
+                msg_parts.append("Zgodovina")
+
+            types_to_clear = 0
+            if do_cookies:
+                types_to_clear |= WebKit2.WebsiteDataTypes.COOKIES
+                types_to_clear |= WebKit2.WebsiteDataTypes.SESSION_STORAGE
+                types_to_clear |= WebKit2.WebsiteDataTypes.LOCAL_STORAGE
+                cookie_path = os.path.join(self.config.config_dir, "cookies.sqlite")
+                if os.path.exists(cookie_path):
+                    try:
+                        os.remove(cookie_path)
+                    except Exception:
+                        pass
+                msg_parts.append("Piškotki")
+
+            if do_cache:
+                types_to_clear |= WebKit2.WebsiteDataTypes.DISK_CACHE
+                types_to_clear |= WebKit2.WebsiteDataTypes.MEMORY_CACHE
+                types_to_clear |= WebKit2.WebsiteDataTypes.DOM_CACHE
+                types_to_clear |= WebKit2.WebsiteDataTypes.INDEXEDDB_DATABASES
+                types_to_clear |= WebKit2.WebsiteDataTypes.WEBSQL_DATABASES
+                types_to_clear |= WebKit2.WebsiteDataTypes.OFFLINE_APPLICATION_CACHE
+                msg_parts.append("Predpomnilnik")
+
+            if types_to_clear != 0:
+                try:
+                    self.website_data_manager.clear(types_to_clear, 0, None, None, None)
+                except Exception as e:
+                    print(f"[Privacy] Napaka pri brisanju podatkov: {e}")
+
+            info_dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.INFO,
+                buttons=Gtk.ButtonsType.OK,
+                text="✅ Podatki brskanja uspešno očiščeni!"
+            )
+            info_dialog.format_secondary_text(
+                f"Uspešno odstranjeno: {', '.join(msg_parts)}.\n"
+                "Vaša zasebnost je zaščitena."
+            )
+            info_dialog.run()
+            info_dialog.destroy()
+        else:
+            dialog.destroy()
 
     def on_js_message(self, content_mgr, js_result):
         try:
