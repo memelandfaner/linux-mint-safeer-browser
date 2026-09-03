@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('WebKit2', '4.1')
-from gi.repository import Gtk, Gdk, WebKit2, GLib, Gio
+from gi.repository import Gtk, Gdk, WebKit2, GLib, Gio, Pango
 
 # Explicitly set application & program name for Linux Mint window manager & taskbar
 GLib.set_prgname("safeer-browser")
@@ -163,109 +163,170 @@ class SafeerMintBrowser(Gtk.Window):
     def apply_css(self):
         css_provider = Gtk.CssProvider()
         css_data = """
+        * {
+            font-family: "Ubuntu", "Ubuntu Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
         window, paned, box, .view, WebKitWebView {
-            background-color: #080c16;
-            background: #080c16;
+            background-color: #1c1b22;
+            background: #1c1b22;
+            color: #fbfbfe;
         }
-        .top-toolbar {
-            background: linear-gradient(180deg, #0f172a 0%, #090d1a 100%);
+
+        /* 1. Firefox Proton Tab Row */
+        .tab-toolbar {
+            background-color: #1c1b22;
+            background: #1c1b22;
+            padding: 4px 10px 0px 10px;
+            min-height: 38px;
+        }
+        .firefox-tab {
+            background-color: #2b2a33;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            padding: 4px 12px;
+            min-width: 170px;
+            transition: all 120ms ease;
+        }
+        .tab-title {
+            color: #fbfbfe;
+            font-size: 13px;
+            font-weight: 500;
+            margin: 0 6px;
+        }
+        .tab-close-btn {
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            color: #9ca3af;
+            padding: 1px 4px;
+            font-size: 11px;
+        }
+        .tab-close-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+        }
+        .new-tab-btn {
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: #cfcfd8;
+            padding: 2px 9px;
+            font-size: 18px;
+            margin-left: 4px;
+        }
+        .new-tab-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        /* 2. Firefox Proton Nav Row */
+        .nav-toolbar {
+            background-color: #1c1b22;
+            background: #1c1b22;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 10px 18px;
-            min-height: 56px;
-        }
-        .mint-badge {
-            color: #87cf3e;
-            font-weight: 800;
-            font-size: 14.5px;
-            padding: 7px 15px;
-            border-radius: 10px;
-            background: rgba(135, 207, 62, 0.14);
-            border: 1px solid rgba(135, 207, 62, 0.3);
-            margin-right: 8px;
-        }
-        .nav-btn {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            color: #f1f5f9;
-            padding: 8px 16px;
-            margin-right: 5px;
-            font-size: 14.5px;
-            font-weight: 700;
+            padding: 4px 10px 7px 10px;
             min-height: 42px;
-            transition: all 180ms ease-in-out;
         }
-        .nav-btn:hover {
-            background: rgba(135, 207, 62, 0.2);
-            border-color: #87cf3e;
+        .ff-nav-btn {
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: #cfcfd8;
+            padding: 5px 9px;
+            margin-right: 2px;
+            font-size: 15px;
+            font-weight: 500;
+            min-height: 32px;
+            min-width: 32px;
+            transition: all 120ms ease;
+        }
+        .ff-nav-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
             color: #ffffff;
-            box-shadow: 0 0 12px rgba(135, 207, 62, 0.25);
         }
-        .nav-btn.active {
-            background: rgba(135, 207, 62, 0.28);
-            border-color: #87cf3e;
-            color: #87cf3e;
+        .ff-nav-btn.active {
+            background: rgba(255, 255, 255, 0.15);
+            color: #00ddff;
         }
-        .nav-btn-shield {
-            background: rgba(0, 210, 255, 0.12);
-            border: 1px solid rgba(0, 210, 255, 0.35);
-            color: #00d2ff;
+
+        /* 3. Firefox Awesomebar (URL Container) */
+        .ff-url-container {
+            background-color: #2b2a33;
+            background: #2b2a33;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            padding: 2px 10px;
+            transition: all 150ms ease;
         }
-        .nav-btn-shield:hover {
-            background: rgba(0, 210, 255, 0.25);
-            border-color: #00d2ff;
-            box-shadow: 0 0 14px rgba(0, 210, 255, 0.4);
+        .ff-url-container:focus-within {
+            border-color: #00ddff;
+            background-color: #1c1b22;
+            box-shadow: 0 0 0 2px rgba(0, 221, 255, 0.3);
         }
-        .url-entry {
-            background: #050811;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 999px;
-            color: #ffffff;
-            padding: 8px 22px;
-            font-size: 14.5px;
-            min-height: 42px;
-            transition: all 180ms ease-in-out;
+        .ff-url-entry {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            color: #fbfbfe;
+            font-family: "Ubuntu", -apple-system, sans-serif;
+            font-size: 14px;
+            font-weight: 400;
+            padding: 5px 6px;
         }
-        .url-entry:focus {
-            border-color: #87cf3e;
-            box-shadow: 0 0 14px rgba(135, 207, 62, 0.35);
+        .ff-shield-btn {
+            background: transparent;
+            border: none;
+            padding: 2px 6px;
+            color: #00ddff;
+            font-size: 14px;
+            border-radius: 4px;
         }
+        .ff-shield-btn:hover {
+            background: rgba(0, 221, 255, 0.15);
+        }
+        .ff-security-icon {
+            color: #9ca3af;
+            font-size: 13px;
+            margin-right: 4px;
+        }
+
+        /* Left Dock Bar */
         .dock-bar {
-            background-color: #070a14;
+            background-color: #131217;
             border-right: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 10px 5px;
-            min-width: 58px;
+            padding: 8px 4px;
+            min-width: 52px;
         }
         .dock-btn {
             background: transparent;
             border: none;
             border-left: 3px solid transparent;
-            border-radius: 12px;
-            padding: 12px 10px;
-            margin: 4px 2px;
+            border-radius: 8px;
+            padding: 10px 8px;
+            margin: 3px 2px;
             color: #94a3b8;
-            font-size: 22px;
-            transition: all 150ms ease;
+            font-size: 20px;
+            transition: all 120ms ease;
         }
         .dock-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.08);
             color: #ffffff;
         }
         .dock-btn.active {
-            background: rgba(135, 207, 62, 0.2);
-            border-left: 3px solid #87cf3e;
-            color: #87cf3e;
-            box-shadow: 0 0 14px rgba(135, 207, 62, 0.3);
+            background: rgba(0, 221, 255, 0.15);
+            border-left: 3px solid #00ddff;
+            color: #00ddff;
         }
         .drawer-box {
-            background-color: #0a0f1d;
+            background-color: #1c1b22;
             border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
         .drawer-header-bar {
-            background: #0d1527;
+            background: #2b2a33;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 10px 16px;
-            min-height: 52px;
+            padding: 8px 14px;
+            min-height: 44px;
         }
         .btn-delete {
             background: rgba(239, 68, 68, 0.15);
@@ -296,70 +357,108 @@ class SafeerMintBrowser(Gtk.Window):
         return False
 
     def create_top_bar(self):
-        self.top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        self.top_bar.get_style_context().add_class("top-toolbar")
+        # Master header container (Tabs + Navigation bar in Firefox Proton layout)
+        self.top_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
-        # Linux Mint Brand Badge
-        self.mint_badge = Gtk.Label(label="🍃 Safeer Mint")
-        self.mint_badge.get_style_context().add_class("mint-badge")
-        self.top_bar.pack_start(self.mint_badge, False, False, 2)
+        # 1. Tier 1: Firefox Tab Strip
+        self.tab_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.tab_bar.get_style_context().add_class("tab-toolbar")
 
-        # Back
-        self.btn_back = Gtk.Button(label="◀")
-        self.btn_back.set_tooltip_text("Nazaj (Alt + Levo)")
-        self.btn_back.get_style_context().add_class("nav-btn")
-        self.btn_back.connect("clicked", lambda b: self.webview.go_back())
-        self.top_bar.pack_start(self.btn_back, False, False, 0)
+        # Active Tab (matches Mozilla screenshot: Favicon + Title + Close x)
+        self.active_tab = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.active_tab.get_style_context().add_class("firefox-tab")
 
-        # Forward
-        self.btn_forward = Gtk.Button(label="▶")
-        self.btn_forward.set_tooltip_text("Naprej (Alt + Desno)")
-        self.btn_forward.get_style_context().add_class("nav-btn")
-        self.btn_forward.connect("clicked", lambda b: self.webview.go_forward())
-        self.top_bar.pack_start(self.btn_forward, False, False, 0)
+        self.tab_icon = Gtk.Label(label="🌐")
+        self.active_tab.pack_start(self.tab_icon, False, False, 2)
 
-        # Reload
-        self.btn_reload = Gtk.Button(label="⟳")
-        self.btn_reload.set_tooltip_text("Osveži stran (F5 / Ctrl + R)")
-        self.btn_reload.get_style_context().add_class("nav-btn")
-        self.btn_reload.connect("clicked", lambda b: self.webview.reload())
-        self.top_bar.pack_start(self.btn_reload, False, False, 0)
+        self.tab_title_label = Gtk.Label(label="Safeer Domača Stran")
+        self.tab_title_label.get_style_context().add_class("tab-title")
+        self.tab_title_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self.tab_title_label.set_max_width_chars(25)
+        self.active_tab.pack_start(self.tab_title_label, True, True, 2)
 
-        # Home
-        self.btn_home = Gtk.Button(label="🏠")
-        self.btn_home.set_tooltip_text("Domača stran Safeer")
-        self.btn_home.get_style_context().add_class("nav-btn")
-        self.btn_home.connect("clicked", lambda b: self.load_homepage())
-        self.top_bar.pack_start(self.btn_home, False, False, 0)
+        self.tab_close_btn = Gtk.Button(label="✕")
+        self.tab_close_btn.get_style_context().add_class("tab-close-btn")
+        self.tab_close_btn.set_tooltip_text("Zapri ali naloži domačo stran")
+        self.tab_close_btn.connect("clicked", lambda b: self.load_homepage())
+        self.active_tab.pack_start(self.tab_close_btn, False, False, 2)
 
-        # Omnibox / URL Entry
-        self.url_entry = Gtk.Entry()
-        self.url_entry.get_style_context().add_class("url-entry")
-        self.url_entry.set_placeholder_text("Vnesite naslov spletnega mesta ali iskanje...")
-        self.url_entry.connect("activate", self.on_url_activate)
-        self.top_bar.pack_start(self.url_entry, True, True, 4)
+        self.tab_bar.pack_start(self.active_tab, False, False, 0)
 
-        # Shield Status indicator & Dialog Trigger
-        self.btn_shield = Gtk.Button(label="🛡️ Ščit Aktiven")
-        self.btn_shield.get_style_context().add_class("nav-btn")
-        self.btn_shield.get_style_context().add_class("nav-btn-shield")
-        self.btn_shield.set_tooltip_text("Safeer Shield: Blokiranje oglasov, YouTube zaščita & abuse.ch C2 Ščit")
-        self.btn_shield.connect("clicked", lambda b: self.show_shield_status_dialog())
-        self.top_bar.pack_start(self.btn_shield, False, False, 2)
+        # New Tab Button (+)
+        self.btn_new_tab = Gtk.Button(label="+")
+        self.btn_new_tab.get_style_context().add_class("new-tab-btn")
+        self.btn_new_tab.set_tooltip_text("Odpri domačo stran Safeer (+)")
+        self.btn_new_tab.connect("clicked", lambda b: self.load_homepage())
+        self.tab_bar.pack_start(self.btn_new_tab, False, False, 0)
 
-        # Toggle Sidebar Button (Začasno skrij/pokaži)
-        self.btn_sidebar = Gtk.Button(label="▤ Stranska vrstica")
-        self.btn_sidebar.get_style_context().add_class("nav-btn")
-        self.btn_sidebar.set_tooltip_text("Začasno skrij ali pokaži stransko vrstico (Bližnjica: F4)")
+        self.top_bar.pack_start(self.tab_bar, False, False, 0)
+
+        # 2. Tier 2: Firefox Navigation Bar
+        self.nav_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.nav_bar.get_style_context().add_class("nav-toolbar")
+
+        # Sidebar button (▤)
+        self.btn_sidebar = Gtk.Button(label="▤")
+        self.btn_sidebar.get_style_context().add_class("ff-nav-btn")
+        self.btn_sidebar.set_tooltip_text("Stranska orodna vrstica (F4)")
         self.btn_sidebar.connect("clicked", lambda b: self.toggle_sidebar_visibility())
-        self.top_bar.pack_start(self.btn_sidebar, False, False, 0)
+        self.nav_bar.pack_start(self.btn_sidebar, False, False, 0)
 
-        # Optional Virtual Keyboard Toggle Button (Default OFF)
-        self.btn_keyboard = Gtk.Button(label="⌨️ Tipkovnica")
-        self.btn_keyboard.get_style_context().add_class("nav-btn")
-        self.btn_keyboard.set_tooltip_text("Vklopi/izklopi navidezno tipkovnico na zaslonu")
+        # Back (←)
+        self.btn_back = Gtk.Button(label="←")
+        self.btn_back.get_style_context().add_class("ff-nav-btn")
+        self.btn_back.set_tooltip_text("Nazaj (Alt + Levo)")
+        self.btn_back.connect("clicked", lambda b: self.webview.go_back())
+        self.nav_bar.pack_start(self.btn_back, False, False, 0)
+
+        # Forward (→)
+        self.btn_forward = Gtk.Button(label="→")
+        self.btn_forward.get_style_context().add_class("ff-nav-btn")
+        self.btn_forward.set_tooltip_text("Naprej (Alt + Desno)")
+        self.btn_forward.connect("clicked", lambda b: self.webview.go_forward())
+        self.nav_bar.pack_start(self.btn_forward, False, False, 0)
+
+        # Reload (↻)
+        self.btn_reload = Gtk.Button(label="↻")
+        self.btn_reload.get_style_context().add_class("ff-nav-btn")
+        self.btn_reload.set_tooltip_text("Osveži stran (F5 / Ctrl + R)")
+        self.btn_reload.connect("clicked", lambda b: self.webview.reload())
+        self.nav_bar.pack_start(self.btn_reload, False, False, 0)
+
+        # 3. Firefox Awesomebar / URL Box
+        self.url_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.url_box.get_style_context().add_class("ff-url-container")
+
+        # Tracking protection shield inside URL bar
+        self.btn_shield = Gtk.Button(label="🛡️")
+        self.btn_shield.get_style_context().add_class("ff-shield-btn")
+        self.btn_shield.set_tooltip_text("Safeer Cyber Shield: Aktivna zaščita pred sledilci in oglasom")
+        self.btn_shield.connect("clicked", lambda b: self.show_shield_status_dialog())
+        self.url_box.pack_start(self.btn_shield, False, False, 0)
+
+        # Security tune sliders icon
+        self.security_icon = Gtk.Label(label="🎚️")
+        self.security_icon.get_style_context().add_class("ff-security-icon")
+        self.url_box.pack_start(self.security_icon, False, False, 0)
+
+        # Clean URL Entry with Ubuntu font
+        self.url_entry = Gtk.Entry()
+        self.url_entry.get_style_context().add_class("ff-url-entry")
+        self.url_entry.set_placeholder_text("Iščite ali vnesite naslov spletnega mesta...")
+        self.url_entry.connect("activate", self.on_url_activate)
+        self.url_box.pack_start(self.url_entry, True, True, 0)
+
+        self.nav_bar.pack_start(self.url_box, True, True, 4)
+
+        # Virtual Keyboard Button (⌨️)
+        self.btn_keyboard = Gtk.Button(label="⌨️")
+        self.btn_keyboard.get_style_context().add_class("ff-nav-btn")
+        self.btn_keyboard.set_tooltip_text("Navidezna tipkovnica")
         self.btn_keyboard.connect("clicked", self.toggle_virtual_keyboard)
-        self.top_bar.pack_start(self.btn_keyboard, False, False, 0)
+        self.nav_bar.pack_start(self.btn_keyboard, False, False, 0)
+
+        self.top_bar.pack_start(self.nav_bar, False, False, 0)
 
     def show_shield_status_dialog(self):
         """Prikaže podrobno varnostno poročilo ščita."""
@@ -916,6 +1015,9 @@ class SafeerMintBrowser(Gtk.Window):
         home_path = os.path.join(BASE_DIR, "ui", "home.html")
         self.webview.load_uri(f"file://{home_path}")
         self.url_entry.set_text("safeer://home")
+        self.tab_title_label.set_text("Safeer Domača Stran")
+        self.tab_icon.set_text("🍃")
+        self.security_icon.set_text("🎚️")
 
     def on_url_activate(self, entry):
         text = entry.get_text().strip()
@@ -960,13 +1062,33 @@ class SafeerMintBrowser(Gtk.Window):
             uri = webview.get_uri() or ""
             if "ui/home.html" in uri:
                 self.url_entry.set_text("safeer://home")
+                self.tab_title_label.set_text("Safeer Domača Stran")
+                self.tab_icon.set_text("🍃")
+                self.security_icon.set_text("🎚️")
             else:
                 self.url_entry.set_text(uri)
+                parsed = urllib.parse.urlparse(uri)
+                if parsed.scheme == "https":
+                    self.security_icon.set_text("🔒")
+                else:
+                    self.security_icon.set_text("🎚️")
 
     def on_title_changed(self, webview, prop):
         title = webview.get_title()
         if title:
             self.set_title(f"{title} — Safeer Browser (Linux Mint)")
+            self.tab_title_label.set_text(title)
+            t_lower = title.lower()
+            if "google" in t_lower:
+                self.tab_icon.set_text("🌐")
+            elif "youtube" in t_lower:
+                self.tab_icon.set_text("▶️")
+            elif "facebook" in t_lower or "messenger" in t_lower:
+                self.tab_icon.set_text("💬")
+            elif "gmail" in t_lower or "pošta" in t_lower:
+                self.tab_icon.set_text("✉️")
+            else:
+                self.tab_icon.set_text("🌐")
 
     def on_uri_changed(self, webview, prop):
         uri = webview.get_uri()
