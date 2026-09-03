@@ -8,11 +8,16 @@ YouTube Zero-Ad & Background Audio engine, Cyber Threat Shield, and Persistent S
 import os
 import sys
 import json
+import urllib.parse
 import gi
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('WebKit2', '4.1')
 from gi.repository import Gtk, Gdk, WebKit2, GLib, Gio
+
+# Explicitly set application & program name for Linux Mint window manager & taskbar
+GLib.set_prgname("safeer-browser")
+GLib.set_application_name("Safeer Browser")
 
 # Import core modules
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,7 +30,8 @@ from core.adblock import (
     is_threat_domain
 )
 
-USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+# Native WebKitGTK user agent matching Safari/WebKit engine to prevent Google CAPTCHA bot triggers
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
 DOCK_WIDTH = 54
 
 
@@ -35,11 +41,23 @@ class SafeerMintBrowser(Gtk.Window):
         self.set_default_size(1280, 820)
         self.set_position(Gtk.WindowPosition.CENTER)
 
+        # Set WM_CLASS so Linux Mint panel associates the window with safeer-browser.desktop
+        self.set_wmclass("safeer-browser", "Safeer-browser")
+
+        # Set official window & taskbar icon
+        icon_path = os.path.join(BASE_DIR, "assets", "icon.png")
+        if os.path.exists(icon_path):
+            try:
+                self.set_icon_from_file(icon_path)
+                Gtk.Window.set_default_icon_from_file(icon_path)
+            except Exception as e:
+                print(f"[Icon] Opozorilo pri nalaganju ikone: {e}")
+
         self.config = ConfigManager()
         self.active_sidebar_service = None
         self.dock_buttons = {}
 
-        # Configure Persistent Cookie & Session Storage
+        # Configure Persistent Cookie, LocalStorage & IndexedDB Storage
         self.setup_persistent_storage()
 
         # Apply Linux Mint Dark Theme preference
@@ -53,15 +71,26 @@ class SafeerMintBrowser(Gtk.Window):
         self.connect("key-press-event", self.on_global_key_press)
 
     def setup_persistent_storage(self):
-        """Omogoči trajne seje in piškotke za Messenger, Gmail, YouTube itd."""
+        """Omogoči trajne seje, LocalStorage in IndexedDB za Messenger, Gmail, YouTube itd."""
         try:
-            ctx = WebKit2.WebContext.get_default()
-            cm = ctx.get_cookie_manager()
+            data_dir = os.path.join(self.config.config_dir, "web-data")
+            os.makedirs(data_dir, exist_ok=True)
+            self.website_data_manager = WebKit2.WebsiteDataManager(
+                base_data_directory=data_dir,
+                base_cache_directory=os.path.join(data_dir, "cache"),
+                disk_cache_directory=os.path.join(data_dir, "cache"),
+                indexeddb_directory=os.path.join(data_dir, "indexeddb"),
+                local_storage_directory=os.path.join(data_dir, "localstorage"),
+                websql_directory=os.path.join(data_dir, "websql")
+            )
+            self.web_context = WebKit2.WebContext.new_with_website_data_manager(self.website_data_manager)
+            cookie_mgr = self.website_data_manager.get_cookie_manager()
             cookie_path = os.path.join(self.config.config_dir, "cookies.sqlite")
-            cm.set_persistent_storage(cookie_path, WebKit2.CookiePersistentStorage.SQLITE)
-            cm.set_accept_policy(WebKit2.CookieAcceptPolicy.ALWAYS)
+            cookie_mgr.set_persistent_storage(cookie_path, WebKit2.CookiePersistentStorage.SQLITE)
+            cookie_mgr.set_accept_policy(WebKit2.CookieAcceptPolicy.ALWAYS)
         except Exception as e:
-            print(f"[Storage] Opozorilo pri nastavitvi piškotkov: {e}")
+            print(f"[Storage] Opozorilo pri nastavitvi shrambe: {e}")
+            self.web_context = WebKit2.WebContext.get_default()
 
     def setup_ui(self):
         # Main Vertical Box
@@ -312,7 +341,7 @@ class SafeerMintBrowser(Gtk.Window):
             "✓ YouTube Background Audio: Predvajanje se nemoteno nadaljuje ob menjavi zavihkov.\n"
             "✓ Ambient Mode: Odstranjena zamegljenost in neželeni sivi okvirji.\n"
             "✓ abuse.ch Botnet Shield: Aktivno blokiranje C2 strežnikov in phishing domen.\n"
-            "✓ Trajne seje: Piškotki za Messenger in Gmail so varno shranjeni v ~/.config/safeer-mint."
+            "✓ Čista prijava: Zaščita ne posega v obrazce za prijavo (Facebook, Google, Messenger)."
         )
         dialog.format_secondary_text(msg)
         dialog.run()
@@ -329,7 +358,10 @@ class SafeerMintBrowser(Gtk.Window):
             self.icon_dock.show_all()
             if self.active_sidebar_service:
                 self.sidebar_drawer.show_all()
-                target_w = DOCK_WIDTH + self.config.get("sidebar_width", 420)
+                drawer_w = self.config.get("sidebar_width", 420)
+                if drawer_w > 650 or drawer_w < 300:
+                    drawer_w = 420
+                target_w = DOCK_WIDTH + drawer_w
                 self.content_paned.set_position(target_w)
             else:
                 self.sidebar_drawer.hide()
@@ -389,8 +421,8 @@ class SafeerMintBrowser(Gtk.Window):
 
         self.sidebar_drawer.pack_start(self.drawer_header, False, False, 0)
 
-        # Drawer WebView
-        self.sidebar_webview = WebKit2.WebView()
+        # Drawer WebView: uses shared persistent web_context
+        self.sidebar_webview = WebKit2.WebView.new_with_context(self.web_context)
         self.setup_webview_settings(self.sidebar_webview)
         self.sidebar_webview.connect("create", self.on_create_webview)
         self.sidebar_drawer.pack_start(self.sidebar_webview, True, True, 0)
@@ -463,7 +495,10 @@ class SafeerMintBrowser(Gtk.Window):
 
             # Show drawer and expand divider
             self.sidebar_drawer.show_all()
-            target_width = DOCK_WIDTH + self.config.get("sidebar_width", 420)
+            drawer_w = self.config.get("sidebar_width", 420)
+            if drawer_w > 650 or drawer_w < 300:
+                drawer_w = 420
+            target_width = DOCK_WIDTH + drawer_w
             self.content_paned.set_position(target_width)
             self.active_sidebar_service = service_id
 
@@ -485,7 +520,8 @@ class SafeerMintBrowser(Gtk.Window):
         pos = paned.get_position()
         if self.sidebar_drawer.is_visible() and pos > DOCK_WIDTH + 100:
             drawer_w = pos - DOCK_WIDTH
-            self.config.set("sidebar_width", drawer_w)
+            if 300 <= drawer_w <= 650:
+                self.config.set("sidebar_width", drawer_w)
 
     def on_create_webview(self, webview, action):
         """Preusmeri nova okna/povezave v glavno okno brskalnika."""
@@ -660,7 +696,9 @@ class SafeerMintBrowser(Gtk.Window):
 
     def create_main_webview(self):
         self.webview_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.webview = WebKit2.WebView()
+        
+        # Main WebView: uses shared persistent web_context
+        self.webview = WebKit2.WebView.new_with_context(self.web_context)
         self.setup_webview_settings(self.webview)
 
         # Connect signals
@@ -674,23 +712,32 @@ class SafeerMintBrowser(Gtk.Window):
         content_mgr.register_script_message_handler("safeer")
         content_mgr.connect("script-message-received::safeer", self.on_js_message)
 
-        # Inject YouTube zero-ad script
+        # Inject YouTube zero-ad script ONLY ON YOUTUBE DOMAINS
+        # This guarantees Google Search, Facebook, Banking, etc. receive 100% native untouched JS primitives!
         yt_script = WebKit2.UserScript(
             YOUTUBE_ADBLOCK_SCRIPT,
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
             WebKit2.UserScriptInjectionTime.START,
-            None,
+            ["*://*.youtube.com/*", "*://youtube.com/*", "*://*.googlevideo.com/*"],
             None
         )
         content_mgr.add_script(yt_script)
 
-        # Inject Generic cosmetic ad-blocker
+        # Inject Generic cosmetic ad-blocker on content frames, excluding sensitive domains
+        cosmetic_blocklist = [
+            "*://*.google.com/*",
+            "*://*.google.si/*",
+            "*://*.facebook.com/*",
+            "*://*.messenger.com/*",
+            "*://accounts.google.com/*",
+            "*://*.banka.si/*"
+        ]
         gen_script = WebKit2.UserScript(
             GENERIC_COSMETIC_SCRIPT,
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
             WebKit2.UserScriptInjectionTime.END,
             None,
-            None
+            cosmetic_blocklist
         )
         content_mgr.add_script(gen_script)
 
@@ -703,6 +750,12 @@ class SafeerMintBrowser(Gtk.Window):
         settings.set_enable_webgl(True)
         settings.set_enable_media_stream(True)
         settings.set_enable_smooth_scrolling(True)
+        settings.set_enable_html5_local_storage(True)
+        settings.set_enable_html5_database(True)
+        settings.set_enable_javascript(True)
+        settings.set_enable_javascript_markup(True)
+        settings.set_allow_modal_dialogs(True)
+        settings.set_enable_encrypted_media(True)
         settings.set_user_agent(USER_AGENT)
 
     def create_keyboard_panel(self):
@@ -710,7 +763,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.keyboard_box.set_size_request(-1, 240)
         self.keyboard_box.set_no_show_all(True)
 
-        self.kb_webview = WebKit2.WebView()
+        self.kb_webview = WebKit2.WebView.new_with_context(self.web_context)
         self.setup_webview_settings(self.kb_webview)
         kb_path = os.path.join(BASE_DIR, "ui", "keyboard.html")
         self.kb_webview.load_uri(f"file://{kb_path}")
@@ -747,6 +800,7 @@ class SafeerMintBrowser(Gtk.Window):
             if data.get("action") == "close":
                 self.toggle_virtual_keyboard()
             elif "key" in data:
+                key = data["key"]
                 js_inject = """
                 (function() {
                     const el = document.activeElement;
@@ -788,7 +842,7 @@ class SafeerMintBrowser(Gtk.Window):
             if "." in text and " " not in text:
                 target = "https://" + text
             else:
-                target = f"https://www.google.com/search?q={text}"
+                target = f"https://www.google.com/search?q={urllib.parse.quote_plus(text)}"
         else:
             target = text
 
