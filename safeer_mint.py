@@ -1400,6 +1400,11 @@ class SafeerMintBrowser(Gtk.Window):
                         t["icon"] = "🍃"
                         t["title_label"].set_text("Safeer Domača Stran")
                         t["icon_label"].set_text("🍃")
+                        # Inject live custom portals into home.html
+                        portals = self.config.get_portals()
+                        portals_json = json.dumps(portals)
+                        js = f"if (window.setCustomPortals) {{ window.setCustomPortals({portals_json}); }}"
+                        webview.run_javascript(js, None, None, None)
                     break
 
             if self.active_tab_id == tab_id:
@@ -2052,7 +2057,97 @@ class SafeerMintBrowser(Gtk.Window):
         notebook.append_page(css_page_box, Gtk.Label(label="🖌️ Lasten CSS"))
 
         # -------------------------------------------------------------
-        # ZAVIHEK 2: 🧩 Uporabniške skripte (UserScripts)
+        # ZAVIHEK 3: ⭐ Priljubljene strani & Multimedija
+        # -------------------------------------------------------------
+        portals_tab_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        portals_tab_box.set_margin_top(14)
+        portals_tab_box.set_margin_bottom(14)
+        portals_tab_box.set_margin_start(16)
+        portals_tab_box.set_margin_end(16)
+        portals_tab_box.set_vexpand(True)
+        portals_tab_box.set_hexpand(True)
+
+        portals_top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        lbl_portals_head = Gtk.Label(label="<b>Priljubljene strani in multimedija na domačem zaslonu:</b>")
+        lbl_portals_head.set_use_markup(True)
+        lbl_portals_head.set_xalign(0.0)
+        portals_top_bar.pack_start(lbl_portals_head, True, True, 0)
+
+        btn_add_p_tab = Gtk.Button(label="➕ Dodaj novo stran")
+        btn_add_p_tab.get_style_context().add_class("nav-btn")
+        portals_top_bar.pack_start(btn_add_p_tab, False, False, 0)
+
+        btn_res_p_tab = Gtk.Button(label="🔄 Ponastavi")
+        btn_res_p_tab.get_style_context().add_class("btn-delete")
+        portals_top_bar.pack_start(btn_res_p_tab, False, False, 0)
+        portals_tab_box.pack_start(portals_top_bar, False, False, 0)
+
+        p_scroll = Gtk.ScrolledWindow()
+        p_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        p_scroll.set_vexpand(True)
+        p_scroll.set_hexpand(True)
+        p_scroll.set_min_content_height(320)
+
+        p_list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        p_scroll.add(p_list_box)
+        portals_tab_box.pack_start(p_scroll, True, True, 0)
+
+        def populate_tab_portals():
+            for child in p_list_box.get_children():
+                p_list_box.remove(child)
+
+            portals = self.config.get_portals()
+            for p in portals:
+                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+                row.get_style_context().add_class("user-script-row")
+                row.set_margin_top(4)
+                row.set_margin_bottom(4)
+
+                badge = Gtk.Label(label=p.get("mark", "🌐"))
+                badge.set_width_chars(3)
+                row.pack_start(badge, False, False, 6)
+
+                info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+                lbl_title = Gtk.Label(label=f"<b>{p.get('title', '')}</b>")
+                lbl_title.set_use_markup(True)
+                lbl_title.set_xalign(0.0)
+                lbl_url = Gtk.Label(label=p.get('url', ''))
+                lbl_url.set_xalign(0.0)
+                lbl_url.get_style_context().add_class("text-muted")
+                info_box.pack_start(lbl_title, False, False, 0)
+                info_box.pack_start(lbl_url, False, False, 0)
+                row.pack_start(info_box, True, True, 0)
+
+                btn_edit = Gtk.Button(label="✏️ Uredi")
+                btn_edit.get_style_context().add_class("nav-btn")
+                btn_edit.connect("clicked", lambda b, prt=p: self.open_portal_editor_dialog(prt, on_saved=populate_tab_portals))
+                row.pack_end(btn_edit, False, False, 4)
+
+                btn_del = Gtk.Button(label="🗑️")
+                btn_del.get_style_context().add_class("btn-delete")
+                def on_delete_tab(b, pid=p.get("id")):
+                    self.config.delete_portal(pid)
+                    self.broadcast_portals_update()
+                    populate_tab_portals()
+                btn_del.connect("clicked", on_delete_tab)
+                row.pack_end(btn_del, False, False, 0)
+
+                p_list_box.pack_start(row, False, False, 0)
+
+            p_list_box.show_all()
+
+        populate_tab_portals()
+        btn_add_p_tab.connect("clicked", lambda b: self.open_portal_editor_dialog(None, on_saved=populate_tab_portals))
+        def on_reset_tab_click(b):
+            self.config.reset_portals()
+            self.broadcast_portals_update()
+            populate_tab_portals()
+        btn_res_p_tab.connect("clicked", on_reset_tab_click)
+
+        notebook.append_page(portals_tab_box, Gtk.Label(label="⭐ Priljubljene strani"))
+
+        # -------------------------------------------------------------
+        # ZAVIHEK 4: 🧩 Uporabniške skripte (UserScripts)
         # -------------------------------------------------------------
         scripts_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         scripts_box.set_margin_top(12)
@@ -2231,6 +2326,223 @@ class SafeerMintBrowser(Gtk.Window):
                 )
         dialog.destroy()
 
+    def broadcast_portals_update(self):
+        """Osveži priljubljene portale na vseh odprtih zavihkih z domačo stranjo."""
+        portals = self.config.get_portals()
+        portals_json = json.dumps(portals)
+        js = f"if (window.setCustomPortals) {{ window.setCustomPortals({portals_json}); }}"
+        for t in self.tabs:
+            wv = t.get("webview")
+            uri = t.get("uri", "")
+            if wv and ("home.html" in uri or uri == "safeer://home"):
+                wv.run_javascript(js, None, None, None)
+
+    def open_portal_editor_dialog(self, portal=None, on_saved=None):
+        """Dialog za dodajanje ali urejanje priljubljenega portala / strani."""
+        is_edit = portal is not None
+        title = "✏️ Uredi priljubljeno stran" if is_edit else "➕ Dodaj novo priljubljeno stran"
+        dialog = Gtk.Dialog(title=title, transient_for=self, flags=0)
+        dialog.set_default_size(560, 480)
+        dialog.set_resizable(True)
+        dialog.set_position(Gtk.WindowPosition.CENTER)
+        dialog.add_button("Prekliči", Gtk.ResponseType.CANCEL)
+        btn_save = dialog.add_button("💾 Shrani stran", Gtk.ResponseType.OK)
+        btn_save.get_style_context().add_class("nav-btn")
+
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(14)
+        content.set_margin_bottom(14)
+        content.set_margin_start(16)
+        content.set_margin_end(16)
+
+        lbl_title = Gtk.Label(label="<b>Naziv strani (npr. YouTube, 24ur, Filmi):</b>")
+        lbl_title.set_use_markup(True)
+        lbl_title.set_xalign(0.0)
+        content.pack_start(lbl_title, False, False, 0)
+        entry_title = Gtk.Entry()
+        entry_title.set_text(portal.get("title", "") if is_edit else "")
+        entry_title.set_placeholder_text("Ime portala...")
+        content.pack_start(entry_title, False, False, 0)
+
+        lbl_url = Gtk.Label(label="<b>Spletni naslov URL (npr. https://youtube.com):</b>")
+        lbl_url.set_use_markup(True)
+        lbl_url.set_xalign(0.0)
+        content.pack_start(lbl_url, False, False, 0)
+        entry_url = Gtk.Entry()
+        entry_url.set_text(portal.get("url", "") if is_edit else "https://")
+        content.pack_start(entry_url, False, False, 0)
+
+        lbl_mark = Gtk.Label(label="<b>Ikona ali simbol (Emoji):</b>")
+        lbl_mark.set_use_markup(True)
+        lbl_mark.set_xalign(0.0)
+        content.pack_start(lbl_mark, False, False, 0)
+
+        mark_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        entry_mark = Gtk.Entry()
+        entry_mark.set_max_length(4)
+        entry_mark.set_width_chars(6)
+        entry_mark.set_text(portal.get("mark", "🌐") if is_edit else "⭐")
+        mark_box.pack_start(entry_mark, False, False, 0)
+
+        emojis = ["📺", "🎬", "🎵", "📰", "🎮", "🤖", "📊", "💬", "🌐", "⭐", "🚀", "🛒"]
+        for em in emojis:
+            btn_em = Gtk.Button(label=em)
+            btn_em.connect("clicked", lambda b, e=em: entry_mark.set_text(e))
+            mark_box.pack_start(btn_em, False, False, 0)
+        content.pack_start(mark_box, False, False, 0)
+
+        lbl_color = Gtk.Label(label="<b>Barvni poudarek kartice:</b>")
+        lbl_color.set_use_markup(True)
+        lbl_color.set_xalign(0.0)
+        content.pack_start(lbl_color, False, False, 0)
+
+        selected_color = [portal.get("color", "#00d2ff") if is_edit else "#10b981"]
+        colors_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        color_presets = [
+            ("🔴 Rdeča", "#cc0000"),
+            ("🔵 Modra", "#0284c7"),
+            ("🟢 Mint", "#10b981"),
+            ("🟣 Vijolična", "#a855f7"),
+            ("🟠 Oranžna", "#f59e0b"),
+            ("⚫ Temna", "#1e293b"),
+            ("✨ Cian", "#00d2ff")
+        ]
+        lbl_curr_color = Gtk.Label(label=f"Izbrana barva: {selected_color[0]}")
+        for cname, chex in color_presets:
+            btn_c = Gtk.Button(label=cname)
+            def on_c_click(b, hex_code=chex):
+                selected_color[0] = hex_code
+                lbl_curr_color.set_text(f"Izbrana barva: {hex_code}")
+            btn_c.connect("clicked", on_c_click)
+            colors_box.pack_start(btn_c, False, False, 0)
+        content.pack_start(colors_box, False, False, 0)
+        content.pack_start(lbl_curr_color, False, False, 0)
+
+        dialog.show_all()
+        resp = dialog.run()
+        if resp == Gtk.ResponseType.OK:
+            p_title = entry_title.get_text().strip() or "Priljubljena stran"
+            p_url = entry_url.get_text().strip() or "https://"
+            p_mark = entry_mark.get_text().strip() or "🌐"
+            p_color = selected_color[0]
+            p_bg = f"linear-gradient(145deg, #091a28, {p_color})"
+
+            if is_edit:
+                self.config.update_portal(portal["id"], title=p_title, url=p_url, mark=p_mark, bg=p_bg, color=p_color)
+            else:
+                self.config.add_portal(title=p_title, url=p_url, mark=p_mark, bg=p_bg, color=p_color)
+
+            self.broadcast_portals_update()
+            if on_saved:
+                on_saved()
+
+        dialog.destroy()
+
+    def open_portals_dialog(self):
+        """Samostojno okno za upravljanje priljubljenih strani in multimedije."""
+        dialog = Gtk.Dialog(
+            title="⭐ Priljubljene strani in multimedija — Safeer",
+            transient_for=self,
+            flags=0
+        )
+        dialog.set_default_size(780, 580)
+        dialog.set_resizable(True)
+        dialog.set_position(Gtk.WindowPosition.CENTER)
+        dialog.add_button("Zapri", Gtk.ResponseType.CLOSE)
+
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_start(16)
+        content.set_margin_end(16)
+
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        lbl_head = Gtk.Label(label="<b>⭐ Upravljanje priljubljenih strani & multimedije</b>")
+        lbl_head.set_use_markup(True)
+        lbl_head.set_xalign(0.0)
+        header_box.pack_start(lbl_head, True, True, 0)
+
+        btn_add = Gtk.Button(label="➕ Dodaj nov portal / stran")
+        btn_add.get_style_context().add_class("nav-btn")
+        header_box.pack_end(btn_add, False, False, 0)
+
+        btn_reset = Gtk.Button(label="🔄 Ponastavi na privzete")
+        btn_reset.get_style_context().add_class("btn-delete")
+        header_box.pack_end(btn_reset, False, False, 0)
+        content.pack_start(header_box, False, False, 0)
+
+        lbl_sub = Gtk.Label(label="Bližnjice se takoj v živo posodobijo na vaši začetni strani (safeer://home).")
+        lbl_sub.set_xalign(0.0)
+        content.pack_start(lbl_sub, False, False, 0)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+        scroll.set_hexpand(True)
+        scroll.set_min_content_height(360)
+
+        list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        scroll.add(list_box)
+        content.pack_start(scroll, True, True, 0)
+
+        def populate_portals():
+            for child in list_box.get_children():
+                list_box.remove(child)
+
+            portals = self.config.get_portals()
+            for p in portals:
+                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+                row.get_style_context().add_class("user-script-row")
+                row.set_margin_top(4)
+                row.set_margin_bottom(4)
+
+                badge = Gtk.Label(label=p.get("mark", "🌐"))
+                badge.set_width_chars(3)
+                row.pack_start(badge, False, False, 6)
+
+                info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+                lbl_title = Gtk.Label(label=f"<b>{p.get('title', '')}</b>")
+                lbl_title.set_use_markup(True)
+                lbl_title.set_xalign(0.0)
+                lbl_url = Gtk.Label(label=p.get('url', ''))
+                lbl_url.set_xalign(0.0)
+                lbl_url.get_style_context().add_class("text-muted")
+                info_box.pack_start(lbl_title, False, False, 0)
+                info_box.pack_start(lbl_url, False, False, 0)
+                row.pack_start(info_box, True, True, 0)
+
+                btn_edit = Gtk.Button(label="✏️ Uredi")
+                btn_edit.get_style_context().add_class("nav-btn")
+                btn_edit.connect("clicked", lambda b, prt=p: self.open_portal_editor_dialog(prt, on_saved=populate_portals))
+                row.pack_end(btn_edit, False, False, 4)
+
+                btn_del = Gtk.Button(label="🗑️")
+                btn_del.get_style_context().add_class("btn-delete")
+                def on_delete(b, pid=p.get("id")):
+                    self.config.delete_portal(pid)
+                    self.broadcast_portals_update()
+                    populate_portals()
+                btn_del.connect("clicked", on_delete)
+                row.pack_end(btn_del, False, False, 0)
+
+                list_box.pack_start(row, False, False, 0)
+
+            list_box.show_all()
+
+        populate_portals()
+        btn_add.connect("clicked", lambda b: self.open_portal_editor_dialog(None, on_saved=populate_portals))
+        def on_reset(b):
+            self.config.reset_portals()
+            self.broadcast_portals_update()
+            populate_portals()
+        btn_reset.connect("clicked", on_reset)
+
+        dialog.show_all()
+        dialog.run()
+        dialog.destroy()
+
     def on_js_message(self, content_mgr, js_result):
         try:
             val = js_result.get_js_value()
@@ -2249,6 +2561,10 @@ class SafeerMintBrowser(Gtk.Window):
                     self.open_settings_dialog()
                 elif service == "customizer":
                     self.open_customizer_dialog()
+                elif service in ["portals", "edit_portals"]:
+                    self.open_portals_dialog()
+                elif service == "add_portal":
+                    self.open_portal_editor_dialog(None)
                 else:
                     self.toggle_sidebar_panel(service)
         except Exception as e:

@@ -81,8 +81,14 @@
     <!-- My Portals / Moje Strani -->
     <section class="portals-section">
       <div class="portals-head">
-        <h2 class="section-title">Priljubljene strani in multimedija</h2>
-        <span class="portals-note">Brez oglasov • Zasebno • Hitro</span>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <h2 class="section-title">Priljubljene strani in multimedija</h2>
+          <span class="portals-note">Brez oglasov • Zasebno • Hitro</span>
+        </div>
+        <div class="portals-actions">
+          <button type="button" class="portals-btn" onclick="openSidebar('edit_portals')" title="Upravljaj priljubljene strani">⚙️ Uredi</button>
+          <button type="button" class="portals-btn highlight" onclick="openSidebar('add_portal')" title="Dodaj novo bližnjico">➕ Dodaj stran</button>
+        </div>
       </div>
 
       <div class="portals-grid" id="portalsGrid">

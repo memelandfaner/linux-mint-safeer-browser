@@ -49,13 +49,14 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         }
     },
     "custom_portals": [
-        {"title": "Xplore TV", "url": "https://www.xploretv.si/livetv", "color": "#e31837"},
-        {"title": "YouTube", "url": "https://www.youtube.com", "color": "#cc0000"},
-        {"title": "24ur.com", "url": "https://www.24ur.com", "color": "#1256a8"},
-        {"title": "RTV SLO", "url": "https://www.rtvslo.si", "color": "#0284c7"},
-        {"title": "Filmi", "url": "https://hydrahd.ws/", "color": "#0277a3"},
-        {"title": "ChatGPT", "url": "https://chatgpt.com", "color": "#10a37f"},
-        {"title": "CryptoQuant", "url": "https://cryptoquant.com", "color": "#f59e0b"}
+        {"id": "p1", "title": "Xplore TV", "url": "https://www.xploretv.si/livetv", "mark": "📺", "bg": "linear-gradient(145deg, #7a1024, #e31837)", "color": "#e31837"},
+        {"id": "p2", "title": "YouTube", "url": "https://www.youtube.com", "mark": "▶️", "bg": "linear-gradient(145deg, #4a0b0b, #cc0000)", "color": "#cc0000"},
+        {"id": "p3", "title": "24ur.com", "url": "https://www.24ur.com", "mark": "📰", "bg": "linear-gradient(145deg, #0a2040, #1256a8)", "color": "#1256a8"},
+        {"id": "p4", "title": "RTV SLO", "url": "https://www.rtvslo.si", "mark": "🇸🇮", "bg": "linear-gradient(145deg, #04364a, #0284c7)", "color": "#0284c7"},
+        {"id": "p5", "title": "Filmi & Serije", "url": "https://hydrahd.ws/", "mark": "🎬", "bg": "linear-gradient(145deg, #062a38, #0277a3)", "color": "#0277a3"},
+        {"id": "p6", "title": "ChatGPT AI", "url": "https://chatgpt.com", "mark": "🤖", "bg": "linear-gradient(145deg, #063c2f, #10a37f)", "color": "#10a37f"},
+        {"id": "p7", "title": "CryptoQuant", "url": "https://cryptoquant.com", "mark": "📊", "bg": "linear-gradient(145deg, #3d2303, #d97706)", "color": "#f59e0b"},
+        {"id": "p8", "title": "GitHub", "url": "https://github.com", "mark": "🐙", "bg": "linear-gradient(145deg, #1b1f24, #24292e)", "color": "#24292e"}
     ]
 }
 
@@ -222,4 +223,70 @@ class ConfigManager:
                 self.save_user_scripts(scripts)
                 return s["enabled"]
         return False
+
+    # -------------------------------------------------------------------------
+    # Upravljanje Priljubljenih Strani in Portalov
+    # -------------------------------------------------------------------------
+    def get_portals(self):
+        """Vrne seznam priljubljenih strani in portalov."""
+        portals = self.get("custom_portals", [])
+        if not portals:
+            portals = list(DEFAULT_SETTINGS["custom_portals"])
+            self.set("custom_portals", portals)
+        return portals
+
+    def save_portals(self, portals):
+        """Shrani seznam priljubljenih strani."""
+        self.set("custom_portals", portals)
+
+    def add_portal(self, title: str, url: str, mark: str = "🌐", bg: str = "", color: str = "#00d2ff") -> str:
+        """Doda novo priljubljeno stran."""
+        p_id = "p_" + str(uuid.uuid4())[:8]
+        if not bg:
+            bg = f"linear-gradient(145deg, #091a28, {color})"
+        new_portal = {
+            "id": p_id,
+            "title": title.strip() or "Priljubljena stran",
+            "url": url.strip() or "https://",
+            "mark": mark.strip() or "🌐",
+            "bg": bg,
+            "color": color
+        }
+        portals = self.get_portals()
+        portals.append(new_portal)
+        self.save_portals(portals)
+        return p_id
+
+    def update_portal(self, portal_id: str, title: str, url: str, mark: str, bg: str = "", color: str = "") -> bool:
+        """Posodobi obstoječo priljubljeno stran."""
+        portals = self.get_portals()
+        for p in portals:
+            if p.get("id") == portal_id:
+                p["title"] = title.strip()
+                p["url"] = url.strip()
+                p["mark"] = mark.strip()
+                if color:
+                    p["color"] = color
+                if bg:
+                    p["bg"] = bg
+                elif color:
+                    p["bg"] = f"linear-gradient(145deg, #091a28, {color})"
+                self.save_portals(portals)
+                return True
+        return False
+
+    def delete_portal(self, portal_id: str) -> bool:
+        """Izbriše priljubljeno stran."""
+        portals = self.get_portals()
+        new_portals = [p for p in portals if p.get("id") != portal_id]
+        if len(new_portals) != len(portals):
+            self.save_portals(new_portals)
+            return True
+        return False
+
+    def reset_portals(self):
+        """Ponastavi priljubljene strani na privzete."""
+        default_p = list(DEFAULT_SETTINGS["custom_portals"])
+        self.save_portals(default_p)
+        return default_p
 

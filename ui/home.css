@@ -317,6 +317,38 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.portals-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.portals-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.portals-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--accent-mint);
+  color: #fff;
+}
+
+.portals-btn.highlight {
+  background: rgba(135, 207, 62, 0.15);
+  border-color: var(--accent-mint);
+  color: var(--accent-mint);
 }
 
 .section-title {
