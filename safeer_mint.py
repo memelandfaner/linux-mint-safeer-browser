@@ -905,11 +905,11 @@ class SafeerMintBrowser(Gtk.Window):
     def open_settings_dialog(self):
         """Celovit dialog za nastavitve stranske vrstice in brskalnika."""
         dialog = Gtk.Dialog(
-            title="Nastavitve Safeer Browser",
+            title=f"⚙️ {t('settings')} — Safeer",
             transient_for=self,
             flags=0
         )
-        dialog.add_buttons("Zapri", Gtk.ResponseType.CLOSE)
+        dialog.add_buttons(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
         dialog.set_default_size(500, 500)
 
         box = dialog.get_content_area()
@@ -937,6 +937,7 @@ class SafeerMintBrowser(Gtk.Window):
             sel_id = cb.get_active_id() or "auto"
             self.config.set("language", sel_id)
             set_language(sel_id)
+            self.update_tab_titles_for_language()
             self.broadcast_language_update()
 
         combo_lang.connect("changed", on_lang_changed)
@@ -946,12 +947,12 @@ class SafeerMintBrowser(Gtk.Window):
         box.pack_start(sep0, False, False, 4)
 
         # 1. Permanent Sidebar Toggle
-        title_sidebar = Gtk.Label(label="<b>Prikaz stranske vrstice:</b>")
+        title_sidebar = Gtk.Label(label=f"<b>{t('sidebar_display')}</b>")
         title_sidebar.set_use_markup(True)
         title_sidebar.set_halign(Gtk.Align.START)
         box.pack_start(title_sidebar, False, False, 0)
 
-        sb_check = Gtk.CheckButton(label="Prikaži stransko vrstico (Trajno ob zagonu)")
+        sb_check = Gtk.CheckButton(label=t('sidebar_enable_chk'))
         sb_check.set_active(self.config.get("sidebar_enabled", True))
 
         def on_sb_toggled(btn):
@@ -972,7 +973,7 @@ class SafeerMintBrowser(Gtk.Window):
         box.pack_start(sep1, False, False, 4)
 
         # 2. Managing existing sidebar items (with Delete buttons)
-        title_items = Gtk.Label(label="<b>Stranske strani (Vklop / Izbris):</b>")
+        title_items = Gtk.Label(label=f"<b>{t('sidebar_items')}</b>")
         title_items.set_use_markup(True)
         title_items.set_halign(Gtk.Align.START)
         box.pack_start(title_items, False, False, 0)
@@ -1885,35 +1886,23 @@ class SafeerMintBrowser(Gtk.Window):
                 try:
                     self.website_data_manager.clear(types_to_clear, 0, None, None, None)
                 except Exception as e:
-                    print(f"[Privacy] Napaka pri brisanju podatkov: {e}")
+                    print(f"[ClearData] Napaka: {e}")
 
-            info_dialog = Gtk.MessageDialog(
-                transient_for=self,
-                flags=0,
-                message_type=Gtk.MessageType.INFO,
-                buttons=Gtk.ButtonsType.OK,
-                text="✅ Podatki brskanja uspešno očiščeni!"
-            )
-            info_dialog.format_secondary_text(
-                f"Uspešno odstranjeno: {', '.join(msg_parts)}.\n"
-                "Vaša zasebnost je zaščitena."
-            )
-            info_dialog.run()
-            info_dialog.destroy()
+            dialog.destroy()
         else:
             dialog.destroy()
 
     def open_customizer_dialog(self):
         """Dialog za prilagoditev teme, lastnega CSS-ja in uporabniških skript (Tampermonkey)."""
         dialog = Gtk.Dialog(
-            title="🧩 Prilagoditev brskalnika & Uporabniške skripte — Safeer",
+            title=f"🧩 {t('customizer_title')} — Safeer",
             transient_for=self,
             flags=0
         )
         dialog.set_default_size(880, 640)
         dialog.set_resizable(True)
         dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button("Zapri", Gtk.ResponseType.CLOSE)
+        dialog.add_button(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
 
         content = dialog.get_content_area()
         content.set_spacing(6)
@@ -1936,17 +1925,17 @@ class SafeerMintBrowser(Gtk.Window):
         themes_box.set_margin_start(16)
         themes_box.set_margin_end(16)
 
-        lbl_theme = Gtk.Label(label="<b>Izberite barvno temo brskalnika:</b>")
+        lbl_theme = Gtk.Label(label=f"<b>{t('choose_theme')}</b>")
         lbl_theme.set_use_markup(True)
         lbl_theme.set_xalign(0.0)
         themes_box.pack_start(lbl_theme, False, False, 0)
 
         # Theme Radio Buttons
         cur_theme = self.config.get("theme", "midnight")
-        radio_midnight = Gtk.RadioButton.new_with_label(None, "🌙 Firefox Midnight — Eleganten temen videz z mehkim kontrastom (privzeto)")
-        radio_mint = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "🍃 Linux Mint Emerald — Značilni sveži zeleni poudarki v slogu Linux Mint namizja")
-        radio_neon = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "⚡ Cyberpunk Neon — Futuristična tema s cian modro in neonsko vijolično barvo")
-        radio_amoled = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, "🖤 Pure AMOLED Black — Globoka čista črna barva (#000000) za maksimalen kontrast")
+        radio_midnight = Gtk.RadioButton.new_with_label(None, f"🌙 Firefox Midnight — {t('theme_midnight_desc')}")
+        radio_mint = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, f"🍃 Linux Mint Emerald — {t('theme_mint_desc')}")
+        radio_neon = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, f"⚡ Cyberpunk Neon — {t('theme_neon_desc')}")
+        radio_amoled = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, f"🖤 Pure AMOLED Black — {t('theme_amoled_desc')}")
 
         if cur_theme == "mint":
             radio_mint.set_active(True)
@@ -1972,12 +1961,12 @@ class SafeerMintBrowser(Gtk.Window):
         themes_box.pack_start(radio_neon, False, False, 4)
         themes_box.pack_start(radio_amoled, False, False, 4)
 
-        theme_info = Gtk.Label(label="<i>Izbrana barvna tema se takoj v živo uveljavi po vseh odprtih zavihkih in oknih brskalnika.</i>")
+        theme_info = Gtk.Label(label=f"<i>{t('theme_live_notice')}</i>")
         theme_info.set_use_markup(True)
         theme_info.set_xalign(0.0)
         themes_box.pack_start(theme_info, False, False, 10)
 
-        notebook.append_page(themes_box, Gtk.Label(label="🎨 Barvne Teme"))
+        notebook.append_page(themes_box, Gtk.Label(label=f"🎨 {t('tab_themes')}"))
 
         # -------------------------------------------------------------
         # ZAVIHEK 2: 🖌️ Lasten CSS (userChrome.css) - VELIK IN PROSTOREN!
@@ -1991,28 +1980,28 @@ class SafeerMintBrowser(Gtk.Window):
         css_page_box.set_hexpand(True)
 
         css_header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        lbl_css_title = Gtk.Label(label="<b>Lasten CSS slog (userChrome.css za napredne uporabnike):</b>")
+        lbl_css_title = Gtk.Label(label=f"<b>{t('custom_css_title')}</b>")
         lbl_css_title.set_use_markup(True)
         lbl_css_title.set_xalign(0.0)
         css_header_box.pack_start(lbl_css_title, True, True, 0)
         css_page_box.pack_start(css_header_box, False, False, 0)
 
-        lbl_css_desc = Gtk.Label(label="Tukaj imate neomejen prostor za vnos CSS-ja za prilagoditev barv, robov, pisav ali videza katerega koli elementa.")
+        lbl_css_desc = Gtk.Label(label=t('custom_css_desc'))
         lbl_css_desc.set_xalign(0.0)
         css_page_box.pack_start(lbl_css_desc, False, False, 0)
 
         # Snippets Bar
         snippets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        lbl_snip = Gtk.Label(label="Hitri vzorci:")
+        lbl_snip = Gtk.Label(label=t('snippets_lbl'))
         snippets_box.pack_start(lbl_snip, False, False, 0)
 
-        btn_snip_rounded = Gtk.Button(label="+ Zaobljeni zavihki")
+        btn_snip_rounded = Gtk.Button(label=t('snip_rounded'))
         btn_snip_rounded.get_style_context().add_class("nav-btn")
-        btn_snip_font = Gtk.Button(label="+ Večja pisava")
+        btn_snip_font = Gtk.Button(label=t('snip_font'))
         btn_snip_font.get_style_context().add_class("nav-btn")
-        btn_snip_glow = Gtk.Button(label="+ Cian sijaj")
+        btn_snip_glow = Gtk.Button(label=t('snip_glow'))
         btn_snip_glow.get_style_context().add_class("nav-btn")
-        btn_snip_compact = Gtk.Button(label="+ Kompaktna vrstica")
+        btn_snip_compact = Gtk.Button(label=t('snip_compact'))
         btn_snip_compact.get_style_context().add_class("nav-btn")
 
         snippets_box.pack_start(btn_snip_rounded, False, False, 0)
@@ -2041,37 +2030,38 @@ class SafeerMintBrowser(Gtk.Window):
         css_buf = css_tv.get_buffer()
         existing_css = self.config.get("custom_css", "")
         if not existing_css:
-            existing_css = "/* Safeer Browser — Uporabniški lasten CSS (userChrome.css)\n   Primeri pravil, ki jih lahko spremenite:\n\n   .firefox-tab { border-radius: 14px 14px 0 0; }\n   .ff-url-entry { font-size: 17.5px; }\n   .ff-url-container { border-radius: 12px; }\n*/\n"
+            existing_css = "/* Safeer Browser — Lasten CSS (userChrome.css slog) */\n/* Primer:\n.toolbar { background: #0c1017; }\n.nav-btn { border-radius: 8px; }\n*/\n"
         css_buf.set_text(existing_css)
+
+        def insert_snippet(btn, snippet_code):
+            cur_txt = css_buf.get_text(css_buf.get_start_iter(), css_buf.get_end_iter(), True)
+            if snippet_code not in cur_txt:
+                new_txt = cur_txt.rstrip() + "\n\n" + snippet_code + "\n"
+                css_buf.set_text(new_txt)
+
+        btn_snip_rounded.connect("clicked", insert_snippet, "/* Zaobljeni zavihki */\n.tab-btn { border-radius: 12px 12px 0 0; }")
+        btn_snip_font.connect("clicked", insert_snippet, "/* Večja pisava */\n* { font-size: 14px; }")
+        btn_snip_glow.connect("clicked", insert_snippet, "/* Cian sijaj */\n.url-bar:focus-within { box-shadow: 0 0 12px rgba(0, 210, 255, 0.4); }")
+        btn_snip_compact.connect("clicked", insert_snippet, "/* Kompaktna orodna vrstica */\n.nav-btn { padding: 3px 6px; }")
+
         css_scroll.add(css_tv)
         css_page_box.pack_start(css_scroll, True, True, 0)
 
-        # Snippet insertion logic
-        def insert_snippet(code):
-            end_iter = css_buf.get_end_iter()
-            css_buf.insert(end_iter, "\n" + code + "\n")
-            css_tv.grab_focus()
-
-        btn_snip_rounded.connect("clicked", lambda b: insert_snippet(".firefox-tab {\n    border-radius: 14px 14px 0 0;\n}"))
-        btn_snip_font.connect("clicked", lambda b: insert_snippet(".ff-url-entry {\n    font-size: 18px;\n    font-weight: 700;\n}"))
-        btn_snip_glow.connect("clicked", lambda b: insert_snippet(".ff-url-container:focus-within {\n    border-color: #00ddff;\n    box-shadow: 0 0 12px rgba(0, 221, 255, 0.5);\n}"))
-        btn_snip_compact.connect("clicked", lambda b: insert_snippet(".tab-toolbar, .nav-toolbar {\n    padding: 2px 8px;\n    min-height: 34px;\n}"))
-
-        # Bottom Actions Bar
-        css_actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        btn_apply_css = Gtk.Button(label="💾 Shrani in takoj uveljavi lasten CSS")
-        btn_apply_css.get_style_context().add_class("nav-btn")
+        # Action Buttons for CSS
+        css_actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_save_css = Gtk.Button(label=t('save_and_apply_css'))
+        btn_save_css.get_style_context().add_class("nav-btn")
         def on_save_css(b):
-            start, end = css_buf.get_bounds()
-            custom_code = css_buf.get_text(start, end, True)
-            self.config.set("custom_css", custom_code)
+            txt = css_buf.get_text(css_buf.get_start_iter(), css_buf.get_end_iter(), True)
+            self.config.set("custom_css", txt)
             self.apply_css()
-            btn_apply_css.set_label("✅ Uspešno uveljavljeno!")
-            GLib.timeout_add(1800, lambda: btn_apply_css.set_label("💾 Shrani in takoj uveljavi lasten CSS"))
-        btn_apply_css.connect("clicked", on_save_css)
-        css_actions_box.pack_start(btn_apply_css, False, False, 0)
+            orig_lbl = b.get_label()
+            b.set_label("✅ OK")
+            GLib.timeout_add(1500, lambda: b.set_label(orig_lbl))
+        btn_save_css.connect("clicked", on_save_css)
+        css_actions_box.pack_start(btn_save_css, False, False, 0)
 
-        btn_clear_css = Gtk.Button(label="🗑️ Počisti kodo")
+        btn_clear_css = Gtk.Button(label=t('clear_code'))
         btn_clear_css.get_style_context().add_class("btn-delete")
         def on_clear_css(b):
             css_buf.set_text("")
@@ -2082,7 +2072,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         css_page_box.pack_start(css_actions_box, False, False, 0)
 
-        notebook.append_page(css_page_box, Gtk.Label(label="🖌️ Lasten CSS"))
+        notebook.append_page(css_page_box, Gtk.Label(label=f"🖌️ {t('tab_css')}"))
 
         # -------------------------------------------------------------
         # ZAVIHEK 3: ⭐ Priljubljene strani & Multimedija
@@ -2096,16 +2086,16 @@ class SafeerMintBrowser(Gtk.Window):
         portals_tab_box.set_hexpand(True)
 
         portals_top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        lbl_portals_head = Gtk.Label(label="<b>Priljubljene strani in multimedija na domačem zaslonu:</b>")
+        lbl_portals_head = Gtk.Label(label=f"<b>{t('portals_title')}</b>")
         lbl_portals_head.set_use_markup(True)
         lbl_portals_head.set_xalign(0.0)
         portals_top_bar.pack_start(lbl_portals_head, True, True, 0)
 
-        btn_add_p_tab = Gtk.Button(label="➕ Dodaj novo stran")
+        btn_add_p_tab = Gtk.Button(label=f"➕ {t('add_portal')}")
         btn_add_p_tab.get_style_context().add_class("nav-btn")
         portals_top_bar.pack_start(btn_add_p_tab, False, False, 0)
 
-        btn_res_p_tab = Gtk.Button(label="🔄 Ponastavi")
+        btn_res_p_tab = Gtk.Button(label=f"🔄 {t('reset_default')}")
         btn_res_p_tab.get_style_context().add_class("btn-delete")
         portals_top_bar.pack_start(btn_res_p_tab, False, False, 0)
         portals_tab_box.pack_start(portals_top_bar, False, False, 0)
@@ -2146,7 +2136,7 @@ class SafeerMintBrowser(Gtk.Window):
                 info_box.pack_start(lbl_url, False, False, 0)
                 row.pack_start(info_box, True, True, 0)
 
-                btn_edit = Gtk.Button(label="✏️ Uredi")
+                btn_edit = Gtk.Button(label=f"✏️ {t('edit')}")
                 btn_edit.get_style_context().add_class("nav-btn")
                 btn_edit.connect("clicked", lambda b, prt=p: self.open_portal_editor_dialog(prt, on_saved=populate_tab_portals))
                 row.pack_end(btn_edit, False, False, 4)
@@ -2172,7 +2162,7 @@ class SafeerMintBrowser(Gtk.Window):
             populate_tab_portals()
         btn_res_p_tab.connect("clicked", on_reset_tab_click)
 
-        notebook.append_page(portals_tab_box, Gtk.Label(label="⭐ Priljubljene strani"))
+        notebook.append_page(portals_tab_box, Gtk.Label(label=f"⭐ {t('tab_portals')}"))
 
         # -------------------------------------------------------------
         # ZAVIHEK 4: 🧩 Uporabniške skripte (UserScripts)
@@ -2184,12 +2174,12 @@ class SafeerMintBrowser(Gtk.Window):
         scripts_box.set_margin_right(12)
 
         scripts_top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        lbl_scripts = Gtk.Label(label="<b>Nameščene uporabniške skripte (Tampermonkey slog):</b>")
+        lbl_scripts = Gtk.Label(label=f"<b>{t('userscripts_title')}</b>")
         lbl_scripts.set_use_markup(True)
         lbl_scripts.set_xalign(0.0)
         scripts_top_bar.pack_start(lbl_scripts, True, True, 0)
 
-        btn_add_script = Gtk.Button(label="➕ Dodaj novo skripto")
+        btn_add_script = Gtk.Button(label=t('add_new_script'))
         btn_add_script.get_style_context().add_class("nav-btn")
         scripts_top_bar.pack_start(btn_add_script, False, False, 0)
         scripts_box.pack_start(scripts_top_bar, False, False, 0)
@@ -2207,7 +2197,7 @@ class SafeerMintBrowser(Gtk.Window):
 
             scripts = self.config.get_user_scripts()
             if not scripts:
-                empty_lbl = Gtk.Label(label="Trenutno nimate dodanih lastnih skript.\nKliknite 'Dodaj novo skripto' za ustvarjanje prve JavaScript razširitve!")
+                empty_lbl = Gtk.Label(label=t('empty_scripts'))
                 empty_lbl.get_style_context().add_class("tab-title")
                 scripts_vbox.pack_start(empty_lbl, True, True, 30)
             else:
@@ -2238,7 +2228,7 @@ class SafeerMintBrowser(Gtk.Window):
                     row.pack_start(info_box, True, True, 0)
 
                     # Edit button
-                    btn_edit = Gtk.Button(label="✏️ Uredi")
+                    btn_edit = Gtk.Button(label=f"✏️ {t('edit')}")
                     btn_edit.get_style_context().add_class("nav-btn")
                     s_copy = s.copy()
                     btn_edit.connect("clicked", lambda b, script_data=s_copy: [self.open_script_editor_dialog(script_data), populate_scripts()])
@@ -2256,7 +2246,7 @@ class SafeerMintBrowser(Gtk.Window):
         populate_scripts()
         btn_add_script.connect("clicked", lambda b: [self.open_script_editor_dialog(None), populate_scripts()])
 
-        notebook.append_page(scripts_box, Gtk.Label(label="🧩 Uporabniške skripte (UserScripts)"))
+        notebook.append_page(scripts_box, Gtk.Label(label=f"🧩 {t('tab_scripts')}"))
 
         dialog.show_all()
         dialog.run()
@@ -2378,13 +2368,13 @@ class SafeerMintBrowser(Gtk.Window):
     def open_portal_editor_dialog(self, portal=None, on_saved=None):
         """Dialog za dodajanje ali urejanje priljubljenega portala / strani."""
         is_edit = portal is not None
-        title = "✏️ Uredi priljubljeno stran" if is_edit else "➕ Dodaj novo priljubljeno stran"
+        title = f"✏️ {t('edit')} {t('tab_portals')}" if is_edit else f"➕ {t('add_portal')}"
         dialog = Gtk.Dialog(title=title, transient_for=self, flags=0)
         dialog.set_default_size(560, 480)
         dialog.set_resizable(True)
         dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button("Prekliči", Gtk.ResponseType.CANCEL)
-        btn_save = dialog.add_button("💾 Shrani stran", Gtk.ResponseType.OK)
+        dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
+        btn_save = dialog.add_button(f"💾 {t('save_portal')}", Gtk.ResponseType.OK)
         btn_save.get_style_context().add_class("nav-btn")
 
         content = dialog.get_content_area()
@@ -2394,24 +2384,29 @@ class SafeerMintBrowser(Gtk.Window):
         content.set_margin_start(16)
         content.set_margin_end(16)
 
-        lbl_title = Gtk.Label(label="<b>Naziv strani (npr. YouTube, 24ur, Filmi):</b>")
+        lbl_title = Gtk.Label(label=f"<b>{t('portal_name')}:</b>")
         lbl_title.set_use_markup(True)
         lbl_title.set_xalign(0.0)
         content.pack_start(lbl_title, False, False, 0)
         entry_title = Gtk.Entry()
-        entry_title.set_text(portal.get("title", "") if is_edit else "")
-        entry_title.set_placeholder_text("Ime portala...")
+        entry_title.set_placeholder_text("YouTube, 24ur, Reddit, GitHub...")
+        if is_edit:
+            entry_title.set_text(portal.get("title", ""))
         content.pack_start(entry_title, False, False, 0)
 
-        lbl_url = Gtk.Label(label="<b>Spletni naslov URL (npr. https://youtube.com):</b>")
+        lbl_url = Gtk.Label(label=f"<b>{t('portal_url')}:</b>")
         lbl_url.set_use_markup(True)
         lbl_url.set_xalign(0.0)
         content.pack_start(lbl_url, False, False, 0)
         entry_url = Gtk.Entry()
-        entry_url.set_text(portal.get("url", "") if is_edit else "https://")
+        entry_url.set_placeholder_text("https://...")
+        if is_edit:
+            entry_url.set_text(portal.get("url", "https://"))
+        else:
+            entry_url.set_text("https://")
         content.pack_start(entry_url, False, False, 0)
 
-        lbl_mark = Gtk.Label(label="<b>Ikona ali simbol (Emoji):</b>")
+        lbl_mark = Gtk.Label(label=f"<b>{t('portal_icon')}:</b>")
         lbl_mark.set_use_markup(True)
         lbl_mark.set_xalign(0.0)
         content.pack_start(lbl_mark, False, False, 0)
@@ -2430,7 +2425,7 @@ class SafeerMintBrowser(Gtk.Window):
             mark_box.pack_start(btn_em, False, False, 0)
         content.pack_start(mark_box, False, False, 0)
 
-        lbl_color = Gtk.Label(label="<b>Barvni poudarek kartice:</b>")
+        lbl_color = Gtk.Label(label=f"<b>{t('portal_color')}:</b>")
         lbl_color.set_use_markup(True)
         lbl_color.set_xalign(0.0)
         content.pack_start(lbl_color, False, False, 0)
@@ -2446,12 +2441,12 @@ class SafeerMintBrowser(Gtk.Window):
             ("⚫ Temna", "#1e293b"),
             ("✨ Cian", "#00d2ff")
         ]
-        lbl_curr_color = Gtk.Label(label=f"Izbrana barva: {selected_color[0]}")
+        lbl_curr_color = Gtk.Label(label=f"HEX: {selected_color[0]}")
         for cname, chex in color_presets:
             btn_c = Gtk.Button(label=cname)
             def on_c_click(b, hex_code=chex):
                 selected_color[0] = hex_code
-                lbl_curr_color.set_text(f"Izbrana barva: {hex_code}")
+                lbl_curr_color.set_text(f"HEX: {hex_code}")
             btn_c.connect("clicked", on_c_click)
             colors_box.pack_start(btn_c, False, False, 0)
         content.pack_start(colors_box, False, False, 0)
@@ -2480,14 +2475,14 @@ class SafeerMintBrowser(Gtk.Window):
     def open_portals_dialog(self):
         """Samostojno okno za upravljanje priljubljenih strani in multimedije."""
         dialog = Gtk.Dialog(
-            title="⭐ Priljubljene strani in multimedija — Safeer",
+            title=f"⭐ {t('portals_title')} — Safeer",
             transient_for=self,
             flags=0
         )
         dialog.set_default_size(780, 580)
         dialog.set_resizable(True)
         dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button("Zapri", Gtk.ResponseType.CLOSE)
+        dialog.add_button(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
 
         content = dialog.get_content_area()
         content.set_spacing(10)
@@ -2497,21 +2492,21 @@ class SafeerMintBrowser(Gtk.Window):
         content.set_margin_end(16)
 
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        lbl_head = Gtk.Label(label="<b>⭐ Upravljanje priljubljenih strani & multimedije</b>")
+        lbl_head = Gtk.Label(label=f"<b>⭐ {t('portals_title')}</b>")
         lbl_head.set_use_markup(True)
         lbl_head.set_xalign(0.0)
         header_box.pack_start(lbl_head, True, True, 0)
 
-        btn_add = Gtk.Button(label="➕ Dodaj nov portal / stran")
+        btn_add = Gtk.Button(label=f"➕ {t('add_portal')}")
         btn_add.get_style_context().add_class("nav-btn")
         header_box.pack_end(btn_add, False, False, 0)
 
-        btn_reset = Gtk.Button(label="🔄 Ponastavi na privzete")
+        btn_reset = Gtk.Button(label=f"🔄 {t('reset_default')}")
         btn_reset.get_style_context().add_class("btn-delete")
         header_box.pack_end(btn_reset, False, False, 0)
         content.pack_start(header_box, False, False, 0)
 
-        lbl_sub = Gtk.Label(label="Bližnjice se takoj v živo posodobijo na vaši začetni strani (safeer://home).")
+        lbl_sub = Gtk.Label(label=t('portals_sub'))
         lbl_sub.set_xalign(0.0)
         content.pack_start(lbl_sub, False, False, 0)
 
@@ -2551,7 +2546,7 @@ class SafeerMintBrowser(Gtk.Window):
                 info_box.pack_start(lbl_url, False, False, 0)
                 row.pack_start(info_box, True, True, 0)
 
-                btn_edit = Gtk.Button(label="✏️ Uredi")
+                btn_edit = Gtk.Button(label=f"✏️ {t('edit')}")
                 btn_edit.get_style_context().add_class("nav-btn")
                 btn_edit.connect("clicked", lambda b, prt=p: self.open_portal_editor_dialog(prt, on_saved=populate_portals))
                 row.pack_end(btn_edit, False, False, 4)
@@ -2593,6 +2588,12 @@ class SafeerMintBrowser(Gtk.Window):
                     wv = self.get_active_webview()
                     if wv:
                         wv.load_uri(url)
+            elif action == "set_language":
+                lang = data.get("language", "sl")
+                self.config.set("language", lang)
+                set_language(lang)
+                self.update_tab_titles_for_language()
+                self.broadcast_language_update()
             elif action == "open_sidebar":
                 service = data.get("service")
                 if service == "settings":
@@ -2607,6 +2608,17 @@ class SafeerMintBrowser(Gtk.Window):
                     self.toggle_sidebar_panel(service)
         except Exception as e:
             print(f"[IPC] Napaka: {e}")
+
+    def update_tab_titles_for_language(self):
+        """Posodobi naslove zavihkov in okna v skladu z novim jezikom."""
+        for t_info in self.tabs:
+            uri = t_info.get("uri", "")
+            if "ui/home.html" in uri or uri == "safeer://home":
+                h_title = t("home_title")
+                t_info["title"] = h_title
+                if "title_label" in t_info and t_info["title_label"]:
+                    t_info["title_label"].set_text(h_title)
+        self.set_title(f"{t('app_title')} — Linux Mint Edition")
 
 
 def main():

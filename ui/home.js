@@ -6,6 +6,11 @@ let currentHomeLang = 'sl';
 const homeI18n = {
   sl: {
     locale: "sl-SI",
+    home_title: "Safeer Domača Stran",
+    shield_subtitle: "Linux Mint Suverena Izdaja",
+    shield_status: "🛡️ ZAŠČITA AKTIVNA",
+    lbl_ads: "Blokirani oglasi",
+    lbl_speed: "Odzivnost",
     lbl_oss: "Odprta koda",
     search_placeholder: "Iščite z Google ali vnesite spletni naslov...",
     search_submit: "Išči",
@@ -15,10 +20,16 @@ const homeI18n = {
     section_portals: "Priljubljene strani in multimedija",
     portals_note: "Brez oglasov • Zasebno • Hitro",
     btn_edit: "⚙️ Uredi",
-    btn_add: "➕ Dodaj stran"
+    btn_add: "➕ Dodaj stran",
+    add_site_tile: "Dodaj stran"
   },
   en: {
     locale: "en-US",
+    home_title: "Safeer Home",
+    shield_subtitle: "Linux Mint Sovereign Edition",
+    shield_status: "🛡️ SHIELD ACTIVE",
+    lbl_ads: "Ads Blocked",
+    lbl_speed: "Latency",
     lbl_oss: "Open Source",
     search_placeholder: "Search with Google or enter web address...",
     search_submit: "Search",
@@ -28,10 +39,16 @@ const homeI18n = {
     section_portals: "Favorite Sites & Multimedia",
     portals_note: "No Ads • Private • Ultra Fast",
     btn_edit: "⚙️ Edit",
-    btn_add: "➕ Add Site"
+    btn_add: "➕ Add Site",
+    add_site_tile: "Add Site"
   },
   de: {
     locale: "de-DE",
+    home_title: "Safeer Startseite",
+    shield_subtitle: "Linux Mint Souveräne Edition",
+    shield_status: "🛡️ SCHUTZ AKTIV",
+    lbl_ads: "Blockierte Werbung",
+    lbl_speed: "Latenz",
     lbl_oss: "Open Source",
     search_placeholder: "Mit Google suchen oder Adresse eingeben...",
     search_submit: "Suchen",
@@ -41,10 +58,16 @@ const homeI18n = {
     section_portals: "Favoriten & Multimedia",
     portals_note: "Werbefrei • Privat • Schnell",
     btn_edit: "⚙️ Bearbeiten",
-    btn_add: "➕ Hinzufügen"
+    btn_add: "➕ Hinzufügen",
+    add_site_tile: "Seite hinzufügen"
   },
   es: {
     locale: "es-ES",
+    home_title: "Página Principal Safeer",
+    shield_subtitle: "Edición Soberana Linux Mint",
+    shield_status: "🛡️ ESCUDO ACTIVO",
+    lbl_ads: "Anuncios bloqueados",
+    lbl_speed: "Latencia",
     lbl_oss: "Código Abierto",
     search_placeholder: "Buscar en Google o escribir dirección...",
     search_submit: "Buscar",
@@ -54,10 +77,16 @@ const homeI18n = {
     section_portals: "Sitios Favoritos y Multimedia",
     portals_note: "Sin anuncios • Privado • Rápido",
     btn_edit: "⚙️ Editar",
-    btn_add: "➕ Añadir"
+    btn_add: "➕ Añadir",
+    add_site_tile: "Añadir sitio"
   },
   fr: {
     locale: "fr-FR",
+    home_title: "Page d'accueil Safeer",
+    shield_subtitle: "Édition Souveraine Linux Mint",
+    shield_status: "🛡️ BOUCLIER ACTIF",
+    lbl_ads: "Publicités bloquées",
+    lbl_speed: "Latence",
     lbl_oss: "Open Source",
     search_placeholder: "Rechercher avec Google ou entrer une adresse...",
     search_submit: "Chercher",
@@ -67,10 +96,16 @@ const homeI18n = {
     section_portals: "Sites Favoris et Multimédia",
     portals_note: "Sans pub • Privé • Rapide",
     btn_edit: "⚙️ Modifier",
-    btn_add: "➕ Ajouter"
+    btn_add: "➕ Ajouter",
+    add_site_tile: "Ajouter un site"
   },
   it: {
     locale: "it-IT",
+    home_title: "Pagina iniziale Safeer",
+    shield_subtitle: "Edizione Sovrana Linux Mint",
+    shield_status: "🛡️ PROTEZIONE ATTIVA",
+    lbl_ads: "Pubblicità bloccate",
+    lbl_speed: "Latenza",
     lbl_oss: "Open Source",
     search_placeholder: "Cerca con Google o inserisci un indirizzo...",
     search_submit: "Cerca",
@@ -80,11 +115,12 @@ const homeI18n = {
     section_portals: "Siti Preferiti e Multimedia",
     portals_note: "Senza pubblicità • Privato • Veloce",
     btn_edit: "⚙️ Modifica",
-    btn_add: "➕ Aggiungi"
+    btn_add: "➕ Aggiungi",
+    add_site_tile: "Aggiungi sito"
   }
 };
 
-function changeHomeLanguage(lang) {
+function changeHomeLanguage(lang, notifyBackend = true) {
   if (!homeI18n[lang]) lang = 'en';
   currentHomeLang = lang;
   try {
@@ -92,6 +128,8 @@ function changeHomeLanguage(lang) {
   } catch(e) {}
 
   const dict = homeI18n[lang];
+  document.title = dict.home_title || "Safeer Home";
+
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
     if (dict[key]) el.textContent = dict[key];
@@ -106,11 +144,20 @@ function changeHomeLanguage(lang) {
     btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
   });
 
+  const addTileTxt = document.querySelector('.portal-add-card .portal-title');
+  if (addTileTxt) {
+    addTileTxt.textContent = dict.add_site_tile || dict.btn_add;
+  }
+
   updateClock();
+
+  if (notifyBackend && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {
+    window.webkit.messageHandlers.safeer.postMessage({ action: 'set_language', language: lang });
+  }
 }
 
 window.setAppLanguage = function(lang) {
-  changeHomeLanguage(lang);
+  changeHomeLanguage(lang, false);
 };
 
 const searchUrls = {
@@ -245,9 +292,10 @@ function renderPortals() {
   addCard.style.background = 'rgba(255, 255, 255, 0.02)';
   addCard.style.cursor = 'pointer';
   addCard.title = 'Dodaj novo priljubljeno stran ali multimedijo';
+  const dict = homeI18n[currentHomeLang] || homeI18n.sl;
   addCard.innerHTML = `
     <span class="portal-mark" style="font-size: 1.8rem; color: var(--accent-mint);">➕</span>
-    <span class="portal-title" style="color: var(--text-muted);">Dodaj stran</span>
+    <span class="portal-title" style="color: var(--text-muted);">${dict.add_site_tile || dict.btn_add}</span>
   `;
   addCard.addEventListener('click', () => {
     openSidebar('add_portal');
