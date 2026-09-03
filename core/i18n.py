@@ -18,6 +18,9 @@ SUPPORTED_LANGUAGES = {
 
 TRANSLATIONS = {
     "en": {
+        "customizer_subtitle": "Personalize your browsing experience • Themes, Custom CSS, Portals & UserScripts",
+        "active_theme_badge": "Active",
+        "select_theme_btn": "Select",
         "app_title": "Safeer Browser",
         "home_title": "Safeer Home",
         "new_tab": "New Tab",
@@ -92,6 +95,9 @@ TRANSLATIONS = {
         "force_dark_mode": "Force Dark Mode on All Websites"
     },
     "sl": {
+        "customizer_subtitle": "Prilagodite videz, barvne teme, CSS sloge, bližnjice in skripte po meri",
+        "active_theme_badge": "Aktivno",
+        "select_theme_btn": "Izberi",
         "app_title": "Safeer Brskalnik",
         "home_title": "Safeer Domača Stran",
         "new_tab": "Nov zavihek",
@@ -166,6 +172,9 @@ TRANSLATIONS = {
         "force_dark_mode": "Prisili temni način na vseh spletnih straneh"
     },
     "de": {
+        "customizer_subtitle": "Personalisieren Sie Ihr Surferlebnis • Themes, CSS, Favoriten & Skripte",
+        "active_theme_badge": "Aktiv",
+        "select_theme_btn": "Auswählen",
         "app_title": "Safeer Browser",
         "home_title": "Safeer Startseite",
         "new_tab": "Neuer Tab",
@@ -240,6 +249,9 @@ TRANSLATIONS = {
         "force_dark_mode": "Dunkelmodus auf allen Websites erzwingen"
     },
     "es": {
+        "customizer_subtitle": "Personaliza tu experiencia • Temas, CSS personalizado, sitios y scripts",
+        "active_theme_badge": "Activo",
+        "select_theme_btn": "Seleccionar",
         "app_title": "Navegador Safeer",
         "home_title": "Página Principal Safeer",
         "new_tab": "Nueva pestaña",
@@ -314,6 +326,9 @@ TRANSLATIONS = {
         "force_dark_mode": "Forzar modo oscuro en todos los sitios"
     },
     "fr": {
+        "customizer_subtitle": "Personnalisez votre navigation • Thèmes, CSS personnalisé, sites et scripts",
+        "active_theme_badge": "Actif",
+        "select_theme_btn": "Sélectionner",
         "app_title": "Navigateur Safeer",
         "home_title": "Page d'accueil Safeer",
         "new_tab": "Nouvel onglet",
@@ -388,6 +403,9 @@ TRANSLATIONS = {
         "force_dark_mode": "Forcer le mode sombre sur tous les sites"
     },
     "it": {
+        "customizer_subtitle": "Personalizza la navigazione • Temi, CSS personalizzato, preferiti e script",
+        "active_theme_badge": "Attivo",
+        "select_theme_btn": "Seleziona",
         "app_title": "Browser Safeer",
         "home_title": "Pagina iniziale Safeer",
         "new_tab": "Nuova scheda",

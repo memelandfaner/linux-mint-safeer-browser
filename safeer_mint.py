@@ -412,6 +412,123 @@ class SafeerMintBrowser(Gtk.Window):
             color: #38bdf8;
             font-size: 13px;
         }}
+
+        /* 5. Customizer Studio Dialog & Modern Component Styling */
+        .customizer-dialog {{
+            background-color: {bg_base};
+            color: {fg_main};
+        }}
+        .customizer-banner {{
+            background: linear-gradient(135deg, rgba(0, 96, 223, 0.22) 0%, rgba(135, 207, 62, 0.16) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            padding: 12px 18px;
+            margin-bottom: 6px;
+        }}
+        .banner-icon {{
+            font-size: 26px;
+        }}
+        .customizer-notebook {{
+            background-color: transparent;
+            border: none;
+        }}
+        .customizer-notebook tab {{
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px 8px 0 0;
+            padding: 8px 16px;
+            color: #94a3b8;
+            font-size: 13.5px;
+            font-weight: 600;
+            margin-right: 6px;
+            transition: all 120ms ease;
+        }}
+        .customizer-notebook tab:hover {{
+            background-color: rgba(255, 255, 255, 0.07);
+            color: #ffffff;
+        }}
+        .customizer-notebook tab:checked {{
+            background-color: {bg_card};
+            border-color: rgba(255, 255, 255, 0.14);
+            border-bottom: 2px solid {accent};
+            color: #ffffff;
+        }}
+        .theme-card-box {{
+            background-color: {bg_card};
+            border: 1.5px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 14px 16px;
+            transition: all 120ms ease;
+        }}
+        .theme-card-box:hover {{
+            border-color: rgba(255, 255, 255, 0.24);
+            background-color: rgba(255, 255, 255, 0.06);
+        }}
+        .theme-card-box.active-theme {{
+            border: 2px solid {accent};
+            background-color: rgba(0, 96, 223, 0.09);
+        }}
+        .theme-badge {{
+            background: rgba(255, 255, 255, 0.08);
+            color: #94a3b8;
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 600;
+        }}
+        .theme-badge.active-badge {{
+            background: {accent};
+            color: #ffffff;
+        }}
+        .snippet-chip {{
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            color: #e2e8f0;
+            padding: 6px 12px;
+            font-size: 12.5px;
+            font-weight: 600;
+            transition: all 100ms ease;
+        }}
+        .snippet-chip:hover {{
+            background-color: rgba(0, 210, 255, 0.15);
+            border-color: #00d2ff;
+            color: #00d2ff;
+        }}
+        .item-card-row {{
+            background-color: {bg_card};
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 10px 14px;
+            transition: all 100ms ease;
+        }}
+        .item-card-row:hover {{
+            border-color: rgba(255, 255, 255, 0.18);
+            background-color: rgba(255, 255, 255, 0.05);
+        }}
+        .btn-primary-glow {{
+            background: linear-gradient(135deg, {accent}, #0284c7);
+            border: none;
+            border-radius: 8px;
+            color: #ffffff;
+            font-weight: 700;
+            padding: 8px 18px;
+        }}
+        .btn-primary-glow:hover {{
+            opacity: 0.9;
+        }}
+        .customizer-close-btn {{
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            color: #f1f5f9;
+            font-weight: 600;
+            padding: 7px 22px;
+        }}
+        .customizer-close-btn:hover {{
+            background: rgba(255, 255, 255, 0.16);
+            color: #ffffff;
+        }}
         """
 
         custom_css = self.config.get("custom_css", "")
@@ -1899,25 +2016,53 @@ class SafeerMintBrowser(Gtk.Window):
             transient_for=self,
             flags=0
         )
-        dialog.set_default_size(880, 640)
+        dialog.set_default_size(940, 680)
         dialog.set_resizable(True)
         dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
+        dialog.get_style_context().add_class("customizer-dialog")
+
+        btn_close = dialog.add_button(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
+        btn_close.get_style_context().add_class("customizer-close-btn")
 
         content = dialog.get_content_area()
-        content.set_spacing(6)
-        content.set_margin_top(8)
-        content.set_margin_bottom(8)
-        content.set_margin_left(12)
-        content.set_margin_right(12)
+        content.set_spacing(10)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_start(16)
+        content.set_margin_end(16)
+
+        # -------------------------------------------------------------
+        # Hero Header Banner
+        # -------------------------------------------------------------
+        banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        banner.get_style_context().add_class("customizer-banner")
+
+        icon_lbl = Gtk.Label(label="✨")
+        icon_lbl.get_style_context().add_class("banner-icon")
+        banner.pack_start(icon_lbl, False, False, 2)
+
+        title_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        lbl_head = Gtk.Label(label=f"<b><span size='13000'>{GLib.markup_escape_text(t('customizer_title'))}</span></b>")
+        lbl_head.set_use_markup(True)
+        lbl_head.set_xalign(0.0)
+
+        lbl_sub = Gtk.Label(label=f"<span color='#94a3b8'>{GLib.markup_escape_text(t('customizer_subtitle'))}</span>")
+        lbl_sub.set_use_markup(True)
+        lbl_sub.set_xalign(0.0)
+
+        title_vbox.pack_start(lbl_head, False, False, 0)
+        title_vbox.pack_start(lbl_sub, False, False, 0)
+        banner.pack_start(title_vbox, True, True, 0)
+        content.pack_start(banner, False, False, 0)
 
         notebook = Gtk.Notebook()
+        notebook.get_style_context().add_class("customizer-notebook")
         notebook.set_vexpand(True)
         notebook.set_hexpand(True)
         content.pack_start(notebook, True, True, 0)
 
         # -------------------------------------------------------------
-        # ZAVIHEK 1: 🎨 Teme & Barve
+        # ZAVIHEK 1: 🎨 Teme & Barve (Interaktivne Tematske Kartice)
         # -------------------------------------------------------------
         themes_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         themes_box.set_margin_top(16)
@@ -1925,46 +2070,137 @@ class SafeerMintBrowser(Gtk.Window):
         themes_box.set_margin_start(16)
         themes_box.set_margin_end(16)
 
-        lbl_theme = Gtk.Label(label=f"<b>{t('choose_theme')}</b>")
+        lbl_theme = Gtk.Label(label=f"<b><span size='11500'>{GLib.markup_escape_text(t('choose_theme'))}</span></b>")
         lbl_theme.set_use_markup(True)
         lbl_theme.set_xalign(0.0)
         themes_box.pack_start(lbl_theme, False, False, 0)
 
-        # Theme Radio Buttons
+        grid = Gtk.Grid()
+        grid.set_column_spacing(14)
+        grid.set_row_spacing(14)
+        grid.set_hexpand(True)
+        grid.set_column_homogeneous(True)
+
+        theme_cards_data = [
+            {
+                "id": "midnight",
+                "name": "Firefox Midnight",
+                "icon": "🌙",
+                "desc": t("theme_midnight_desc"),
+                "tag": "Proton • Dark",
+                "colors": ["#1c1b22", "#2b2a33", "#0060df"]
+            },
+            {
+                "id": "mint",
+                "name": "Linux Mint Emerald",
+                "icon": "🍃",
+                "desc": t("theme_mint_desc"),
+                "tag": "Mint Desktop • Eco",
+                "colors": ["#141c15", "#1c2b1f", "#87cf3e"]
+            },
+            {
+                "id": "neon",
+                "name": "Cyberpunk Neon",
+                "icon": "⚡",
+                "desc": t("theme_neon_desc"),
+                "tag": "Cyan & Violet",
+                "colors": ["#090d16", "#111827", "#00d2ff"]
+            },
+            {
+                "id": "amoled",
+                "name": "Pure AMOLED Black",
+                "icon": "🖤",
+                "desc": t("theme_amoled_desc"),
+                "tag": "Pitch Black • OLED",
+                "colors": ["#000000", "#181818", "#38bdf8"]
+            }
+        ]
+
+        card_widgets = []
         cur_theme = self.config.get("theme", "midnight")
-        radio_midnight = Gtk.RadioButton.new_with_label(None, f"🌙 Firefox Midnight — {t('theme_midnight_desc')}")
-        radio_mint = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, f"🍃 Linux Mint Emerald — {t('theme_mint_desc')}")
-        radio_neon = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, f"⚡ Cyberpunk Neon — {t('theme_neon_desc')}")
-        radio_amoled = Gtk.RadioButton.new_with_label_from_widget(radio_midnight, f"🖤 Pure AMOLED Black — {t('theme_amoled_desc')}")
 
-        if cur_theme == "mint":
-            radio_mint.set_active(True)
-        elif cur_theme == "neon":
-            radio_neon.set_active(True)
-        elif cur_theme == "amoled":
-            radio_amoled.set_active(True)
-        else:
-            radio_midnight.set_active(True)
+        def select_theme(th_id):
+            self.config.set("theme", th_id)
+            self.apply_css()
+            for c_id, c_box, badge_lbl in card_widgets:
+                is_active = (c_id == th_id)
+                ctx = c_box.get_style_context()
+                b_ctx = badge_lbl.get_style_context()
+                if is_active:
+                    ctx.add_class("active-theme")
+                    b_ctx.add_class("active-badge")
+                    badge_lbl.set_text(f"✓ {t('active_theme_badge')}")
+                else:
+                    ctx.remove_class("active-theme")
+                    b_ctx.remove_class("active-badge")
+                    badge_lbl.set_text(t("select_theme_btn"))
 
-        def on_theme_changed(btn, theme_name):
-            if btn.get_active():
-                self.config.set("theme", theme_name)
-                self.apply_css()
+        for idx, th in enumerate(theme_cards_data):
+            th_id = th["id"]
+            is_cur = (cur_theme == th_id)
 
-        radio_midnight.connect("toggled", on_theme_changed, "midnight")
-        radio_mint.connect("toggled", on_theme_changed, "mint")
-        radio_neon.connect("toggled", on_theme_changed, "neon")
-        radio_amoled.connect("toggled", on_theme_changed, "amoled")
+            eb = Gtk.EventBox()
+            try:
+                eb.set_cursor(Gdk.Cursor.new_from_name(Gdk.Display.get_default(), "pointer"))
+            except Exception:
+                pass
 
-        themes_box.pack_start(radio_midnight, False, False, 4)
-        themes_box.pack_start(radio_mint, False, False, 4)
-        themes_box.pack_start(radio_neon, False, False, 4)
-        themes_box.pack_start(radio_amoled, False, False, 4)
+            card_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            card_box.get_style_context().add_class("theme-card-box")
+            if is_cur:
+                card_box.get_style_context().add_class("active-theme")
 
-        theme_info = Gtk.Label(label=f"<i>{t('theme_live_notice')}</i>")
-        theme_info.set_use_markup(True)
-        theme_info.set_xalign(0.0)
-        themes_box.pack_start(theme_info, False, False, 10)
+            top_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            t_lbl = Gtk.Label(label=f"<b>{th['icon']} {th['name']}</b>")
+            t_lbl.set_use_markup(True)
+            t_lbl.set_xalign(0.0)
+            top_row.pack_start(t_lbl, True, True, 0)
+
+            for hex_val in th["colors"]:
+                sw = Gtk.Box()
+                sw.set_size_request(13, 13)
+                p = Gtk.CssProvider()
+                p.load_from_data(f".swatch-{hex_val[1:]} {{ background-color: {hex_val}; border-radius: 50%; min-width: 12px; min-height: 12px; margin-right: 3px; border: 1px solid rgba(255,255,255,0.25); }}".encode('utf-8'))
+                sw.get_style_context().add_provider(p, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+                sw.get_style_context().add_class(f"swatch-{hex_val[1:]}")
+                top_row.pack_start(sw, False, False, 0)
+
+            badge_lbl = Gtk.Label(label=f"✓ {t('active_theme_badge')}" if is_cur else t("select_theme_btn"))
+            badge_lbl.get_style_context().add_class("theme-badge")
+            if is_cur:
+                badge_lbl.get_style_context().add_class("active-badge")
+            top_row.pack_end(badge_lbl, False, False, 0)
+            card_box.pack_start(top_row, False, False, 0)
+
+            d_lbl = Gtk.Label(label=th["desc"])
+            d_lbl.set_line_wrap(True)
+            d_lbl.set_xalign(0.0)
+            d_lbl.get_style_context().add_class("text-muted")
+            card_box.pack_start(d_lbl, False, False, 0)
+
+            tag_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+            tag_lbl = Gtk.Label(label=f"<small>{GLib.markup_escape_text(th['tag'])}</small>")
+            tag_lbl.set_use_markup(True)
+            tag_lbl.get_style_context().add_class("theme-badge")
+            tag_box.pack_start(tag_lbl, False, False, 0)
+            card_box.pack_start(tag_box, False, False, 0)
+
+            eb.add(card_box)
+            eb.connect("button-press-event", lambda w, ev, tid=th_id: select_theme(tid))
+
+            grid.attach(eb, idx % 2, idx // 2, 1, 1)
+            card_widgets.append((th_id, card_box, badge_lbl))
+
+        themes_box.pack_start(grid, False, False, 0)
+
+        info_card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        info_card.get_style_context().add_class("theme-card-box")
+        info_card.set_margin_top(12)
+        lbl_info = Gtk.Label(label=f"💡 <i>{GLib.markup_escape_text(t('theme_live_notice'))}</i>")
+        lbl_info.set_use_markup(True)
+        lbl_info.set_xalign(0.0)
+        info_card.pack_start(lbl_info, True, True, 4)
+        themes_box.pack_start(info_card, False, False, 0)
 
         notebook.append_page(themes_box, Gtk.Label(label=f"🎨 {t('tab_themes')}"))
 
@@ -1980,7 +2216,7 @@ class SafeerMintBrowser(Gtk.Window):
         css_page_box.set_hexpand(True)
 
         css_header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        lbl_css_title = Gtk.Label(label=f"<b>{t('custom_css_title')}</b>")
+        lbl_css_title = Gtk.Label(label=f"<b>{GLib.markup_escape_text(t('custom_css_title'))}</b>")
         lbl_css_title.set_use_markup(True)
         lbl_css_title.set_xalign(0.0)
         css_header_box.pack_start(lbl_css_title, True, True, 0)
@@ -1991,18 +2227,19 @@ class SafeerMintBrowser(Gtk.Window):
         css_page_box.pack_start(lbl_css_desc, False, False, 0)
 
         # Snippets Bar
-        snippets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        lbl_snip = Gtk.Label(label=t('snippets_lbl'))
+        snippets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        lbl_snip = Gtk.Label(label=f"<b>{GLib.markup_escape_text(t('snippets_lbl'))}</b>")
+        lbl_snip.set_use_markup(True)
         snippets_box.pack_start(lbl_snip, False, False, 0)
 
         btn_snip_rounded = Gtk.Button(label=t('snip_rounded'))
-        btn_snip_rounded.get_style_context().add_class("nav-btn")
+        btn_snip_rounded.get_style_context().add_class("snippet-chip")
         btn_snip_font = Gtk.Button(label=t('snip_font'))
-        btn_snip_font.get_style_context().add_class("nav-btn")
+        btn_snip_font.get_style_context().add_class("snippet-chip")
         btn_snip_glow = Gtk.Button(label=t('snip_glow'))
-        btn_snip_glow.get_style_context().add_class("nav-btn")
+        btn_snip_glow.get_style_context().add_class("snippet-chip")
         btn_snip_compact = Gtk.Button(label=t('snip_compact'))
-        btn_snip_compact.get_style_context().add_class("nav-btn")
+        btn_snip_compact.get_style_context().add_class("snippet-chip")
 
         snippets_box.pack_start(btn_snip_rounded, False, False, 0)
         snippets_box.pack_start(btn_snip_font, False, False, 0)
@@ -2015,7 +2252,7 @@ class SafeerMintBrowser(Gtk.Window):
         css_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         css_scroll.set_vexpand(True)
         css_scroll.set_hexpand(True)
-        css_scroll.set_min_content_height(320)
+        css_scroll.set_min_content_height(340)
 
         css_tv = Gtk.TextView()
         css_tv.get_style_context().add_class("code-editor")
@@ -2048,15 +2285,15 @@ class SafeerMintBrowser(Gtk.Window):
         css_page_box.pack_start(css_scroll, True, True, 0)
 
         # Action Buttons for CSS
-        css_actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        css_actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         btn_save_css = Gtk.Button(label=t('save_and_apply_css'))
-        btn_save_css.get_style_context().add_class("nav-btn")
+        btn_save_css.get_style_context().add_class("btn-primary-glow")
         def on_save_css(b):
             txt = css_buf.get_text(css_buf.get_start_iter(), css_buf.get_end_iter(), True)
             self.config.set("custom_css", txt)
             self.apply_css()
             orig_lbl = b.get_label()
-            b.set_label("✅ OK")
+            b.set_label("✅ OK!")
             GLib.timeout_add(1500, lambda: b.set_label(orig_lbl))
         btn_save_css.connect("clicked", on_save_css)
         css_actions_box.pack_start(btn_save_css, False, False, 0)
@@ -2086,27 +2323,27 @@ class SafeerMintBrowser(Gtk.Window):
         portals_tab_box.set_hexpand(True)
 
         portals_top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        lbl_portals_head = Gtk.Label(label=f"<b>{t('portals_title')}</b>")
+        lbl_portals_head = Gtk.Label(label=f"<b><span size='11500'>{GLib.markup_escape_text(t('portals_title'))}</span></b>")
         lbl_portals_head.set_use_markup(True)
         lbl_portals_head.set_xalign(0.0)
         portals_top_bar.pack_start(lbl_portals_head, True, True, 0)
 
         btn_add_p_tab = Gtk.Button(label=f"➕ {t('add_portal')}")
-        btn_add_p_tab.get_style_context().add_class("nav-btn")
-        portals_top_bar.pack_start(btn_add_p_tab, False, False, 0)
+        btn_add_p_tab.get_style_context().add_class("btn-primary-glow")
+        portals_top_bar.pack_end(btn_add_p_tab, False, False, 0)
 
         btn_res_p_tab = Gtk.Button(label=f"🔄 {t('reset_default')}")
         btn_res_p_tab.get_style_context().add_class("btn-delete")
-        portals_top_bar.pack_start(btn_res_p_tab, False, False, 0)
+        portals_top_bar.pack_end(btn_res_p_tab, False, False, 0)
         portals_tab_box.pack_start(portals_top_bar, False, False, 0)
 
         p_scroll = Gtk.ScrolledWindow()
         p_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         p_scroll.set_vexpand(True)
         p_scroll.set_hexpand(True)
-        p_scroll.set_min_content_height(320)
+        p_scroll.set_min_content_height(340)
 
-        p_list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        p_list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         p_scroll.add(p_list_box)
         portals_tab_box.pack_start(p_scroll, True, True, 0)
 
@@ -2117,16 +2354,15 @@ class SafeerMintBrowser(Gtk.Window):
             portals = self.config.get_portals()
             for p in portals:
                 row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-                row.get_style_context().add_class("user-script-row")
-                row.set_margin_top(4)
-                row.set_margin_bottom(4)
+                row.get_style_context().add_class("item-card-row")
 
                 badge = Gtk.Label(label=p.get("mark", "🌐"))
                 badge.set_width_chars(3)
-                row.pack_start(badge, False, False, 6)
+                badge.get_style_context().add_class("nav-btn")
+                row.pack_start(badge, False, False, 4)
 
                 info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-                lbl_title = Gtk.Label(label=f"<b>{p.get('title', '')}</b>")
+                lbl_title = Gtk.Label(label=f"<b>{GLib.markup_escape_text(p.get('title', ''))}</b>")
                 lbl_title.set_use_markup(True)
                 lbl_title.set_xalign(0.0)
                 lbl_url = Gtk.Label(label=p.get('url', ''))
@@ -2168,26 +2404,26 @@ class SafeerMintBrowser(Gtk.Window):
         # ZAVIHEK 4: 🧩 Uporabniške skripte (UserScripts)
         # -------------------------------------------------------------
         scripts_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        scripts_box.set_margin_top(12)
-        scripts_box.set_margin_bottom(12)
-        scripts_box.set_margin_left(12)
-        scripts_box.set_margin_right(12)
+        scripts_box.set_margin_top(14)
+        scripts_box.set_margin_bottom(14)
+        scripts_box.set_margin_start(16)
+        scripts_box.set_margin_end(16)
 
         scripts_top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        lbl_scripts = Gtk.Label(label=f"<b>{t('userscripts_title')}</b>")
+        lbl_scripts = Gtk.Label(label=f"<b><span size='11500'>{GLib.markup_escape_text(t('userscripts_title'))}</span></b>")
         lbl_scripts.set_use_markup(True)
         lbl_scripts.set_xalign(0.0)
         scripts_top_bar.pack_start(lbl_scripts, True, True, 0)
 
         btn_add_script = Gtk.Button(label=t('add_new_script'))
-        btn_add_script.get_style_context().add_class("nav-btn")
-        scripts_top_bar.pack_start(btn_add_script, False, False, 0)
+        btn_add_script.get_style_context().add_class("btn-primary-glow")
+        scripts_top_bar.pack_end(btn_add_script, False, False, 0)
         scripts_box.pack_start(scripts_top_bar, False, False, 0)
 
         # Scrolled scripts container
         scripts_scroll = Gtk.ScrolledWindow()
         scripts_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scripts_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        scripts_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         scripts_scroll.add(scripts_vbox)
         scripts_box.pack_start(scripts_scroll, True, True, 0)
 
@@ -2197,44 +2433,50 @@ class SafeerMintBrowser(Gtk.Window):
 
             scripts = self.config.get_user_scripts()
             if not scripts:
+                empty_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+                empty_box.get_style_context().add_class("theme-card-box")
+                empty_box.set_margin_top(20)
+                empty_box.set_margin_bottom(20)
+
+                empty_icon = Gtk.Label(label="🧩")
+                empty_icon.get_style_context().add_class("banner-icon")
+                empty_box.pack_start(empty_icon, False, False, 0)
+
                 empty_lbl = Gtk.Label(label=t('empty_scripts'))
-                empty_lbl.get_style_context().add_class("tab-title")
-                scripts_vbox.pack_start(empty_lbl, True, True, 30)
+                empty_lbl.set_justify(Gtk.Justification.CENTER)
+                empty_box.pack_start(empty_lbl, True, True, 6)
+                scripts_vbox.pack_start(empty_box, True, True, 10)
             else:
                 for s in scripts:
-                    row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-                    row.get_style_context().add_class("drawer-header-bar")
+                    row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+                    row.get_style_context().add_class("item-card-row")
 
-                    # Enable Switch
                     sw = Gtk.Switch()
                     sw.set_active(s.get("enabled", True))
                     s_id = s["id"]
                     sw.connect("state-set", lambda widget, state, sid=s_id: self.config.toggle_user_script(sid))
                     row.pack_start(sw, False, False, 4)
 
-                    # Info
                     info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-                    title_lbl = Gtk.Label(label=f"<b>{s.get('name', 'Brez imena')}</b>")
+                    title_lbl = Gtk.Label(label=f"<b>{GLib.markup_escape_text(s.get('name', 'Brez imena'))}</b>")
                     title_lbl.set_use_markup(True)
                     title_lbl.set_xalign(0.0)
                     info_box.pack_start(title_lbl, False, False, 0)
 
-                    pattern_txt = f"Domena: <code>{s.get('pattern', '*')}</code> • Zagon: {s.get('run_at', 'end').upper()}"
+                    pattern_txt = f"Domena: <tt>{GLib.markup_escape_text(s.get('pattern', '*'))}</tt> • Zagon: {s.get('run_at', 'end').upper()}"
                     meta_lbl = Gtk.Label(label=pattern_txt)
                     meta_lbl.set_use_markup(True)
                     meta_lbl.set_xalign(0.0)
-                    meta_lbl.get_style_context().add_class("tab-title")
+                    meta_lbl.get_style_context().add_class("text-muted")
                     info_box.pack_start(meta_lbl, False, False, 0)
                     row.pack_start(info_box, True, True, 0)
 
-                    # Edit button
                     btn_edit = Gtk.Button(label=f"✏️ {t('edit')}")
                     btn_edit.get_style_context().add_class("nav-btn")
                     s_copy = s.copy()
                     btn_edit.connect("clicked", lambda b, script_data=s_copy: [self.open_script_editor_dialog(script_data), populate_scripts()])
                     row.pack_end(btn_edit, False, False, 0)
 
-                    # Delete button
                     btn_del = Gtk.Button(label="🗑️")
                     btn_del.get_style_context().add_class("btn-delete")
                     btn_del.connect("clicked", lambda b, sid=s_id: [self.config.delete_user_script(sid), populate_scripts()])
@@ -2257,10 +2499,12 @@ class SafeerMintBrowser(Gtk.Window):
         is_edit = script is not None
         title = "Uredi skripto" if is_edit else "Nova uporabniška skripta"
         dialog = Gtk.Dialog(title=title, transient_for=self, flags=0)
-        dialog.set_default_size(600, 480)
-        dialog.add_button("Prekliči", Gtk.ResponseType.CANCEL)
-        btn_save = dialog.add_button("💾 Shrani skripto", Gtk.ResponseType.OK)
-        btn_save.get_style_context().add_class("nav-btn")
+        dialog.set_default_size(680, 520)
+        dialog.get_style_context().add_class("customizer-dialog")
+        btn_cancel = dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
+        btn_cancel.get_style_context().add_class("customizer-close-btn")
+        btn_save = dialog.add_button(f"💾 {t('save')}", Gtk.ResponseType.OK)
+        btn_save.get_style_context().add_class("btn-primary-glow")
 
         content = dialog.get_content_area()
         content.set_spacing(10)
@@ -2370,12 +2614,14 @@ class SafeerMintBrowser(Gtk.Window):
         is_edit = portal is not None
         title = f"✏️ {t('edit')} {t('tab_portals')}" if is_edit else f"➕ {t('add_portal')}"
         dialog = Gtk.Dialog(title=title, transient_for=self, flags=0)
-        dialog.set_default_size(560, 480)
+        dialog.set_default_size(600, 500)
         dialog.set_resizable(True)
         dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
+        dialog.get_style_context().add_class("customizer-dialog")
+        btn_cancel = dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
+        btn_cancel.get_style_context().add_class("customizer-close-btn")
         btn_save = dialog.add_button(f"💾 {t('save_portal')}", Gtk.ResponseType.OK)
-        btn_save.get_style_context().add_class("nav-btn")
+        btn_save.get_style_context().add_class("btn-primary-glow")
 
         content = dialog.get_content_area()
         content.set_spacing(10)
@@ -2384,7 +2630,7 @@ class SafeerMintBrowser(Gtk.Window):
         content.set_margin_start(16)
         content.set_margin_end(16)
 
-        lbl_title = Gtk.Label(label=f"<b>{t('portal_name')}:</b>")
+        lbl_title = Gtk.Label(label=f"<b>{GLib.markup_escape_text(t('portal_name'))}:</b>")
         lbl_title.set_use_markup(True)
         lbl_title.set_xalign(0.0)
         content.pack_start(lbl_title, False, False, 0)
@@ -2394,7 +2640,7 @@ class SafeerMintBrowser(Gtk.Window):
             entry_title.set_text(portal.get("title", ""))
         content.pack_start(entry_title, False, False, 0)
 
-        lbl_url = Gtk.Label(label=f"<b>{t('portal_url')}:</b>")
+        lbl_url = Gtk.Label(label=f"<b>{GLib.markup_escape_text(t('portal_url'))}:</b>")
         lbl_url.set_use_markup(True)
         lbl_url.set_xalign(0.0)
         content.pack_start(lbl_url, False, False, 0)
@@ -2406,7 +2652,7 @@ class SafeerMintBrowser(Gtk.Window):
             entry_url.set_text("https://")
         content.pack_start(entry_url, False, False, 0)
 
-        lbl_mark = Gtk.Label(label=f"<b>{t('portal_icon')}:</b>")
+        lbl_mark = Gtk.Label(label=f"<b>{GLib.markup_escape_text(t('portal_icon'))}:</b>")
         lbl_mark.set_use_markup(True)
         lbl_mark.set_xalign(0.0)
         content.pack_start(lbl_mark, False, False, 0)
@@ -2425,7 +2671,7 @@ class SafeerMintBrowser(Gtk.Window):
             mark_box.pack_start(btn_em, False, False, 0)
         content.pack_start(mark_box, False, False, 0)
 
-        lbl_color = Gtk.Label(label=f"<b>{t('portal_color')}:</b>")
+        lbl_color = Gtk.Label(label=f"<b>{GLib.markup_escape_text(t('portal_color'))}:</b>")
         lbl_color.set_use_markup(True)
         lbl_color.set_xalign(0.0)
         content.pack_start(lbl_color, False, False, 0)
@@ -2479,10 +2725,12 @@ class SafeerMintBrowser(Gtk.Window):
             transient_for=self,
             flags=0
         )
-        dialog.set_default_size(780, 580)
+        dialog.set_default_size(840, 600)
         dialog.set_resizable(True)
         dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
+        dialog.get_style_context().add_class("customizer-dialog")
+        btn_close = dialog.add_button(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
+        btn_close.get_style_context().add_class("customizer-close-btn")
 
         content = dialog.get_content_area()
         content.set_spacing(10)
