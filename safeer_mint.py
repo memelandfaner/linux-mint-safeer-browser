@@ -40,6 +40,7 @@ from core.adblock import (
     is_threat_domain,
     FORCE_DARK_MODE_CSS
 )
+from core.reader import READER_MODE_JS
 
 # Native WebKitGTK user agent matching Safari/WebKit engine to prevent Google CAPTCHA bot triggers
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
@@ -415,6 +416,41 @@ class SafeerMintBrowser(Gtk.Window):
             font-weight: 600;
             padding: 6px 8px;
         }}
+        .ff-action-btn {{
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: #9ca3af;
+            padding: 3px 6px;
+            font-size: 15px;
+            margin-left: 2px;
+            transition: all 120ms ease;
+        }}
+        .ff-action-btn:hover {{
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+        }}
+        .ff-action-btn.active-star {{
+            color: #eab308;
+            font-size: 16px;
+        }}
+        .ff-action-btn.reader-active {{
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.2);
+        }}
+        .tab-audio-btn {{
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            padding: 2px 4px;
+            font-size: 12px;
+            color: #38bdf8;
+            transition: all 100ms ease;
+        }}
+        .tab-audio-btn:hover {{
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+        }}
 
         /* 4. Left Dock and Sidebar */
         .dock-bar {{
@@ -671,6 +707,16 @@ class SafeerMintBrowser(Gtk.Window):
             self.toggle_dark_mode()
             return True
 
+        # Ctrl + Alt + R or Alt + R: Reader Mode (Distraction-Free)
+        elif (ctrl and alt and event.keyval in (Gdk.KEY_r, Gdk.KEY_R)) or (alt and event.keyval in (Gdk.KEY_r, Gdk.KEY_R)):
+            self.toggle_reader_mode()
+            return True
+
+        # Ctrl + M: Toggle Mute Audio on Active Tab
+        elif ctrl and not alt and not shift and event.keyval in (Gdk.KEY_m, Gdk.KEY_M):
+            self.toggle_active_tab_mute()
+            return True
+
         # Ctrl + D: Bookmark current page to Portals / Favorites
         elif ctrl and not shift and event.keyval in (Gdk.KEY_d, Gdk.KEY_D):
             self.bookmark_current_page()
@@ -729,6 +775,10 @@ class SafeerMintBrowser(Gtk.Window):
             self._is_fullscreen = True
 
     def bookmark_current_page(self):
+        self.toggle_bookmark_current_page()
+
+    def toggle_bookmark_current_page(self, btn=None):
+        """Doda trenutno stran med priljubljene portale (Speed Dial) ali odpre urejanje."""
         wv = self.get_active_webview()
         if not wv:
             return
@@ -736,7 +786,80 @@ class SafeerMintBrowser(Gtk.Window):
         title = wv.get_title() or "Priljubljena stran"
         if not uri or "home.html" in uri or uri == "safeer://home":
             return
-        self.open_portal_editor_dialog(None, prefill={"title": title, "url": uri})
+        portals = self.config.get_portals()
+        norm_uri = uri.rstrip("/")
+        existing = next((p for p in portals if p.get("url", "").rstrip("/") == norm_uri), None)
+        if existing:
+            self.open_portal_editor_dialog(existing, on_saved=self.update_star_status)
+        else:
+            self.open_portal_editor_dialog(None, prefill={"title": title, "url": uri}, on_saved=self.update_star_status)
+
+    def toggle_reader_mode(self, btn=None):
+        """Preklopi aktivno stran v bralni način (Reader Mode) ali nazaj."""
+        wv = self.get_active_webview()
+        if not wv:
+            return
+        uri = wv.get_uri() or ""
+        if not uri or uri.startswith("safeer://") or "home.html" in uri:
+            return
+        wv.run_javascript(READER_MODE_JS, None, None, None)
+
+    def toggle_pip(self, btn=None):
+        """Preklopi video v sliko v sliki (Picture-in-Picture)."""
+        wv = self.get_active_webview()
+        if not wv:
+            return
+        js = """
+        (function() {
+            const v = document.querySelector('video');
+            if (v) {
+                if (document.pictureInPictureElement) {
+                    document.exitPictureInPicture().catch(console.error);
+                } else if (v.requestPictureInPicture) {
+                    v.requestPictureInPicture().catch(console.error);
+                }
+            }
+        })();
+        """
+        wv.run_javascript(js, None, None, None)
+
+    def toggle_active_tab_mute(self):
+        """Utiša ali odtiša zvok v aktivnem zavihku."""
+        wv = self.get_active_webview()
+        if wv:
+            muted = not wv.get_property("is-muted")
+            wv.set_is_muted(muted)
+
+    def update_star_status(self):
+        """Posodobi videz zvezdice in orodij v naslovni vrstici."""
+        if not hasattr(self, 'btn_star'):
+            return
+        wv = self.get_active_webview()
+        if not wv:
+            return
+        uri = wv.get_uri() or ""
+        if not uri or uri.startswith("safeer://") or "home.html" in uri:
+            self.btn_star.hide()
+            if hasattr(self, 'btn_reader'): self.btn_reader.hide()
+            if hasattr(self, 'btn_pip'): self.btn_pip.hide()
+            return
+
+        self.btn_star.show()
+        if hasattr(self, 'btn_reader'): self.btn_reader.show()
+        if hasattr(self, 'btn_pip'): self.btn_pip.show()
+
+        portals = self.config.get_portals()
+        norm_uri = uri.rstrip("/")
+        is_saved = any(p.get("url", "").rstrip("/") == norm_uri for p in portals)
+        ctx = self.btn_star.get_style_context()
+        if is_saved:
+            self.btn_star.set_label("⭐")
+            ctx.add_class("active-star")
+            self.btn_star.set_tooltip_text(f"{t('page_bookmarked')}")
+        else:
+            self.btn_star.set_label("☆")
+            ctx.remove_class("active-star")
+            self.btn_star.set_tooltip_text(f"{t('bookmark_page')} (Ctrl + D)")
 
     def create_top_bar(self):
         # Master header container (Tabs + Navigation bar in Firefox Proton layout)
@@ -815,6 +938,27 @@ class SafeerMintBrowser(Gtk.Window):
         self.url_entry.connect("focus-in-event", self.on_url_focus_in)
         self.url_entry.connect("focus-out-event", self.on_url_focus_out)
         self.url_box.pack_start(self.url_entry, True, True, 0)
+
+        # Reader Mode Button (📖)
+        self.btn_reader = Gtk.Button(label="📖")
+        self.btn_reader.get_style_context().add_class("ff-action-btn")
+        self.btn_reader.set_tooltip_text(t('reader_mode'))
+        self.btn_reader.connect("clicked", lambda b: self.toggle_reader_mode())
+        self.url_box.pack_start(self.btn_reader, False, False, 0)
+
+        # Picture-in-Picture Button (⧉)
+        self.btn_pip = Gtk.Button(label="⧉")
+        self.btn_pip.get_style_context().add_class("ff-action-btn")
+        self.btn_pip.set_tooltip_text(f"{t('pip_video')}")
+        self.btn_pip.connect("clicked", lambda b: self.toggle_pip())
+        self.url_box.pack_start(self.btn_pip, False, False, 0)
+
+        # Speed Dial / Bookmark Star Button (⭐ / ☆)
+        self.btn_star = Gtk.Button(label="☆")
+        self.btn_star.get_style_context().add_class("ff-action-btn")
+        self.btn_star.set_tooltip_text(f"{t('bookmark_page')} (Ctrl + D)")
+        self.btn_star.connect("clicked", self.toggle_bookmark_current_page)
+        self.url_box.pack_start(self.btn_star, False, False, 0)
 
         self.nav_bar.pack_start(self.url_box, True, True, 4)
 
@@ -1473,6 +1617,41 @@ class SafeerMintBrowser(Gtk.Window):
         if not text:
             return
 
+        # 1. Switch-To-Tab shortcut (npr. "% youtube" ali "% 24ur")
+        if text.startswith("%") or text.startswith("@tab "):
+            query = text.lstrip("%").replace("@tab", "").strip().lower()
+            if query:
+                for tab in self.tabs:
+                    t_title = tab.get("title", "").lower()
+                    t_uri = tab.get("uri", "").lower()
+                    if query in t_title or query in t_uri:
+                        self.switch_to_tab(tab["id"])
+                        return
+
+        # 2. Smart Search Engine prefixes (@g, @ddg, @b, @yt, @w, @gh)
+        if text.startswith("@"):
+            parts = text.split(" ", 1)
+            prefix = parts[0].lower()
+            q = parts[1].strip() if len(parts) > 1 else ""
+            target = None
+            if prefix in ("@g", "@google"):
+                target = f"https://www.google.com/search?q={urllib.parse.quote_plus(q)}"
+            elif prefix in ("@ddg", "@duckduckgo"):
+                target = f"https://duckduckgo.com/?q={urllib.parse.quote_plus(q)}"
+            elif prefix in ("@b", "@brave"):
+                target = f"https://search.brave.com/search?q={urllib.parse.quote_plus(q)}"
+            elif prefix in ("@yt", "@youtube"):
+                target = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(q)}"
+            elif prefix in ("@w", "@wiki", "@wikipedia"):
+                target = f"https://en.wikipedia.org/wiki/Special:Search?search={urllib.parse.quote_plus(q)}"
+            elif prefix in ("@gh", "@github"):
+                target = f"https://github.com/search?q={urllib.parse.quote_plus(q)}"
+            if target and q:
+                wv = self.get_active_webview()
+                if wv:
+                    wv.load_uri(target)
+                return
+
         if text == "safeer://home" or text == "about:blank":
             self.load_homepage()
             return
@@ -1636,6 +1815,35 @@ class SafeerMintBrowser(Gtk.Window):
         tab_title.set_xalign(0.0)
         tab_box.pack_start(tab_title, True, True, 2)
 
+        # Audio Indicator & One-Click Mute Button (🔊 / 🔇)
+        btn_audio = Gtk.Button(label="🔊")
+        btn_audio.get_style_context().add_class("tab-audio-btn")
+        btn_audio.set_tooltip_text(f"{t('audio_mute')}")
+        btn_audio.set_no_show_all(True)
+        btn_audio.hide()
+
+        def on_tab_mute_clicked(b, w=wv, btn=btn_audio):
+            muted = not w.get_property("is-muted")
+            w.set_is_muted(muted)
+            btn.set_label("🔇" if muted else "🔊")
+            btn.set_tooltip_text(t("audio_unmute") if muted else t("audio_mute"))
+
+        btn_audio.connect("clicked", on_tab_mute_clicked)
+        tab_box.pack_start(btn_audio, False, False, 2)
+
+        def on_audio_state_notify(w, param, btn=btn_audio):
+            playing = w.get_property("is-playing-audio")
+            muted = w.get_property("is-muted")
+            if playing or muted:
+                btn.set_label("🔇" if muted else "🔊")
+                btn.set_tooltip_text(t("audio_unmute") if muted else t("audio_mute"))
+                btn.show()
+            else:
+                btn.hide()
+
+        wv.connect("notify::is-playing-audio", on_audio_state_notify)
+        wv.connect("notify::is-muted", on_audio_state_notify)
+
         btn_close = Gtk.Button(label="✕")
         btn_close.get_style_context().add_class("tab-close-btn")
         btn_close.set_tooltip_text("Zapri zavihek (Ctrl + W)")
@@ -1737,6 +1945,7 @@ class SafeerMintBrowser(Gtk.Window):
             self.security_icon.set_text("🎚️")
 
         self.set_title(f"{target['title']} — Safeer Browser (Linux Mint)")
+        self.update_star_status()
 
     def on_tab_load_changed(self, tab_id, webview, event):
         if event == WebKit2.LoadEvent.FINISHED:
@@ -1772,6 +1981,7 @@ class SafeerMintBrowser(Gtk.Window):
                         self.security_icon.set_text("🔒")
                     else:
                         self.security_icon.set_text("🎚️")
+                self.update_star_status()
 
             self.add_history_entry(uri, title)
 
@@ -1812,6 +2022,7 @@ class SafeerMintBrowser(Gtk.Window):
                     break
             if self.active_tab_id == tab_id and not self.url_entry.is_focus():
                 self.url_entry.set_text(self.format_clean_url(uri))
+                self.update_star_status()
 
 
     # -------------------------------------------------------------
@@ -3107,6 +3318,13 @@ class SafeerMintBrowser(Gtk.Window):
             self.btn_customizer.set_tooltip_text(f"{t('customizer_title')}")
         if hasattr(self, 'btn_keyboard'):
             self.btn_keyboard.set_tooltip_text(f"{t('tab_themes')}")
+        if hasattr(self, 'btn_reader'):
+            self.btn_reader.set_tooltip_text(t('reader_mode'))
+        if hasattr(self, 'btn_pip'):
+            self.btn_pip.set_tooltip_text(f"{t('pip_video')}")
+        if hasattr(self, 'btn_star'):
+            self.btn_star.set_tooltip_text(f"{t('bookmark_page')} (Ctrl + D)")
+        self.update_star_status()
 
         if hasattr(self, 'btn_back_drawer'):
             self.btn_back_drawer.set_tooltip_text(f"{t('back')}")

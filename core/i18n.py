@@ -120,7 +120,12 @@ TRANSLATIONS = {
         "zoom_in": "Zoom In (Ctrl + +)",
         "zoom_out": "Zoom Out (Ctrl + -)",
         "zoom_reset": "Reset Zoom (Ctrl + 0)",
-        "fullscreen": "Fullscreen (F11)"
+        "fullscreen": "Fullscreen (F11)",
+        "reader_mode": "Reader Mode (Ctrl + Alt + R)",
+        "audio_mute": "Mute Tab Audio",
+        "audio_unmute": "Unmute Tab Audio",
+        "pip_video": "Picture-in-Picture (PiP)",
+        "switch_to_tab": "Switch to tab"
     },
     "sl": {
         "customizer_subtitle": "Prilagodite videz, barvne teme, CSS sloge, bližnjice in skripte po meri",
@@ -225,7 +230,12 @@ TRANSLATIONS = {
         "zoom_in": "Povečaj (Ctrl + +)",
         "zoom_out": "Pomanjšaj (Ctrl + -)",
         "zoom_reset": "Ponastavi povečavo (Ctrl + 0)",
-        "fullscreen": "Celozaslonski način (F11)"
+        "fullscreen": "Celozaslonski način (F11)",
+        "reader_mode": "Bralni način (Ctrl + Alt + R)",
+        "audio_mute": "Utišaj zavihek",
+        "audio_unmute": "Vklopi zvok zavihka",
+        "pip_video": "Slika v sliki (PiP)",
+        "switch_to_tab": "Preklopi na zavihek"
     },
     "de": {
         "customizer_subtitle": "Personalisieren Sie Ihr Surferlebnis • Themes, CSS, Favoriten & Skripte",
@@ -330,7 +340,12 @@ TRANSLATIONS = {
         "zoom_in": "Vergrößern (Strg + +)",
         "zoom_out": "Verkleinern (Strg + -)",
         "zoom_reset": "Zoom zurücksetzen (Strg + 0)",
-        "fullscreen": "Vollbild (F11)"
+        "fullscreen": "Vollbild (F11)",
+        "reader_mode": "Lesemodus (Ctrl + Alt + R)",
+        "audio_mute": "Tab stummschalten",
+        "audio_unmute": "Tab-Stummschaltung aufheben",
+        "pip_video": "Bild-in-Bild (PiP)",
+        "switch_to_tab": "Zu Tab wechseln"
     },
     "es": {
         "customizer_subtitle": "Personaliza tu experiencia • Temas, CSS personalizado, sitios y scripts",
@@ -435,7 +450,12 @@ TRANSLATIONS = {
         "zoom_in": "Acercar (Ctrl + +)",
         "zoom_out": "Alejar (Ctrl + -)",
         "zoom_reset": "Restablecer zoom (Ctrl + 0)",
-        "fullscreen": "Pantalla completa (F11)"
+        "fullscreen": "Pantalla completa (F11)",
+        "reader_mode": "Modo de lectura (Ctrl + Alt + R)",
+        "audio_mute": "Silenciar pestaña",
+        "audio_unmute": "Activar sonido de pestaña",
+        "pip_video": "Imagen en imagen (PiP)",
+        "switch_to_tab": "Cambiar a pestaña"
     },
     "fr": {
         "customizer_subtitle": "Personnalisez votre navigation • Thèmes, CSS personnalisé, sites et scripts",
@@ -540,7 +560,12 @@ TRANSLATIONS = {
         "zoom_in": "Zoom avant (Ctrl + +)",
         "zoom_out": "Zoom arrière (Ctrl + -)",
         "zoom_reset": "Réinitialiser le zoom (Ctrl + 0)",
-        "fullscreen": "Plein écran (F11)"
+        "fullscreen": "Plein écran (F11)",
+        "reader_mode": "Mode lecture (Ctrl + Alt + R)",
+        "audio_mute": "Couper le son de l'onglet",
+        "audio_unmute": "Réactiver le son de l'onglet",
+        "pip_video": "Image dans l'image (PiP)",
+        "switch_to_tab": "Aller à l'onglet"
     },
     "it": {
         "customizer_subtitle": "Personalizza la navigazione • Temi, CSS personalizzato, preferiti e script",
@@ -645,7 +670,12 @@ TRANSLATIONS = {
         "zoom_in": "Ingrandisci (Ctrl + +)",
         "zoom_out": "Riduci (Ctrl + -)",
         "zoom_reset": "Reimposta zoom (Ctrl + 0)",
-        "fullscreen": "Schermo intero (F11)"
+        "fullscreen": "Schermo intero (F11)",
+        "reader_mode": "Modalità lettura (Ctrl + Alt + R)",
+        "audio_mute": "Silenzia scheda",
+        "audio_unmute": "Riattiva audio scheda",
+        "pip_video": "Picture-in-Picture (PiP)",
+        "switch_to_tab": "Passa alla scheda"
     }
 }
 
