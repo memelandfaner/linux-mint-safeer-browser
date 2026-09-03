@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; }
+    body {
+      background: #080c14;
+      background: rgba(8, 12, 20, 0.95);
+      border-top: 2px solid rgba(0, 210, 255, 0.3);
+      padding: 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .kb-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 4px;
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .kb-close-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      border-radius: 6px;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .kb-close-btn:hover {
+      background: #ef4444;
+      border-color: #ef4444;
+    }
+    .kb-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
+    .kb-key {
+      flex: 1;
+      max-width: 64px;
+      height: 42px;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+      transition: all 0.1s ease;
+    }
+    .kb-key:hover {
+      background: rgba(0, 210, 255, 0.2);
+      border-color: #00d2ff;
+      transform: translateY(-1px);
+    }
+    .kb-key:active {
+      transform: translateY(1px);
+      background: #00d2ff;
+      color: #000;
+    }
+    .kb-key.wide {
+      flex: 1.5;
+      max-width: 96px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 13px;
+    }
+    .kb-key.space {
+      flex: 5;
+      max-width: 320px;
+    }
+    .kb-key.enter {
+      background: linear-gradient(135deg, #00d2ff, #0088cc);
+      color: #000;
+      font-weight: 800;
+      max-width: 110px;
+    }
+  </style>
+</head>
+<body>
+  <div class="kb-header">
+    <span>⌨️ Safeer Navidezna tipkovnica (Izbirno)</span>
+    <button class="kb-close-btn" onclick="closeKeyboard()">✕ Zapri</button>
+  </div>
+
+  <!-- Row 1: Numbers -->
+  <div class="kb-row">
+    <button class="kb-key" onclick="sendKey('1')">1</button>
+    <button class="kb-key" onclick="sendKey('2')">2</button>
+    <button class="kb-key" onclick="sendKey('3')">3</button>
+    <button class="kb-key" onclick="sendKey('4')">4</button>
+    <button class="kb-key" onclick="sendKey('5')">5</button>
+    <button class="kb-key" onclick="sendKey('6')">6</button>
+    <button class="kb-key" onclick="sendKey('7')">7</button>
+    <button class="kb-key" onclick="sendKey('8')">8</button>
+    <button class="kb-key" onclick="sendKey('9')">9</button>
+    <button class="kb-key" onclick="sendKey('0')">0</button>
+    <button class="kb-key wide" onclick="sendKey('Backspace')">⌫ Briši</button>
+  </div>
+
+  <!-- Row 2: QWERTY -->
+  <div class="kb-row">
+    <button class="kb-key" onclick="sendKey('q')">q</button>
+    <button class="kb-key" onclick="sendKey('w')">w</button>
+    <button class="kb-key" onclick="sendKey('e')">e</button>
+    <button class="kb-key" onclick="sendKey('r')">r</button>
+    <button class="kb-key" onclick="sendKey('t')">t</button>
+    <button class="kb-key" onclick="sendKey('z')">z</button>
+    <button class="kb-key" onclick="sendKey('u')">u</button>
+    <button class="kb-key" onclick="sendKey('i')">i</button>
+    <button class="kb-key" onclick="sendKey('o')">o</button>
+    <button class="kb-key" onclick="sendKey('p')">p</button>
+    <button class="kb-key" onclick="sendKey('š')">š</button>
+    <button class="kb-key" onclick="sendKey('đ')">đ</button>
+  </div>
+
+  <!-- Row 3: ASDF -->
+  <div class="kb-row">
+    <button class="kb-key" onclick="sendKey('a')">a</button>
+    <button class="kb-key" onclick="sendKey('s')">s</button>
+    <button class="kb-key" onclick="sendKey('d')">d</button>
+    <button class="kb-key" onclick="sendKey('f')">f</button>
+    <button class="kb-key" onclick="sendKey('g')">g</button>
+    <button class="kb-key" onclick="sendKey('h')">h</button>
+    <button class="kb-key" onclick="sendKey('j')">j</button>
+    <button class="kb-key" onclick="sendKey('k')">k</button>
+    <button class="kb-key" onclick="sendKey('l')">l</button>
+    <button class="kb-key" onclick="sendKey('č')">č</button>
+    <button class="kb-key" onclick="sendKey('ž')">ž</button>
+    <button class="kb-key wide enter" onclick="sendKey('Enter')">↵ Potrdi</button>
+  </div>
+
+  <!-- Row 4: ZXCV & Space -->
+  <div class="kb-row">
+    <button class="kb-key" onclick="sendKey('y')">y</button>
+    <button class="kb-key" onclick="sendKey('x')">x</button>
+    <button class="kb-key" onclick="sendKey('c')">c</button>
+    <button class="kb-key" onclick="sendKey('v')">v</button>
+    <button class="kb-key" onclick="sendKey('b')">b</button>
+    <button class="kb-key" onclick="sendKey('n')">n</button>
+    <button class="kb-key" onclick="sendKey('m')">m</button>
+    <button class="kb-key" onclick="sendKey(',')">,</button>
+    <button class="kb-key" onclick="sendKey('.')">.</button>
+    <button class="kb-key space" onclick="sendKey(' ')">Presledek</button>
+    <button class="kb-key wide" onclick="sendKey('.com')">.com</button>
+  </div>
+
+  <script>
+    function sendKey(key) {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeerKeyboard) {
+        window.webkit.messageHandlers.safeerKeyboard.postMessage({ key: key });
+      }
+    }
+
+    function closeKeyboard() {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeerKeyboard) {
+        window.webkit.messageHandlers.safeerKeyboard.postMessage({ action: 'close' });
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Safeer Browser - Linux Mint Edition</title>
+  <link rel="stylesheet" href="home.css">
+</head>
+<body>
+  <div class="desktop-container">
+
+    <!-- Top Privacy & Shield Banner -->
+    <header class="shield-header">
+      <div class="shield-badge">
+        <span class="shield-icon">🛡️</span>
+        <span class="shield-title">Safeer Shield</span>
+        <span class="shield-status">Zaščita aktivna</span>
+      </div>
+
+      <div class="shield-metrics">
+        <div class="metric-item">
+          <span class="metric-val text-cyan" id="adsCount">1.482</span>
+          <span class="metric-lbl">Blokirani oglasi</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-val text-emerald" id="bandwidthCount">24.8 MB</span>
+          <span class="metric-lbl">Prihranek podatkov</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-val text-purple" id="timeCount">2.1 min</span>
+          <span class="metric-lbl">Prihranjen čas</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Center Stage: Clock & Omnibox Search -->
+    <main class="center-stage">
+      <div class="clock-display">
+        <h1 class="clock-time" id="clockTime">12:00</h1>
+        <p class="clock-date" id="clockDate">Četrtek, 3. September 2026</p>
+      </div>
+
+      <!-- Search Box -->
+      <form class="search-form" id="searchForm" onsubmit="return performSearch(event)">
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" class="search-input" placeholder="Iščite na spletu ali vnesite naslov URL..." autofocus autocomplete="off">
+          <button type="submit" class="search-submit">→</button>
+        </div>
+
+        <div class="engine-pills">
+          <button type="button" class="pill active" data-engine="google" onclick="setEngine('google', this)">Google</button>
+          <button type="button" class="pill" data-engine="duckduckgo" onclick="setEngine('duckduckgo', this)">DuckDuckGo</button>
+          <button type="button" class="pill" data-engine="brave" onclick="setEngine('brave', this)">Brave Search</button>
+          <button type="button" class="pill" data-engine="youtube" onclick="setEngine('youtube', this)">YouTube</button>
+        </div>
+      </form>
+    </main>
+
+    <!-- My Portals / Moje Strani (Safeer TV & Mobile DNA) -->
+    <section class="portals-section">
+      <div class="portals-head">
+        <h2 class="section-title">Priljubljene strani</h2>
+        <button class="btn-subtle" onclick="toggleEditMode()" id="editBtn">Uredi</button>
+      </div>
+
+      <div class="portals-grid" id="portalsGrid">
+        <!-- Injected via JavaScript -->
+      </div>
+    </section>
+
+    <!-- Sidebar Integrations Quick Bar -->
+    <footer class="integrations-quick-bar">
+      <span class="dock-hint">Hitre integracije v stranski vrstici:</span>
+      <div class="dock-chips">
+        <button class="dock-chip" onclick="openSidebar('messenger')">💬 Messenger</button>
+        <button class="dock-chip" onclick="openSidebar('gmail')">✉️ Gmail</button>
+        <button class="dock-chip" onclick="openSidebar('youtube')">📺 YouTube (Brez oglasov)</button>
+        <button class="dock-chip" onclick="openSidebar('settings')">⚙️ Nastavitve</button>
+      </div>
+    </footer>
+
+  </div>
+
+  <script src="home.js"></script>
+</body>
+</html>

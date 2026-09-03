@@ -1,0 +1,21 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Safeer Browser
+GenericName=Spletni brskalnik
+Comment=Varen in hiter odprtokodni spletni brskalnik za Linux Mint z Messenger, Gmail in YouTube integracijo
+Exec=/home/janez/Namizje/linux-mint-safeer-browser/safeer-mint.sh %U
+Icon=/home/janez/Namizje/linux-mint-safeer-browser/assets/icon.png
+Terminal=false
+StartupNotify=true
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+Actions=NewWindow;PrivateBrowsing;
+
+[Desktop Action NewWindow]
+Name=Odpri novo okno
+Exec=/home/janez/Namizje/linux-mint-safeer-browser/safeer-mint.sh
+
+[Desktop Action PrivateBrowsing]
+Name=Zasebno brskanje
+Exec=/home/janez/Namizje/linux-mint-safeer-browser/safeer-mint.sh --private
