@@ -31,6 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
 from core.config import ConfigManager
+from core.i18n import t, set_language, get_current_language, SUPPORTED_LANGUAGES
 from core.adblock import (
     YOUTUBE_ADBLOCK_SCRIPT,
     GENERIC_COSMETIC_SCRIPT,
@@ -918,6 +919,32 @@ class SafeerMintBrowser(Gtk.Window):
         box.set_margin_start(16)
         box.set_margin_end(16)
 
+        # 0. Global Language Selection
+        title_lang = Gtk.Label(label=f"<b>🌐 {t('language')}:</b>")
+        title_lang.set_use_markup(True)
+        title_lang.set_halign(Gtk.Align.START)
+        box.pack_start(title_lang, False, False, 0)
+
+        combo_lang = Gtk.ComboBoxText()
+        combo_lang.append("auto", f"🌐 {t('lang_auto')}")
+        for code, name in SUPPORTED_LANGUAGES.items():
+            combo_lang.append(code, f"{name} ({code.upper()})")
+
+        cur_lang_cfg = self.config.get("language", "auto")
+        combo_lang.set_active_id(cur_lang_cfg)
+
+        def on_lang_changed(cb):
+            sel_id = cb.get_active_id() or "auto"
+            self.config.set("language", sel_id)
+            set_language(sel_id)
+            self.broadcast_language_update()
+
+        combo_lang.connect("changed", on_lang_changed)
+        box.pack_start(combo_lang, False, False, 0)
+
+        sep0 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        box.pack_start(sep0, False, False, 4)
+
         # 1. Permanent Sidebar Toggle
         title_sidebar = Gtk.Label(label="<b>Prikaz stranske vrstice:</b>")
         title_sidebar.set_use_markup(True)
@@ -1403,7 +1430,8 @@ class SafeerMintBrowser(Gtk.Window):
                         # Inject live custom portals into home.html
                         portals = self.config.get_portals()
                         portals_json = json.dumps(portals)
-                        js = f"if (window.setCustomPortals) {{ window.setCustomPortals({portals_json}); }}"
+                        lang = get_current_language()
+                        js = f"if (window.setCustomPortals) {{ window.setCustomPortals({portals_json}); }} if (window.setAppLanguage) {{ window.setAppLanguage('{lang}'); }}"
                         webview.run_javascript(js, None, None, None)
                     break
 
@@ -2331,6 +2359,16 @@ class SafeerMintBrowser(Gtk.Window):
         portals = self.config.get_portals()
         portals_json = json.dumps(portals)
         js = f"if (window.setCustomPortals) {{ window.setCustomPortals({portals_json}); }}"
+        for t in self.tabs:
+            wv = t.get("webview")
+            uri = t.get("uri", "")
+            if wv and ("home.html" in uri or uri == "safeer://home"):
+                wv.run_javascript(js, None, None, None)
+
+    def broadcast_language_update(self):
+        """Osveži jezik na vseh odprtih zavihkih z domačo stranjo."""
+        lang = get_current_language()
+        js = f"if (window.setAppLanguage) {{ window.setAppLanguage('{lang}'); }}"
         for t in self.tabs:
             wv = t.get("webview")
             uri = t.get("uri", "")

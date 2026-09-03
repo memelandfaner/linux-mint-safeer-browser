@@ -119,6 +119,38 @@ body {
   margin-top: 4px;
 }
 
+/* Language Switcher Pills */
+.lang-pills {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  padding: 3px 6px;
+  border-radius: 999px;
+  align-items: center;
+}
+
+.lang-pill {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lang-pill:hover {
+  color: #fff;
+}
+
+.lang-pill.active {
+  background: var(--accent-mint);
+  color: #080d16;
+}
+
 .text-mint { color: var(--accent-mint); }
 .text-cyan { color: var(--accent-cyan); }
 .text-purple { color: var(--accent-purple); }

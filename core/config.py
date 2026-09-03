@@ -13,6 +13,7 @@ CONFIG_DIR = os.path.expanduser("~/.config/safeer-mint")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
+    "language": "auto",                 # "auto", "en", "sl", "de", "es", "fr", "it"
     "force_dark_mode": False,           # Prisili temni način na vseh spletnih straneh
     "theme": "midnight",                # "midnight", "mint", "neon", "amoled"
     "custom_css": "",                   # Lasten CSS slog uporabnika

@@ -1,6 +1,117 @@
 // Safeer Browser — Linux Mint Edition Start Page Logic
 
 let currentEngine = 'google';
+let currentHomeLang = 'sl';
+
+const homeI18n = {
+  sl: {
+    locale: "sl-SI",
+    lbl_oss: "Odprta koda",
+    search_placeholder: "Iščite z Google ali vnesite spletni naslov...",
+    search_submit: "Išči",
+    quick_lbl: "Hitre možnosti:",
+    quick_customizer: "🧩 Teme & Skripte",
+    quick_toolbar: "⚙️ Uredi orodno vrstico",
+    section_portals: "Priljubljene strani in multimedija",
+    portals_note: "Brez oglasov • Zasebno • Hitro",
+    btn_edit: "⚙️ Uredi",
+    btn_add: "➕ Dodaj stran"
+  },
+  en: {
+    locale: "en-US",
+    lbl_oss: "Open Source",
+    search_placeholder: "Search with Google or enter web address...",
+    search_submit: "Search",
+    quick_lbl: "Quick Options:",
+    quick_customizer: "🧩 Themes & Scripts",
+    quick_toolbar: "⚙️ Settings",
+    section_portals: "Favorite Sites & Multimedia",
+    portals_note: "No Ads • Private • Ultra Fast",
+    btn_edit: "⚙️ Edit",
+    btn_add: "➕ Add Site"
+  },
+  de: {
+    locale: "de-DE",
+    lbl_oss: "Open Source",
+    search_placeholder: "Mit Google suchen oder Adresse eingeben...",
+    search_submit: "Suchen",
+    quick_lbl: "Schnellzugriff:",
+    quick_customizer: "🧩 Themes & Skripte",
+    quick_toolbar: "⚙️ Einstellungen",
+    section_portals: "Favoriten & Multimedia",
+    portals_note: "Werbefrei • Privat • Schnell",
+    btn_edit: "⚙️ Bearbeiten",
+    btn_add: "➕ Hinzufügen"
+  },
+  es: {
+    locale: "es-ES",
+    lbl_oss: "Código Abierto",
+    search_placeholder: "Buscar en Google o escribir dirección...",
+    search_submit: "Buscar",
+    quick_lbl: "Accesos rápidos:",
+    quick_customizer: "🧩 Temas y Scripts",
+    quick_toolbar: "⚙️ Configuración",
+    section_portals: "Sitios Favoritos y Multimedia",
+    portals_note: "Sin anuncios • Privado • Rápido",
+    btn_edit: "⚙️ Editar",
+    btn_add: "➕ Añadir"
+  },
+  fr: {
+    locale: "fr-FR",
+    lbl_oss: "Open Source",
+    search_placeholder: "Rechercher avec Google ou entrer une adresse...",
+    search_submit: "Chercher",
+    quick_lbl: "Outils rapides:",
+    quick_customizer: "🧩 Thèmes & Scripts",
+    quick_toolbar: "⚙️ Paramètres",
+    section_portals: "Sites Favoris et Multimédia",
+    portals_note: "Sans pub • Privé • Rapide",
+    btn_edit: "⚙️ Modifier",
+    btn_add: "➕ Ajouter"
+  },
+  it: {
+    locale: "it-IT",
+    lbl_oss: "Open Source",
+    search_placeholder: "Cerca con Google o inserisci un indirizzo...",
+    search_submit: "Cerca",
+    quick_lbl: "Strumenti rapidi:",
+    quick_customizer: "🧩 Temi e Script",
+    quick_toolbar: "⚙️ Impostazioni",
+    section_portals: "Siti Preferiti e Multimedia",
+    portals_note: "Senza pubblicità • Privato • Veloce",
+    btn_edit: "⚙️ Modifica",
+    btn_add: "➕ Aggiungi"
+  }
+};
+
+function changeHomeLanguage(lang) {
+  if (!homeI18n[lang]) lang = 'en';
+  currentHomeLang = lang;
+  try {
+    localStorage.setItem('safeer_home_lang', lang);
+  } catch(e) {}
+
+  const dict = homeI18n[lang];
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (dict[key]) el.textContent = dict[key];
+  });
+
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput && dict.search_placeholder) {
+    searchInput.placeholder = dict.search_placeholder;
+  }
+
+  document.querySelectorAll('.lang-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
+  });
+
+  updateClock();
+}
+
+window.setAppLanguage = function(lang) {
+  changeHomeLanguage(lang);
+};
 
 const searchUrls = {
   google: 'https://www.google.com/search?q=',
@@ -9,7 +120,7 @@ const searchUrls = {
   youtube: 'https://www.youtube.com/results?search_query='
 };
 
-// 1. Live Clock & Date in Slovenian
+// 1. Live Clock & Date localized
 function updateClock() {
   const now = new Date();
   const hours = String(now.getHours()).padStart(2, '0');
@@ -18,16 +129,13 @@ function updateClock() {
   const timeEl = document.getElementById('clockTime');
   if (timeEl) timeEl.textContent = `${hours}:${minutes}`;
 
-  const days = ['Nedelja', 'Ponedeljek', 'Torek', 'Sreda', 'Četrtek', 'Petek', 'Sobota'];
-  const months = ['Januar', 'Februar', 'Marec', 'April', 'Maj', 'Junij', 'Julij', 'Avgust', 'September', 'Oktober', 'November', 'December'];
-
-  const dayName = days[now.getDay()];
-  const day = now.getDate();
-  const monthName = months[now.getMonth()];
-  const year = now.getFullYear();
-
   const dateEl = document.getElementById('clockDate');
-  if (dateEl) dateEl.textContent = `${dayName}, ${day}. ${monthName} ${year}`;
+  if (dateEl) {
+    const dict = homeI18n[currentHomeLang] || homeI18n.sl;
+    const loc = dict.locale || 'sl-SI';
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    dateEl.textContent = now.toLocaleDateString(loc, options);
+  }
 }
 
 // 2. Search Handler
@@ -157,7 +265,8 @@ function openSidebar(serviceId) {
 
 // 4. Initialize
 document.addEventListener('DOMContentLoaded', () => {
-  updateClock();
+  const savedLang = localStorage.getItem('safeer_home_lang') || 'sl';
+  changeHomeLanguage(savedLang);
   setInterval(updateClock, 1000);
   renderPortals();
 });

@@ -39,7 +39,16 @@
         <div class="metric-divider"></div>
         <div class="metric-item">
           <span class="metric-val text-purple" id="timeCount">100%</span>
-          <span class="metric-lbl">Odprta koda</span>
+          <span class="metric-lbl" data-i18n="lbl_oss">Odprta koda</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="lang-pills">
+          <button type="button" class="lang-pill active" data-lang="sl" onclick="changeHomeLanguage('sl')">SL</button>
+          <button type="button" class="lang-pill" data-lang="en" onclick="changeHomeLanguage('en')">EN</button>
+          <button type="button" class="lang-pill" data-lang="de" onclick="changeHomeLanguage('de')">DE</button>
+          <button type="button" class="lang-pill" data-lang="es" onclick="changeHomeLanguage('es')">ES</button>
+          <button type="button" class="lang-pill" data-lang="fr" onclick="changeHomeLanguage('fr')">FR</button>
+          <button type="button" class="lang-pill" data-lang="it" onclick="changeHomeLanguage('it')">IT</button>
         </div>
       </div>
     </header>
@@ -48,16 +57,14 @@
     <main class="center-stage">
       <div class="clock-display">
         <h1 class="clock-time" id="clockTime">12:00</h1>
-        <p class="clock-date" id="clockDate">Četrtek, 3. September 2026</p>
-        <p class="manifesto-mini-quote">»Kdor nadzoruje brskalnik, nadzoruje splet. Vzemi nadzor v svoje roke.«</p>
+        <p class="clock-date" id="clockDate">Nalaganje...</p>
       </div>
 
-      <!-- Search Box -->
-      <form class="search-form" id="searchForm" onsubmit="return performSearch(event)">
+      <form class="search-form" id="searchForm" onsubmit="return handleSearch(event)">
         <div class="search-bar">
           <span class="search-icon">🔍</span>
-          <input type="text" id="searchInput" class="search-input" placeholder="Iščite na spletu ali vnesite naslov URL..." autofocus autocomplete="off">
-          <button type="submit" class="search-submit">Išči</button>
+          <input type="text" id="searchInput" class="search-input" placeholder="Iščite z Google ali vnesite spletni naslov..." autocomplete="off" autofocus>
+          <button type="submit" class="search-submit" data-i18n="search_submit">Išči</button>
         </div>
 
         <div class="engine-pills">
@@ -71,23 +78,23 @@
 
     <!-- Quick Integrations Bar -->
     <div class="integrations-quick-bar">
-      <span class="quick-lbl">Hitre možnosti:</span>
+      <span class="quick-lbl" data-i18n="quick_lbl">Hitre možnosti:</span>
       <button class="quick-chip" onclick="openSidebar('messenger')">💬 Facebook Messenger</button>
       <button class="quick-chip" onclick="openSidebar('gmail')">✉️ Gmail</button>
-      <button class="quick-chip" onclick="openSidebar('customizer')">🧩 Teme & Skripte</button>
-      <button class="quick-chip highlight" onclick="openSidebar('settings')">⚙️ Uredi orodno vrstico</button>
+      <button class="quick-chip" onclick="openSidebar('customizer')" data-i18n="quick_customizer">🧩 Teme & Skripte</button>
+      <button class="quick-chip highlight" onclick="openSidebar('settings')" data-i18n="quick_toolbar">⚙️ Uredi orodno vrstico</button>
     </div>
 
     <!-- My Portals / Moje Strani -->
     <section class="portals-section">
       <div class="portals-head">
         <div style="display:flex; align-items:center; gap:12px;">
-          <h2 class="section-title">Priljubljene strani in multimedija</h2>
-          <span class="portals-note">Brez oglasov • Zasebno • Hitro</span>
+          <h2 class="section-title" data-i18n="section_portals">Priljubljene strani in multimedija</h2>
+          <span class="portals-note" data-i18n="portals_note">Brez oglasov • Zasebno • Hitro</span>
         </div>
         <div class="portals-actions">
-          <button type="button" class="portals-btn" onclick="openSidebar('edit_portals')" title="Upravljaj priljubljene strani">⚙️ Uredi</button>
-          <button type="button" class="portals-btn highlight" onclick="openSidebar('add_portal')" title="Dodaj novo bližnjico">➕ Dodaj stran</button>
+          <button type="button" class="portals-btn" onclick="openSidebar('edit_portals')" title="Upravljaj priljubljene strani" data-i18n="btn_edit">⚙️ Uredi</button>
+          <button type="button" class="portals-btn highlight" onclick="openSidebar('add_portal')" title="Dodaj novo bližnjico" data-i18n="btn_add">➕ Dodaj stran</button>
         </div>
       </div>
 
