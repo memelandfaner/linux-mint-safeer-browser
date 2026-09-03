@@ -8,8 +8,11 @@ YouTube Zero-Ad & Background Audio engine, Cyber Threat Shield, and Persistent S
 import os
 import sys
 import json
+import uuid
+import subprocess
 import warnings
 import urllib.parse
+from datetime import datetime
 import gi
 
 # Suppress GTK deprecation and driver warnings for clean, smooth console output
@@ -31,7 +34,8 @@ from core.config import ConfigManager
 from core.adblock import (
     YOUTUBE_ADBLOCK_SCRIPT,
     GENERIC_COSMETIC_SCRIPT,
-    is_threat_domain
+    is_threat_domain,
+    FORCE_DARK_MODE_CSS
 )
 
 # Native WebKitGTK user agent matching Safari/WebKit engine to prevent Google CAPTCHA bot triggers
@@ -69,9 +73,20 @@ class SafeerMintBrowser(Gtk.Window):
 
         self.active_sidebar_service = None
         self.dock_buttons = {}
+        self.dark_style_sheet = None
+
+        # Multi-tab state management
+        self.tabs = []
+        self.active_tab_id = None
+        self.tab_counter = 0
+
+        # Downloads & History state
+        self.downloads = []
+        self.history_file = os.path.join(self.config.config_dir, "history.json")
 
         # Configure Persistent Cookie, LocalStorage & IndexedDB Storage
         self.setup_persistent_storage()
+        self.setup_downloads_handling()
 
         # Apply Linux Mint Dark Theme preference
         settings = Gtk.Settings.get_default()
@@ -154,11 +169,8 @@ class SafeerMintBrowser(Gtk.Window):
         # Connect paned divider moved signal to remember custom width
         self.content_paned.connect("notify::position", self.on_paned_moved)
 
-        # Load initial start page or CLI passed URL
-        if initial_url:
-            self.webview.load_uri(initial_url)
-        else:
-            self.load_homepage()
+        # Create first initial tab
+        self.new_tab(url=initial_url or "safeer://home", switch=True)
 
     def apply_css(self):
         css_provider = Gtk.CssProvider()
@@ -180,13 +192,38 @@ class SafeerMintBrowser(Gtk.Window):
             min-height: 40px;
         }
         .firefox-tab {
-            background-color: #2b2a33;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-bottom: none;
             border-radius: 8px 8px 0 0;
-            padding: 6px 14px;
-            min-width: 220px;
+            padding: 5px 12px;
+            min-width: 170px;
             transition: all 120ms ease;
+        }
+        .firefox-tab.active-tab {
+            background-color: #2b2a33;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-bottom: none;
+        }
+        .firefox-tab.inactive-tab {
+            background-color: rgba(255, 255, 255, 0.04);
+            border: 1px solid transparent;
+            border-bottom: none;
+        }
+        .firefox-tab.inactive-tab:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+        .firefox-tab.inactive-tab .tab-title {
+            color: #9ca3af;
+        }
+        .firefox-tab.active-tab .tab-title {
+            color: #ffffff;
+        }
+        .history-tree {
+            background-color: #181920;
+            color: #fbfbfe;
+            font-size: 13.5px;
+        }
+        .history-tree:selected {
+            background-color: #0060df;
+            color: #ffffff;
         }
         .tab-icon {
             font-size: 16px;
@@ -360,9 +397,43 @@ class SafeerMintBrowser(Gtk.Window):
         )
 
     def on_global_key_press(self, widget, event):
-        # F4 toggles sidebar temporarily
+        ctrl = (event.state & Gdk.ModifierType.CONTROL_MASK) != 0
+        alt = (event.state & Gdk.ModifierType.MOD1_MASK) != 0
+
+        # F4 toggles sidebar
         if event.keyval == Gdk.KEY_F4:
             self.toggle_sidebar_visibility()
+            return True
+        elif ctrl and event.keyval in (Gdk.KEY_t, Gdk.KEY_T):
+            self.new_tab()
+            return True
+        elif ctrl and event.keyval in (Gdk.KEY_w, Gdk.KEY_W):
+            if self.active_tab_id:
+                self.close_tab(self.active_tab_id)
+            return True
+        elif ctrl and event.keyval in (Gdk.KEY_h, Gdk.KEY_H):
+            self.open_history_dialog()
+            return True
+        elif ctrl and event.keyval in (Gdk.KEY_j, Gdk.KEY_J):
+            self.open_downloads_dialog()
+            return True
+        elif ctrl and event.keyval in (Gdk.KEY_d, Gdk.KEY_D):
+            self.toggle_dark_mode()
+            return True
+        elif ctrl and event.keyval in (Gdk.KEY_r, Gdk.KEY_R) or event.keyval == Gdk.KEY_F5:
+            wv = self.get_active_webview()
+            if wv:
+                wv.reload()
+            return True
+        elif alt and event.keyval == Gdk.KEY_Left:
+            wv = self.get_active_webview()
+            if wv:
+                wv.go_back()
+            return True
+        elif alt and event.keyval == Gdk.KEY_Right:
+            wv = self.get_active_webview()
+            if wv:
+                wv.go_forward()
             return True
         return False
 
@@ -374,34 +445,15 @@ class SafeerMintBrowser(Gtk.Window):
         self.tab_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         self.tab_bar.get_style_context().add_class("tab-toolbar")
 
-        # Active Tab (matches Mozilla screenshot: Favicon + Title + Close x)
-        self.active_tab = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        self.active_tab.get_style_context().add_class("firefox-tab")
-        self.active_tab.set_size_request(240, 36)
-
-        self.tab_icon = Gtk.Label(label="🌐")
-        self.tab_icon.get_style_context().add_class("tab-icon")
-        self.active_tab.pack_start(self.tab_icon, False, False, 2)
-
-        self.tab_title_label = Gtk.Label(label="Safeer Domača Stran")
-        self.tab_title_label.get_style_context().add_class("tab-title")
-        self.tab_title_label.set_ellipsize(Pango.EllipsizeMode.END)
-        self.tab_title_label.set_xalign(0.0)
-        self.active_tab.pack_start(self.tab_title_label, True, True, 2)
-
-        self.tab_close_btn = Gtk.Button(label="✕")
-        self.tab_close_btn.get_style_context().add_class("tab-close-btn")
-        self.tab_close_btn.set_tooltip_text("Zapri ali naloži domačo stran")
-        self.tab_close_btn.connect("clicked", lambda b: self.load_homepage())
-        self.active_tab.pack_start(self.tab_close_btn, False, False, 2)
-
-        self.tab_bar.pack_start(self.active_tab, False, False, 0)
+        # Dynamic tabs container
+        self.tabs_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.tab_bar.pack_start(self.tabs_box, False, False, 0)
 
         # New Tab Button (+)
         self.btn_new_tab = Gtk.Button(label="+")
         self.btn_new_tab.get_style_context().add_class("new-tab-btn")
-        self.btn_new_tab.set_tooltip_text("Odpri domačo stran Safeer (+)")
-        self.btn_new_tab.connect("clicked", lambda b: self.load_homepage())
+        self.btn_new_tab.set_tooltip_text("Odpri nov zavihek (Ctrl + T)")
+        self.btn_new_tab.connect("clicked", lambda b: self.new_tab())
         self.tab_bar.pack_start(self.btn_new_tab, False, False, 0)
 
         self.top_bar.pack_start(self.tab_bar, False, False, 0)
@@ -421,21 +473,21 @@ class SafeerMintBrowser(Gtk.Window):
         self.btn_back = Gtk.Button(label="←")
         self.btn_back.get_style_context().add_class("ff-nav-btn")
         self.btn_back.set_tooltip_text("Nazaj (Alt + Levo)")
-        self.btn_back.connect("clicked", lambda b: self.webview.go_back())
+        self.btn_back.connect("clicked", lambda b: self.get_active_webview() and self.get_active_webview().go_back())
         self.nav_bar.pack_start(self.btn_back, False, False, 0)
 
         # Forward (→)
         self.btn_forward = Gtk.Button(label="→")
         self.btn_forward.get_style_context().add_class("ff-nav-btn")
         self.btn_forward.set_tooltip_text("Naprej (Alt + Desno)")
-        self.btn_forward.connect("clicked", lambda b: self.webview.go_forward())
+        self.btn_forward.connect("clicked", lambda b: self.get_active_webview() and self.get_active_webview().go_forward())
         self.nav_bar.pack_start(self.btn_forward, False, False, 0)
 
         # Reload (↻)
         self.btn_reload = Gtk.Button(label="↻")
         self.btn_reload.get_style_context().add_class("ff-nav-btn")
         self.btn_reload.set_tooltip_text("Osveži stran (F5 / Ctrl + R)")
-        self.btn_reload.connect("clicked", lambda b: self.webview.reload())
+        self.btn_reload.connect("clicked", lambda b: self.get_active_webview() and self.get_active_webview().reload())
         self.nav_bar.pack_start(self.btn_reload, False, False, 0)
 
         # 3. Firefox Awesomebar / URL Box
@@ -464,6 +516,30 @@ class SafeerMintBrowser(Gtk.Window):
         self.url_box.pack_start(self.url_entry, True, True, 0)
 
         self.nav_bar.pack_start(self.url_box, True, True, 4)
+
+        # Force Dark Mode Toggle Button (🌙 / ☀️)
+        is_dark = self.config.get("force_dark_mode", False)
+        self.btn_dark_mode = Gtk.Button(label="🌙" if is_dark else "☀️")
+        self.btn_dark_mode.get_style_context().add_class("ff-nav-btn")
+        if is_dark:
+            self.btn_dark_mode.get_style_context().add_class("active")
+        self.btn_dark_mode.set_tooltip_text("Prisili temni način (Force Dark Mode) — " + ("Vklopljen" if is_dark else "Izklopljen"))
+        self.btn_dark_mode.connect("clicked", self.toggle_dark_mode)
+        self.nav_bar.pack_start(self.btn_dark_mode, False, False, 0)
+
+        # Downloads Button (📥)
+        self.btn_downloads = Gtk.Button(label="📥")
+        self.btn_downloads.get_style_context().add_class("ff-nav-btn")
+        self.btn_downloads.set_tooltip_text("Prenosi datotek (Ctrl + J)")
+        self.btn_downloads.connect("clicked", lambda b: self.open_downloads_dialog())
+        self.nav_bar.pack_start(self.btn_downloads, False, False, 0)
+
+        # History Button (🕒)
+        self.btn_history = Gtk.Button(label="🕒")
+        self.btn_history.get_style_context().add_class("ff-nav-btn")
+        self.btn_history.set_tooltip_text("Zgodovina brskanja (Ctrl + H)")
+        self.btn_history.connect("clicked", lambda b: self.open_history_dialog())
+        self.nav_bar.pack_start(self.btn_history, False, False, 0)
 
         # Virtual Keyboard Button (⌨️)
         self.btn_keyboard = Gtk.Button(label="⌨️")
@@ -632,7 +708,9 @@ class SafeerMintBrowser(Gtk.Window):
     def popout_sidebar_to_main(self, widget=None):
         uri = self.sidebar_webview.get_uri()
         if uri:
-            self.webview.load_uri(uri)
+            wv = self.get_active_webview()
+            if wv:
+                wv.load_uri(uri)
             self.close_sidebar_panel()
 
     def toggle_drawer_width(self, widget=None):
@@ -705,7 +783,7 @@ class SafeerMintBrowser(Gtk.Window):
                 if webview == self.sidebar_webview:
                     self.sidebar_webview.load_uri(uri)
                 else:
-                    self.webview.load_uri(uri)
+                    self.new_tab(url=uri, switch=True)
         except Exception as e:
             print(f"[Create WebView] Napaka: {e}")
         return None
@@ -721,7 +799,7 @@ class SafeerMintBrowser(Gtk.Window):
                     if webview == self.sidebar_webview:
                         self.sidebar_webview.load_uri(uri)
                     else:
-                        self.webview.load_uri(uri)
+                        self.new_tab(url=uri, switch=True)
                 decision.ignore()
                 return True
             except Exception as e:
@@ -883,7 +961,13 @@ class SafeerMintBrowser(Gtk.Window):
         sep2 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         box.pack_start(sep2, False, False, 4)
 
-        # 4. Virtual Keyboard Setting
+        # 4. Force Dark Mode Setting
+        dark_check = Gtk.CheckButton(label="🌙 Prisili temni način na vseh spletnih straneh (Force Dark Mode)")
+        dark_check.set_active(self.config.get("force_dark_mode", False))
+        dark_check.connect("toggled", lambda b: self.toggle_dark_mode())
+        box.pack_start(dark_check, False, False, 0)
+
+        # 5. Virtual Keyboard Setting
         kb_check = Gtk.CheckButton(label="⌨️ Omogoči navidezno tipkovnico na zaslonu")
         kb_check.set_active(self.config.get("virtual_keyboard_enabled", False))
         kb_check.connect("toggled", lambda b: self.toggle_virtual_keyboard())
@@ -895,53 +979,9 @@ class SafeerMintBrowser(Gtk.Window):
 
     def create_main_webview(self):
         self.webview_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        
-        # Main WebView: uses shared persistent web_context
-        self.webview = WebKit2.WebView.new_with_context(self.web_context)
-        self.setup_webview_settings(self.webview)
-
-        # Connect signals
-        self.webview.connect("load-changed", self.on_load_changed)
-        self.webview.connect("notify::title", self.on_title_changed)
-        self.webview.connect("notify::uri", self.on_uri_changed)
-        self.webview.connect("create", self.on_create_webview)
-        self.webview.connect("decide-policy", self.on_decide_policy)
-
-        # Connect JavaScript Message Handlers
-        content_mgr = self.webview.get_user_content_manager()
-        content_mgr.register_script_message_handler("safeer")
-        content_mgr.connect("script-message-received::safeer", self.on_js_message)
-
-        # Inject YouTube zero-ad script ONLY ON YOUTUBE DOMAINS
-        # This guarantees Google Search, Facebook, Banking, etc. receive 100% native untouched JS primitives!
-        yt_script = WebKit2.UserScript(
-            YOUTUBE_ADBLOCK_SCRIPT,
-            WebKit2.UserContentInjectedFrames.ALL_FRAMES,
-            WebKit2.UserScriptInjectionTime.START,
-            ["*://*.youtube.com/*", "*://youtube.com/*", "*://*.googlevideo.com/*"],
-            None
-        )
-        content_mgr.add_script(yt_script)
-
-        # Inject Generic cosmetic ad-blocker on content frames, excluding sensitive domains
-        cosmetic_blocklist = [
-            "*://*.google.com/*",
-            "*://*.google.si/*",
-            "*://*.facebook.com/*",
-            "*://*.messenger.com/*",
-            "*://accounts.google.com/*",
-            "*://*.banka.si/*"
-        ]
-        gen_script = WebKit2.UserScript(
-            GENERIC_COSMETIC_SCRIPT,
-            WebKit2.UserContentInjectedFrames.ALL_FRAMES,
-            WebKit2.UserScriptInjectionTime.END,
-            None,
-            cosmetic_blocklist
-        )
-        content_mgr.add_script(gen_script)
-
-        self.webview_container.pack_start(self.webview, True, True, 0)
+        self.webview_stack = Gtk.Stack()
+        self.webview_stack.set_transition_type(Gtk.StackTransitionType.NONE)
+        self.webview_container.pack_start(self.webview_stack, True, True, 0)
 
     def setup_webview_settings(self, webview):
         # Set dark canvas background color instantly to eliminate white flashbang on load
@@ -1021,16 +1061,24 @@ class SafeerMintBrowser(Gtk.Window):
                     }
                 })();
                 """.replace("__KEY__", key.replace("'", "\\'"))
-                self.webview.run_javascript(js_inject, None, None, None)
+                wv = self.get_active_webview()
+                if wv:
+                    wv.run_javascript(js_inject, None, None, None)
         except Exception as e:
             print(f"[Keyboard] Napaka: {e}")
 
     def load_homepage(self):
         home_path = os.path.join(BASE_DIR, "ui", "home.html")
-        self.webview.load_uri(f"file://{home_path}")
+        wv = self.get_active_webview()
+        if wv:
+            wv.load_uri(f"file://{home_path}")
         self.url_entry.set_text("safeer://home")
-        self.tab_title_label.set_text("Safeer Domača Stran")
-        self.tab_icon.set_text("🍃")
+        active = self.get_active_tab()
+        if active:
+            active["title"] = "Safeer Domača Stran"
+            active["icon"] = "🍃"
+            active["title_label"].set_text("Safeer Domača Stran")
+            active["icon_label"].set_text("🍃")
         self.security_icon.set_text("🎚️")
 
     def on_url_activate(self, entry):
@@ -1054,7 +1102,9 @@ class SafeerMintBrowser(Gtk.Window):
         else:
             target = text
 
-        self.webview.load_uri(target)
+        wv = self.get_active_webview()
+        if wv:
+            wv.load_uri(target)
 
     def show_threat_warning(self, domain):
         dialog = Gtk.MessageDialog(
@@ -1087,7 +1137,8 @@ class SafeerMintBrowser(Gtk.Window):
 
     def on_url_focus_in(self, entry, event):
         """Ob kliku v URL vrstico prikaži polni naslov in označi vse besedilo za urejanje."""
-        cur_uri = self.webview.get_uri() or ""
+        wv = self.get_active_webview()
+        cur_uri = wv.get_uri() if wv else ""
         if "ui/home.html" not in cur_uri and cur_uri:
             entry.set_text(cur_uri)
             GLib.idle_add(entry.select_region, 0, -1)
@@ -1095,49 +1146,561 @@ class SafeerMintBrowser(Gtk.Window):
 
     def on_url_focus_out(self, entry, event):
         """Ko uporabnik klikne ven, vrni jasen, čist in berljiv naslov kot v Firefoxu."""
-        cur_uri = self.webview.get_uri() or ""
+        wv = self.get_active_webview()
+        cur_uri = wv.get_uri() if wv else ""
         if "ui/home.html" not in cur_uri and cur_uri:
             entry.set_text(self.format_clean_url(cur_uri))
         return False
 
-    def on_load_changed(self, webview, event):
+    # -------------------------------------------------------------
+    # Multi-Tab Management Engine
+    # -------------------------------------------------------------
+    def get_active_tab(self):
+        for t in self.tabs:
+            if t["id"] == self.active_tab_id:
+                return t
+        if self.tabs:
+            return self.tabs[0]
+        return None
+
+    def get_active_webview(self):
+        tab = self.get_active_tab()
+        return tab["webview"] if tab else None
+
+    def new_tab(self, url=None, switch=True):
+        self.tab_counter += 1
+        tab_id = f"tab_{self.tab_counter}"
+
+        wv = WebKit2.WebView.new_with_context(self.web_context)
+        self.setup_webview_settings(wv)
+
+        wv.connect("load-changed", lambda w, ev: self.on_tab_load_changed(tab_id, w, ev))
+        wv.connect("notify::title", lambda w, p: self.on_tab_title_changed(tab_id, w, p))
+        wv.connect("notify::uri", lambda w, p: self.on_tab_uri_changed(tab_id, w, p))
+        wv.connect("create", self.on_create_webview)
+        wv.connect("decide-policy", self.on_decide_policy)
+
+        content_mgr = wv.get_user_content_manager()
+        content_mgr.register_script_message_handler("safeer")
+        content_mgr.connect("script-message-received::safeer", self.on_js_message)
+
+        # YouTube Adblock script
+        yt_script = WebKit2.UserScript(
+            YOUTUBE_ADBLOCK_SCRIPT,
+            WebKit2.UserContentInjectedFrames.ALL_FRAMES,
+            WebKit2.UserScriptInjectionTime.START,
+            ["*://*.youtube.com/*", "*://youtube.com/*", "*://*.googlevideo.com/*"],
+            None
+        )
+        content_mgr.add_script(yt_script)
+
+        # Cosmetic script
+        gen_script = WebKit2.UserScript(
+            GENERIC_COSMETIC_SCRIPT,
+            WebKit2.UserContentInjectedFrames.ALL_FRAMES,
+            WebKit2.UserScriptInjectionTime.END,
+            None,
+            ["*://*.google.com/*", "*://*.google.si/*", "*://*.facebook.com/*", "*://*.messenger.com/*", "*://accounts.google.com/*", "*://*.banka.si/*"]
+        )
+        content_mgr.add_script(gen_script)
+
+        # Force Dark Mode if enabled
+        if self.config.get("force_dark_mode", False):
+            self.apply_dark_mode_to_webview(wv, True)
+
+        # Tab Strip Widget
+        tab_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        tab_box.get_style_context().add_class("firefox-tab")
+        tab_box.get_style_context().add_class("inactive-tab")
+        tab_box.set_size_request(200, 36)
+
+        tab_icon = Gtk.Label(label="🌐")
+        tab_icon.get_style_context().add_class("tab-icon")
+        tab_box.pack_start(tab_icon, False, False, 2)
+
+        tab_title = Gtk.Label(label="Nova stran")
+        tab_title.get_style_context().add_class("tab-title")
+        tab_title.set_ellipsize(Pango.EllipsizeMode.END)
+        tab_title.set_xalign(0.0)
+        tab_box.pack_start(tab_title, True, True, 2)
+
+        btn_close = Gtk.Button(label="✕")
+        btn_close.get_style_context().add_class("tab-close-btn")
+        btn_close.set_tooltip_text("Zapri zavihek (Ctrl + W)")
+        btn_close.connect("clicked", lambda b: self.close_tab(tab_id))
+        tab_box.pack_start(btn_close, False, False, 2)
+
+        tab_event_box = Gtk.EventBox()
+        tab_event_box.add(tab_box)
+        tab_event_box.connect("button-press-event", lambda w, ev: self.switch_to_tab(tab_id))
+
+        self.tabs_box.pack_start(tab_event_box, False, False, 0)
+        tab_event_box.show_all()
+
+        wv.show_all()
+        self.webview_stack.add_named(wv, tab_id)
+
+        tab_data = {
+            "id": tab_id,
+            "webview": wv,
+            "title": "Nova stran",
+            "icon": "🌐",
+            "uri": url or "safeer://home",
+            "tab_box": tab_box,
+            "event_box": tab_event_box,
+            "title_label": tab_title,
+            "icon_label": tab_icon
+        }
+        self.tabs.append(tab_data)
+
+        target = url or "safeer://home"
+        if target == "safeer://home":
+            home_path = os.path.join(BASE_DIR, "ui", "home.html")
+            wv.load_uri(f"file://{home_path}")
+            tab_title.set_text("Safeer Domača Stran")
+            tab_icon.set_text("🍃")
+        else:
+            wv.load_uri(target)
+
+        if switch:
+            self.switch_to_tab(tab_id)
+
+        return tab_id
+
+    def close_tab(self, tab_id):
+        tab_to_close = None
+        for t in self.tabs:
+            if t["id"] == tab_id:
+                tab_to_close = t
+                break
+        if not tab_to_close:
+            return
+
+        if len(self.tabs) <= 1:
+            self.load_homepage()
+            return
+
+        idx = self.tabs.index(tab_to_close)
+        self.tabs.remove(tab_to_close)
+
+        self.tabs_box.remove(tab_to_close["event_box"])
+        self.webview_stack.remove(tab_to_close["webview"])
+        tab_to_close["webview"].destroy()
+
+        if self.active_tab_id == tab_id:
+            new_idx = max(0, idx - 1)
+            self.switch_to_tab(self.tabs[new_idx]["id"])
+
+    def switch_to_tab(self, tab_id):
+        self.active_tab_id = tab_id
+        target = None
+        for t in self.tabs:
+            if t["id"] == tab_id:
+                target = t
+                t["tab_box"].get_style_context().add_class("active-tab")
+                t["tab_box"].get_style_context().remove_class("inactive-tab")
+            else:
+                t["tab_box"].get_style_context().remove_class("active-tab")
+                t["tab_box"].get_style_context().add_class("inactive-tab")
+
+        if not target:
+            return
+
+        self.webview_stack.set_visible_child(target["webview"])
+
+        cur_uri = target["webview"].get_uri() or target["uri"] or ""
+        self.url_entry.set_text(self.format_clean_url(cur_uri))
+        if cur_uri.startswith("https://"):
+            self.security_icon.set_text("🔒")
+        else:
+            self.security_icon.set_text("🎚️")
+
+        self.set_title(f"{target['title']} — Safeer Browser (Linux Mint)")
+
+    def on_tab_load_changed(self, tab_id, webview, event):
         if event == WebKit2.LoadEvent.FINISHED:
             uri = webview.get_uri() or ""
-            if "ui/home.html" in uri:
-                self.url_entry.set_text("safeer://home")
-                self.tab_title_label.set_text("Safeer Domača Stran")
-                self.tab_icon.set_text("🍃")
-                self.security_icon.set_text("🎚️")
-            else:
-                self.url_entry.set_text(self.format_clean_url(uri))
-                parsed = urllib.parse.urlparse(uri)
-                if parsed.scheme == "https":
-                    self.security_icon.set_text("🔒")
-                else:
+            title = webview.get_title() or ""
+
+            for t in self.tabs:
+                if t["id"] == tab_id:
+                    t["uri"] = uri
+                    if "ui/home.html" in uri:
+                        t["title"] = "Safeer Domača Stran"
+                        t["icon"] = "🍃"
+                        t["title_label"].set_text("Safeer Domača Stran")
+                        t["icon_label"].set_text("🍃")
+                    break
+
+            if self.active_tab_id == tab_id:
+                if "ui/home.html" in uri:
+                    self.url_entry.set_text("safeer://home")
                     self.security_icon.set_text("🎚️")
+                else:
+                    self.url_entry.set_text(self.format_clean_url(uri))
+                    if uri.startswith("https://"):
+                        self.security_icon.set_text("🔒")
+                    else:
+                        self.security_icon.set_text("🎚️")
 
-    def on_title_changed(self, webview, prop):
+            self.add_history_entry(uri, title)
+
+            if self.config.get("force_dark_mode", False) and "ui/home.html" not in uri:
+                self.inject_dark_mode_js(webview, True)
+
+    def on_tab_title_changed(self, tab_id, webview, prop):
         title = webview.get_title()
-        if title:
-            self.set_title(f"{title} — Safeer Browser (Linux Mint)")
-            self.tab_title_label.set_text(title)
-            t_lower = title.lower()
-            if "google" in t_lower:
-                self.tab_icon.set_text("🌐")
-            elif "youtube" in t_lower:
-                self.tab_icon.set_text("▶️")
-            elif "facebook" in t_lower or "messenger" in t_lower:
-                self.tab_icon.set_text("💬")
-            elif "gmail" in t_lower or "pošta" in t_lower:
-                self.tab_icon.set_text("✉️")
-            else:
-                self.tab_icon.set_text("🌐")
+        if not title:
+            return
 
-    def on_uri_changed(self, webview, prop):
+        for t in self.tabs:
+            if t["id"] == tab_id:
+                t["title"] = title
+                t["title_label"].set_text(title)
+                t_lower = title.lower()
+                if "google" in t_lower:
+                    t["icon_label"].set_text("🌐")
+                elif "youtube" in t_lower:
+                    t["icon_label"].set_text("▶️")
+                elif "facebook" in t_lower or "messenger" in t_lower:
+                    t["icon_label"].set_text("💬")
+                elif "gmail" in t_lower or "pošta" in t_lower:
+                    t["icon_label"].set_text("✉️")
+                else:
+                    t["icon_label"].set_text("🌐")
+                break
+
+        if self.active_tab_id == tab_id:
+            self.set_title(f"{title} — Safeer Browser (Linux Mint)")
+
+    def on_tab_uri_changed(self, tab_id, webview, prop):
         uri = webview.get_uri()
         if uri and "ui/home.html" not in uri:
-            if not self.url_entry.is_focus():
+            for t in self.tabs:
+                if t["id"] == tab_id:
+                    t["uri"] = uri
+                    break
+            if self.active_tab_id == tab_id and not self.url_entry.is_focus():
                 self.url_entry.set_text(self.format_clean_url(uri))
+
+
+    # -------------------------------------------------------------
+    # Force Dark Mode Engine
+    # -------------------------------------------------------------
+    def apply_dark_mode_to_webview(self, webview, is_dark: bool):
+        content_mgr = webview.get_user_content_manager()
+        try:
+            content_mgr.remove_all_style_sheets()
+        except Exception:
+            pass
+
+        if is_dark:
+            try:
+                sheet = WebKit2.UserStyleSheet(
+                    FORCE_DARK_MODE_CSS,
+                    WebKit2.UserContentInjectedFrames.ALL_FRAMES,
+                    WebKit2.UserStyleLevel.USER,
+                    None,
+                    ["file://*"]
+                )
+                content_mgr.add_style_sheet(sheet)
+            except Exception as e:
+                print(f"[DarkMode] Napaka: {e}")
+
+    def toggle_dark_mode(self, widget=None):
+        new_state = self.config.toggle_force_dark()
+        self.update_dark_mode_ui(new_state)
+
+    def update_dark_mode_ui(self, is_dark: bool):
+        if hasattr(self, 'btn_dark_mode'):
+            if is_dark:
+                self.btn_dark_mode.set_label("🌙")
+                self.btn_dark_mode.get_style_context().add_class("active")
+                self.btn_dark_mode.set_tooltip_text("Prisili temni način (Force Dark Mode) — VKLOPLJEN")
+            else:
+                self.btn_dark_mode.set_label("☀️")
+                self.btn_dark_mode.get_style_context().remove_class("active")
+                self.btn_dark_mode.set_tooltip_text("Prisili temni način (Force Dark Mode) — IZKLOPLJEN")
+
+        for tab in self.tabs:
+            wv = tab["webview"]
+            self.apply_dark_mode_to_webview(wv, is_dark)
+            self.inject_dark_mode_js(wv, is_dark)
+
+    def inject_dark_mode_js(self, webview, is_dark: bool):
+        js = f"""
+        (function() {{
+            if (window.location.protocol === 'file:') return;
+            var el = document.getElementById('safeer-force-dark-style');
+            var enable = {'true' if is_dark else 'false'};
+            if (enable) {{
+                if (!el) {{
+                    el = document.createElement('style');
+                    el.id = 'safeer-force-dark-style';
+                    el.textContent = `{FORCE_DARK_MODE_CSS.strip()}`;
+                    (document.head || document.documentElement).appendChild(el);
+                }}
+            }} else {{
+                if (el) el.remove();
+            }}
+        }})();
+        """
+        try:
+            webview.run_javascript(js, None, None, None)
+        except Exception:
+            pass
+
+    # -------------------------------------------------------------
+    # Downloads Management Engine
+    # -------------------------------------------------------------
+    def setup_downloads_handling(self):
+        self.web_context.connect("download-started", self.on_download_started)
+
+    def on_download_started(self, context, download):
+        dl_dir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) or os.path.expanduser("~/Prejemi")
+        os.makedirs(dl_dir, exist_ok=True)
+
+        req = download.get_request()
+        uri = req.get_uri() if req else ""
+        suggested = download.get_response().get_suggested_filename() if download.get_response() else ""
+        if not suggested:
+            suggested = os.path.basename(urllib.parse.urlparse(uri).path) or "prenos_datoteke"
+
+        target_path = os.path.join(dl_dir, suggested)
+        base, ext = os.path.splitext(suggested)
+        counter = 1
+        while os.path.exists(target_path):
+            target_path = os.path.join(dl_dir, f"{base}_{counter}{ext}")
+            counter += 1
+
+        dest_uri = f"file://{target_path}"
+        download.set_destination(dest_uri)
+
+        dl_data = {
+            "id": str(uuid.uuid4())[:8],
+            "filename": os.path.basename(target_path),
+            "path": target_path,
+            "progress": 0.0,
+            "status": "running",
+            "time": datetime.now().strftime("%H:%M:%S")
+        }
+        self.downloads.insert(0, dl_data)
+
+        self.btn_downloads.set_label("⬇️ 0%")
+        self.btn_downloads.get_style_context().add_class("active")
+
+        download.connect("notify::estimated-progress", lambda d, p: self.on_download_progress(dl_data, d))
+        download.connect("finished", lambda d: self.on_download_finished(dl_data))
+        download.connect("failed", lambda d, err: self.on_download_failed(dl_data, err))
+
+    def on_download_progress(self, dl_data, download):
+        prog = download.get_estimated_progress()
+        dl_data["progress"] = prog
+        pct = int(prog * 100)
+        self.btn_downloads.set_label(f"⬇️ {pct}%")
+
+    def on_download_finished(self, dl_data):
+        dl_data["status"] = "completed"
+        dl_data["progress"] = 1.0
+        any_running = any(d["status"] == "running" for d in self.downloads)
+        if not any_running:
+            self.btn_downloads.set_label("📥")
+            self.btn_downloads.get_style_context().remove_class("active")
+
+    def on_download_failed(self, dl_data, error):
+        dl_data["status"] = "failed"
+        any_running = any(d["status"] == "running" for d in self.downloads)
+        if not any_running:
+            self.btn_downloads.set_label("📥")
+            self.btn_downloads.get_style_context().remove_class("active")
+
+    def open_downloads_dialog(self):
+        dialog = Gtk.Dialog(title="📥 Prenosi — Safeer Browser", transient_for=self, flags=0)
+        dialog.set_default_size(540, 420)
+        dialog.add_button("Zapri", Gtk.ResponseType.CLOSE)
+
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_left(16)
+        content.set_margin_right(16)
+
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        lbl_title = Gtk.Label(label="<b>Aktivni in nedavni prenosi</b>")
+        lbl_title.set_use_markup(True)
+        lbl_title.set_xalign(0.0)
+        header_box.pack_start(lbl_title, True, True, 0)
+
+        btn_open_folder = Gtk.Button(label="📁 Odpri mapo Prenosi")
+        btn_open_folder.get_style_context().add_class("nav-btn")
+        dl_dir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) or os.path.expanduser("~/Prejemi")
+        btn_open_folder.connect("clicked", lambda b: subprocess.Popen(["xdg-open", dl_dir]))
+        header_box.pack_start(btn_open_folder, False, False, 0)
+        content.pack_start(header_box, False, False, 0)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        content.pack_start(scroll, True, True, 0)
+
+        dls_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        scroll.add(dls_vbox)
+
+        if not self.downloads:
+            empty_lbl = Gtk.Label(label="Ni nedavnih prenosov.")
+            empty_lbl.get_style_context().add_class("tab-title")
+            dls_vbox.pack_start(empty_lbl, True, True, 20)
+        else:
+            for dl in self.downloads:
+                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+                row.get_style_context().add_class("drawer-header-bar")
+
+                icon_lbl = Gtk.Label(label="✅" if dl["status"] == "completed" else ("⬇️" if dl["status"] == "running" else "❌"))
+                row.pack_start(icon_lbl, False, False, 4)
+
+                meta_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+                fname_lbl = Gtk.Label(label=f"<b>{dl['filename']}</b>")
+                fname_lbl.set_use_markup(True)
+                fname_lbl.set_xalign(0.0)
+                fname_lbl.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+                meta_box.pack_start(fname_lbl, False, False, 0)
+
+                status_txt = f"{dl['time']} • " + ("Končano" if dl["status"] == "completed" else (f"Prenašam... {int(dl['progress']*100)}%" if dl["status"] == "running" else "Napaka"))
+                status_lbl = Gtk.Label(label=status_txt)
+                status_lbl.set_xalign(0.0)
+                status_lbl.get_style_context().add_class("tab-title")
+                meta_box.pack_start(status_lbl, False, False, 0)
+                row.pack_start(meta_box, True, True, 0)
+
+                if dl["status"] == "completed" and os.path.exists(dl["path"]):
+                    btn_open = Gtk.Button(label="Odpri")
+                    btn_open.get_style_context().add_class("nav-btn")
+                    p = dl["path"]
+                    btn_open.connect("clicked", lambda b, path=p: subprocess.Popen(["xdg-open", path]))
+                    row.pack_end(btn_open, False, False, 0)
+
+                dls_vbox.pack_start(row, False, False, 0)
+
+        dialog.show_all()
+        dialog.run()
+        dialog.destroy()
+
+    # -------------------------------------------------------------
+    # History Management Engine
+    # -------------------------------------------------------------
+    def add_history_entry(self, uri, title):
+        if not uri or "ui/home.html" in uri or uri == "safeer://home" or uri == "about:blank":
+            return
+        entry = {
+            "title": title or uri,
+            "url": uri,
+            "time": datetime.now().strftime("%d.%m.%Y %H:%M")
+        }
+        history = self.load_history()
+        if history and history[0].get("url") == uri:
+            history[0]["title"] = entry["title"]
+            history[0]["time"] = entry["time"]
+        else:
+            history.insert(0, entry)
+        history = history[:500]
+        self.save_history(history)
+
+    def load_history(self):
+        if os.path.exists(self.history_file):
+            try:
+                with open(self.history_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return []
+
+    def save_history(self, history):
+        try:
+            with open(self.history_file, "w", encoding="utf-8") as f:
+                json.dump(history, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def open_history_dialog(self):
+        dialog = Gtk.Dialog(title="🕒 Zgodovina brskanja — Safeer Browser", transient_for=self, flags=0)
+        dialog.set_default_size(680, 480)
+        dialog.add_button("Zapri", Gtk.ResponseType.CLOSE)
+
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_left(16)
+        content.set_margin_right(16)
+
+        top_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        search_entry = Gtk.Entry()
+        search_entry.set_placeholder_text("🔍 Išči po zgodovini obiskov...")
+        search_entry.get_style_context().add_class("ff-url-entry")
+        top_box.pack_start(search_entry, True, True, 0)
+
+        btn_clear = Gtk.Button(label="🗑️ Počisti zgodovino")
+        btn_clear.get_style_context().add_class("btn-delete")
+        top_box.pack_start(btn_clear, False, False, 0)
+        content.pack_start(top_box, False, False, 0)
+
+        store = Gtk.ListStore(str, str, str)
+        all_history = self.load_history()
+        for item in all_history:
+            store.append([item.get("time", ""), item.get("title", ""), item.get("url", "")])
+
+        filter_store = store.filter_new()
+        def search_filter_func(model, iter, data):
+            query = search_entry.get_text().lower().strip()
+            if not query:
+                return True
+            title = model[iter][1].lower()
+            url = model[iter][2].lower()
+            return query in title or query in url
+
+        filter_store.set_visible_func(search_filter_func)
+        search_entry.connect("changed", lambda e: filter_store.refilter())
+
+        tree = Gtk.TreeView(model=filter_store)
+        tree.get_style_context().add_class("history-tree")
+
+        col_time = Gtk.TreeViewColumn("Čas", Gtk.CellRendererText(), text=0)
+        col_time.set_min_width(130)
+        tree.append_column(col_time)
+
+        col_title = Gtk.TreeViewColumn("Naslov", Gtk.CellRendererText(), text=1)
+        col_title.set_min_width(220)
+        tree.append_column(col_title)
+
+        col_url = Gtk.TreeViewColumn("URL", Gtk.CellRendererText(), text=2)
+        col_url.set_min_width(260)
+        tree.append_column(col_url)
+
+        def on_row_activated(treeview, path, column):
+            model = treeview.get_model()
+            url = model[path][2]
+            if url:
+                wv = self.get_active_webview()
+                if wv:
+                    wv.load_uri(url)
+                dialog.destroy()
+
+        tree.connect("row-activated", on_row_activated)
+
+        def on_clear_clicked(btn):
+            self.save_history([])
+            store.clear()
+
+        btn_clear.connect("clicked", on_clear_clicked)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroll.add(tree)
+        content.pack_start(scroll, True, True, 0)
+
+        dialog.show_all()
+        dialog.run()
+        dialog.destroy()
 
     def on_js_message(self, content_mgr, js_result):
         try:
@@ -1148,7 +1711,9 @@ class SafeerMintBrowser(Gtk.Window):
             if action == "navigate":
                 url = data.get("url")
                 if url:
-                    self.webview.load_uri(url)
+                    wv = self.get_active_webview()
+                    if wv:
+                        wv.load_uri(url)
             elif action == "open_sidebar":
                 service = data.get("service")
                 if service == "settings":

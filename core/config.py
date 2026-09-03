@@ -13,6 +13,7 @@ CONFIG_DIR = os.path.expanduser("~/.config/safeer-mint")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
+    "force_dark_mode": False,           # Prisili temni način na vseh spletnih straneh
     "virtual_keyboard_enabled": False,  # Privzeto izklopljeno kot zahtevano
     "sidebar_enabled": True,            # Trajni vklop/izklop stranske vrstice
     "sidebar_width": 680,
@@ -100,6 +101,13 @@ class ConfigManager:
         self.settings["virtual_keyboard_enabled"] = new_state
         self.save_settings()
         return new_state
+
+    def toggle_force_dark(self) -> bool:
+        """Trajno vklopi ali izklopi prisilni temni način za vse spletne strani."""
+        cur = self.settings.get("force_dark_mode", False)
+        self.settings["force_dark_mode"] = not cur
+        self.save_settings()
+        return not cur
 
     def toggle_sidebar_permanent(self) -> bool:
         """Trajno vklopi ali izklopi prikaz stranske vrstice."""

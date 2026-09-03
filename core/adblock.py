@@ -206,3 +206,17 @@ def is_threat_domain(url: str) -> bool:
             return True
     return False
 
+
+FORCE_DARK_MODE_CSS = """
+/* 🌙 Safeer Browser - Smart Universal Dark Mode Engine */
+html {
+    filter: invert(90%) hue-rotate(180deg) contrast(92%) !important;
+    background-color: #121212 !important;
+}
+/* Re-invert media elements so photos, videos, and icons maintain true natural colors */
+img, video, canvas, svg, picture, iframe, [style*="background-image"], [role="img"] {
+    filter: invert(100%) hue-rotate(180deg) !important;
+}
+"""
+
+
