@@ -42,9 +42,11 @@ class SafeerMintBrowser(Gtk.Window):
         self.set_position(Gtk.WindowPosition.CENTER)
 
         # Set WM_CLASS so Linux Mint panel associates the window with safeer-browser.desktop
-        self.set_wmclass("safeer-browser", "Safeer-browser")
+        self.set_wmclass("safeer-browser", "safeer-browser")
 
-        # Set official window & taskbar icon
+        # Set official window & taskbar icon using system theme name and direct fallback file
+        Gtk.Window.set_default_icon_name("safeer-browser")
+        self.set_icon_name("safeer-browser")
         icon_path = os.path.join(BASE_DIR, "assets", "icon.png")
         if os.path.exists(icon_path):
             try:
