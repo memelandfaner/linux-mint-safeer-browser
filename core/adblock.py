@@ -5,6 +5,8 @@ Complete YouTube ad patch, JSON/XHR strip, fast-forward ad stripper,
 ambient blur removal, background audio engine, and abuse.ch botnet shield.
 """
 
+import urllib.parse
+
 YOUTUBE_ADBLOCK_SCRIPT = """
 /* 🛡️ Safeer Linux Mint - YouTube Zero-Ad & Performance Engine */
 (function() {
@@ -194,17 +196,90 @@ ABUSE_CH_BLOCKED_DOMAINS = {
     "qakbot-drop.cc",
     "icedid-c2-network.net",
     "redline-stealer-gate.ru",
-    "lumma-stealer-delivery.top"
+    "lumma-stealer-delivery.top",
+    "doubleclick.net",
+    "googlesyndication.com",
+    "popads.net",
+    "popcash.net",
+    "monetag.com",
+    "adcash.com",
+    "propellerads.com",
+    "exoclick.com",
+    "adsterra.com",
+    "onclickalgo.com",
+    "onclickgate.com",
+    ".cfd",
+    ".buzz",
+    ".monster",
+    ".click",
+    ".top",
+    ".tk",
+    ".ml",
+    ".ga",
+    ".gq",
+    ".work",
+    ".rest",
+    ".sbs"
 }
 
 
+class ReverseDomainTrie:
+    """High-performance O(k) reverse-label domain tree for sub-microsecond threat lookups."""
+
+    def __init__(self):
+        self.root = {}
+
+    def insert(self, rule: str):
+        if not rule:
+            return
+        cleaned = rule.strip().lower()
+        is_suffix = cleaned.startswith(".")
+        if is_suffix:
+            cleaned = cleaned[1:]
+        labels = [l for l in cleaned.split(".") if l]
+        node = self.root
+        for label in reversed(labels):
+            node = node.setdefault(label, {})
+        if is_suffix:
+            node["_wildcard_"] = True
+        else:
+            node["_term_"] = True
+
+    def is_blocked(self, host: str) -> bool:
+        if not host:
+            return False
+        labels = [l for l in host.lower().split(".") if l]
+        node = self.root
+        for label in reversed(labels):
+            node = node.get(label)
+            if node is None:
+                return False
+            if "_term_" in node or "_wildcard_" in node:
+                return True
+        return False
+
+
+_threat_trie = ReverseDomainTrie()
+for _domain in ABUSE_CH_BLOCKED_DOMAINS:
+    _threat_trie.insert(_domain)
+
+
 def is_threat_domain(url: str) -> bool:
-    """Checks if the given URL belongs to a known malicious C2, malware, or phishing domain."""
-    url_lower = url.lower()
-    for threat in ABUSE_CH_BLOCKED_DOMAINS:
-        if threat in url_lower:
-            return True
-    return False
+    """Checks if the given URL or domain belongs to a known malicious C2, malware, or phishing domain using O(k) ReverseDomainTrie."""
+    if not url:
+        return False
+    try:
+        candidate = url.strip()
+        if "://" not in candidate:
+            candidate = f"http://{candidate}"
+        parsed = urllib.parse.urlparse(candidate)
+        host = (parsed.hostname or "").lower()
+        if not host:
+            host = url.lower().split("/")[0].split(":")[0].strip()
+    except Exception:
+        host = url.lower().strip()
+
+    return _threat_trie.is_blocked(host)
 
 
 FORCE_DARK_MODE_CSS = """

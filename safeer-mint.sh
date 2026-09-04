@@ -3,7 +3,8 @@
 # Safeer Browser — Linux Mint Edition Launcher
 # Lightning-fast single-instance manager & instant URL handoff via Unix socket
 # ==============================================================================
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 cd "$DIR"
 
 SOCK_FILE="$HOME/.config/safeer-mint/safeer.sock"
@@ -42,6 +43,14 @@ except Exception:
     fi
     # Če je socket neaktiven (stale socket), ga odstranimo
     rm -f "$SOCK_FILE"
+fi
+
+# 🚀 Strojno pospeševanje & VA-API Zero-Copy video cevovod (Linux Mint / Ubuntu)
+export WEBKIT_FORCE_COMPOSITING_MODE=1
+export WEBKIT_DISABLE_COMPOSITING_MODE=0
+export GST_VAAPI_ALL_DRIVERS=1
+if [ -e /dev/dri/renderD128 ]; then
+    export LIBVA_DRIVERS_PATH=/usr/lib/x86_64-linux-gnu/dri:/usr/lib/dri
 fi
 
 # Zagon s sistemskim pythonom

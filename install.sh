@@ -14,6 +14,22 @@ echo "=========================================================="
 echo "🛡️ NAMEŠČANJE: Safeer Browser za Linux Mint"
 echo "=========================================================="
 
+# Preveri potrebne sistemske pakete (Python, GTK3, WebKit2GTK)
+MISSING_PKGS=()
+for pkg in python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1; do
+    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+        MISSING_PKGS+=("$pkg")
+    fi
+done
+
+if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
+    echo "⚠️  OPOZORILO: Manjkajo naslednji sistemski paketi:"
+    echo "   ${MISSING_PKGS[*]}"
+    echo "   Za polno delovanje jih namestite z ukazom:"
+    echo "   sudo apt update && sudo apt install -y ${MISSING_PKGS[*]}"
+    echo "----------------------------------------------------------"
+fi
+
 # 1. Ensure execute permissions
 chmod +x "$DIR/safeer_mint.py"
 chmod +x "$DIR/safeer-mint.sh"

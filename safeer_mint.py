@@ -88,6 +88,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.tabs = []
         self.active_tab_id = None
         self.tab_counter = 0
+        self._paned_debounce_timer = None
 
         # Downloads & History state
         self.downloads = []
@@ -113,6 +114,13 @@ class SafeerMintBrowser(Gtk.Window):
 
     def on_delete_event(self, widget, event):
         """Zapomni si velikost okna in počisti IPC socket ob zaprtju."""
+        if hasattr(self, "_paned_debounce_timer") and self._paned_debounce_timer:
+            try:
+                GLib.source_remove(self._paned_debounce_timer)
+                self._paned_debounce_timer = None
+                self.config.save_settings()
+            except Exception:
+                pass
         try:
             w, h = self.get_size()
             if w >= 800 and h >= 600:
@@ -139,6 +147,10 @@ class SafeerMintBrowser(Gtk.Window):
                     pass
             server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             server.bind(sock_path)
+            try:
+                os.chmod(sock_path, 0o600)
+            except Exception:
+                pass
             server.listen(5)
             self.ipc_server_sock = server
 
@@ -160,16 +172,24 @@ class SafeerMintBrowser(Gtk.Window):
                     except Exception:
                         break
 
-            t = threading.Thread(target=socket_listener, daemon=True)
-            t.start()
+            sock_thread = threading.Thread(target=socket_listener, daemon=True)
+            sock_thread.start()
         except Exception as e:
             print(f"[IPC Socket] Opozorilo pri inicializaciji socketa: {e}")
 
     def open_url_from_external(self, url):
-        """Odpri povezavo iz zunanjega programa (Thunderbird, Telegram, Terminal) v novem zavihku."""
+        """Odpri povezavo iz zunanjega programa v novem zavihku (z varnostnim filtrom protokola)."""
         self.present()
-        if url:
-            self.new_tab(url=url, switch=True)
+        if not url:
+            return
+        url_clean = url.strip()
+        # Varnost: dovoli samo varne spletne protokole in domačo stran (prepovej javascript:, file:, data: ipd.)
+        if url_clean.startswith("http://") or url_clean.startswith("https://") or url_clean == "safeer://home":
+            self.new_tab(url=url_clean, switch=True)
+        elif not ("://" in url_clean):
+            self.new_tab(url=url_clean, switch=True)
+        else:
+            print(f"[IPC Varnost] Zavrnjen nevaren protokol v URL: {url_clean}")
 
     def setup_persistent_storage(self):
         """Omogoči trajne seje, LocalStorage in IndexedDB za Messenger, Gmail, YouTube itd."""
@@ -188,7 +208,7 @@ class SafeerMintBrowser(Gtk.Window):
             cookie_mgr = self.website_data_manager.get_cookie_manager()
             cookie_path = os.path.join(self.config.config_dir, "cookies.sqlite")
             cookie_mgr.set_persistent_storage(cookie_path, WebKit2.CookiePersistentStorage.SQLITE)
-            cookie_mgr.set_accept_policy(WebKit2.CookieAcceptPolicy.ALWAYS)
+            cookie_mgr.set_accept_policy(WebKit2.CookieAcceptPolicy.NO_THIRD_PARTY)
         except Exception as e:
             print(f"[Storage] Opozorilo pri nastavitvi shrambe: {e}")
             self.web_context = WebKit2.WebContext.get_default()
@@ -1070,25 +1090,25 @@ class SafeerMintBrowser(Gtk.Window):
         self.drawer_header.pack_start(self.drawer_title, True, True, 6)
 
         # Back button in drawer
-        btn_back_drawer = Gtk.Button(label="◀")
-        btn_back_drawer.set_tooltip_text("Nazaj v stranski integraciji")
-        btn_back_drawer.get_style_context().add_class("nav-btn")
-        btn_back_drawer.connect("clicked", lambda b: self.sidebar_webview.go_back())
-        self.drawer_header.pack_start(btn_back_drawer, False, False, 0)
+        self.btn_back_drawer = Gtk.Button(label="◀")
+        self.btn_back_drawer.set_tooltip_text("Nazaj v stranski integraciji")
+        self.btn_back_drawer.get_style_context().add_class("nav-btn")
+        self.btn_back_drawer.connect("clicked", lambda b: self.sidebar_webview.go_back())
+        self.drawer_header.pack_start(self.btn_back_drawer, False, False, 0)
 
         # Reload button in drawer
-        btn_reload_drawer = Gtk.Button(label="⟳")
-        btn_reload_drawer.set_tooltip_text("Osveži stransko integracijo")
-        btn_reload_drawer.get_style_context().add_class("nav-btn")
-        btn_reload_drawer.connect("clicked", lambda b: self.sidebar_webview.reload())
-        self.drawer_header.pack_start(btn_reload_drawer, False, False, 0)
+        self.btn_reload_drawer = Gtk.Button(label="⟳")
+        self.btn_reload_drawer.set_tooltip_text("Osveži stransko integracijo")
+        self.btn_reload_drawer.get_style_context().add_class("nav-btn")
+        self.btn_reload_drawer.connect("clicked", lambda b: self.sidebar_webview.reload())
+        self.drawer_header.pack_start(self.btn_reload_drawer, False, False, 0)
 
         # Open in Main Tab button (↗️)
-        btn_popout = Gtk.Button(label="↗️")
-        btn_popout.set_tooltip_text("Odpri to stran v glavnem oknu brskalnika")
-        btn_popout.get_style_context().add_class("nav-btn")
-        btn_popout.connect("clicked", self.popout_sidebar_to_main)
-        self.drawer_header.pack_start(btn_popout, False, False, 0)
+        self.btn_popout = Gtk.Button(label="↗️")
+        self.btn_popout.set_tooltip_text("Odpri to stran v glavnem oknu brskalnika")
+        self.btn_popout.get_style_context().add_class("nav-btn")
+        self.btn_popout.connect("clicked", self.popout_sidebar_to_main)
+        self.drawer_header.pack_start(self.btn_popout, False, False, 0)
 
         # Expand / Shrink drawer width toggle (↔️)
         self.btn_expand_drawer = Gtk.Button(label="↔️")
@@ -1098,11 +1118,11 @@ class SafeerMintBrowser(Gtk.Window):
         self.drawer_header.pack_start(self.btn_expand_drawer, False, False, 0)
 
         # Close button in drawer
-        btn_close_drawer = Gtk.Button(label="✕")
-        btn_close_drawer.set_tooltip_text("Zapri stranski zavihek")
-        btn_close_drawer.get_style_context().add_class("nav-btn")
-        btn_close_drawer.connect("clicked", lambda b: self.close_sidebar_panel())
-        self.drawer_header.pack_start(btn_close_drawer, False, False, 0)
+        self.btn_close_drawer = Gtk.Button(label="✕")
+        self.btn_close_drawer.set_tooltip_text("Zapri stranski zavihek")
+        self.btn_close_drawer.get_style_context().add_class("nav-btn")
+        self.btn_close_drawer.connect("clicked", lambda b: self.close_sidebar_panel())
+        self.drawer_header.pack_start(self.btn_close_drawer, False, False, 0)
 
         self.sidebar_drawer.pack_start(self.drawer_header, False, False, 0)
 
@@ -1142,18 +1162,18 @@ class SafeerMintBrowser(Gtk.Window):
         self.icon_dock.pack_start(spacer, True, True, 0)
 
         # Quick Add Page button (+)
-        btn_add = Gtk.Button(label="➕")
-        btn_add.set_tooltip_text("Dodaj poljubno spletno stran v stransko vrstico")
-        btn_add.get_style_context().add_class("dock-btn")
-        btn_add.connect("clicked", lambda b: self.open_add_page_dialog())
-        self.icon_dock.pack_start(btn_add, False, False, 0)
+        self.btn_add_sidebar = Gtk.Button(label="➕")
+        self.btn_add_sidebar.set_tooltip_text("Dodaj poljubno spletno stran v stransko vrstico")
+        self.btn_add_sidebar.get_style_context().add_class("dock-btn")
+        self.btn_add_sidebar.connect("clicked", lambda b: self.open_add_page_dialog())
+        self.icon_dock.pack_start(self.btn_add_sidebar, False, False, 0)
 
         # Settings Button (⚙️)
-        btn_settings = Gtk.Button(label="⚙️")
-        btn_settings.set_tooltip_text("Nastavitve in urejanje stranske vrstice")
-        btn_settings.get_style_context().add_class("dock-btn")
-        btn_settings.connect("clicked", lambda b: self.open_settings_dialog())
-        self.icon_dock.pack_start(btn_settings, False, False, 0)
+        self.btn_settings_sidebar = Gtk.Button(label="⚙️")
+        self.btn_settings_sidebar.set_tooltip_text("Nastavitve in urejanje stranske vrstice")
+        self.btn_settings_sidebar.get_style_context().add_class("dock-btn")
+        self.btn_settings_sidebar.connect("clicked", lambda b: self.open_settings_dialog())
+        self.icon_dock.pack_start(self.btn_settings_sidebar, False, False, 0)
 
         self.icon_dock.show_all()
 
@@ -1199,8 +1219,7 @@ class SafeerMintBrowser(Gtk.Window):
             for c in self.sidebar_drawer.get_children():
                 c.show_all()
             drawer_w = self.config.get("sidebar_width", 680)
-            if drawer_w < 550:
-                drawer_w = 680
+            drawer_w = max(350, min(950, drawer_w))
             target_width = DOCK_WIDTH + drawer_w
             self.content_paned.set_position(target_width)
             self.active_sidebar_service = service_id
@@ -1224,7 +1243,15 @@ class SafeerMintBrowser(Gtk.Window):
         if self.sidebar_drawer.is_visible() and pos > DOCK_WIDTH + 100:
             drawer_w = pos - DOCK_WIDTH
             if 350 <= drawer_w <= 950:
-                self.config.set("sidebar_width", drawer_w)
+                self.config.settings["sidebar_width"] = drawer_w
+                if hasattr(self, "_paned_debounce_timer") and self._paned_debounce_timer:
+                    GLib.source_remove(self._paned_debounce_timer)
+                self._paned_debounce_timer = GLib.timeout_add(400, self._save_config_debounced)
+
+    def _save_config_debounced(self):
+        self._paned_debounce_timer = None
+        self.config.save_settings()
+        return False
 
     def on_create_webview(self, webview, navigation_action):
         """Obravnava klice window.open ali povezave target=_blank."""
@@ -1248,6 +1275,10 @@ class SafeerMintBrowser(Gtk.Window):
                 req = nav_action.get_request()
                 uri = req.get_uri() if req else ""
                 if uri:
+                    if is_threat_domain(uri):
+                        self.show_threat_warning(uri)
+                        decision.ignore()
+                        return True
                     if webview == self.sidebar_webview:
                         self.sidebar_webview.load_uri(uri)
                     else:
@@ -1259,18 +1290,24 @@ class SafeerMintBrowser(Gtk.Window):
         elif decision_type == WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
             try:
                 nav_action = decision.get_navigation_action()
+                req = nav_action.get_request()
+                uri = req.get_uri() if req else ""
+                if uri and is_threat_domain(uri):
+                    self.show_threat_warning(uri)
+                    decision.ignore()
+                    return True
+
+                nav_type = nav_action.get_navigation_type()
                 mouse_btn = nav_action.get_mouse_button()
                 modifiers = nav_action.get_modifiers()
-                # Srednji klik (kolešček) ali Ctrl + klik odpre povezavo v novem zavihku v ozadju!
-                if mouse_btn == 2 or (modifiers & Gdk.ModifierType.CONTROL_MASK):
-                    req = nav_action.get_request()
-                    uri = req.get_uri() if req else ""
+                # Srednji klik ali Ctrl + klik odpre zavihek v ozadju SAMO ob dejanskem kliku na povezavo!
+                if nav_type == WebKit2.NavigationType.LINK_CLICKED and (mouse_btn == 2 or (modifiers & Gdk.ModifierType.CONTROL_MASK)):
                     if uri:
                         self.new_tab(url=uri, switch=False)
                     decision.ignore()
                     return True
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[Policy Navigation] Napaka: {e}")
             decision.use()
             return True
         return False
@@ -1534,12 +1571,38 @@ class SafeerMintBrowser(Gtk.Window):
         settings.set_enable_encrypted_media(True)
         settings.set_user_agent(USER_AGENT)
 
+        # Strojno pospeševanje & 60fps Zero-Copy renderiranje (WebKitGTK 2025/2026)
+        try:
+            if hasattr(WebKit2, "HardwareAccelerationPolicy"):
+                settings.set_hardware_acceleration_policy(WebKit2.HardwareAccelerationPolicy.ALWAYS)
+            if hasattr(settings, "set_enable_accelerated_2d_canvas"):
+                settings.set_enable_accelerated_2d_canvas(True)
+            if hasattr(settings, "set_enable_mediasource"):
+                settings.set_enable_mediasource(True)
+            if hasattr(settings, "set_enable_back_forward_navigation_gestures"):
+                settings.set_enable_back_forward_navigation_gestures(True)
+        except Exception:
+            pass
+
+        # Samodejno zavrni zahteve za kamero/mikrofon/geolokacijo
+        webview.connect("permission-request", self.on_permission_request)
+
+    def on_permission_request(self, webview, request):
+        """Zavrni zahteve za dostop do kamere, mikrofona ali geolokacije za zaščito zasebnosti."""
+        try:
+            request.deny()
+            return True
+        except Exception:
+            return False
+
     def create_keyboard_panel(self):
         self.keyboard_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.keyboard_box.set_size_request(-1, 240)
         self.keyboard_box.set_no_show_all(True)
 
-        self.kb_webview = WebKit2.WebView.new_with_context(self.web_context)
+        # Ločen ephemeral WebContext za tipkovnico (ne deli piškotkov z Gmailom/sejami)
+        kb_context = WebKit2.WebContext.new_ephemeral()
+        self.kb_webview = WebKit2.WebView.new_with_context(kb_context)
         self.setup_webview_settings(self.kb_webview)
         kb_path = os.path.join(BASE_DIR, "ui", "keyboard.html")
         self.kb_webview.load_uri(f"file://{kb_path}")
@@ -1728,9 +1791,9 @@ class SafeerMintBrowser(Gtk.Window):
     # Multi-Tab Management Engine
     # -------------------------------------------------------------
     def get_active_tab(self):
-        for t in self.tabs:
-            if t["id"] == self.active_tab_id:
-                return t
+        for tab in self.tabs:
+            if tab["id"] == self.active_tab_id:
+                return tab
         if self.tabs:
             return self.tabs[0]
         return None
@@ -1898,9 +1961,9 @@ class SafeerMintBrowser(Gtk.Window):
 
     def close_tab(self, tab_id):
         tab_to_close = None
-        for t in self.tabs:
-            if t["id"] == tab_id:
-                tab_to_close = t
+        for tab in self.tabs:
+            if tab["id"] == tab_id:
+                tab_to_close = tab
                 break
         if not tab_to_close:
             return
@@ -1923,14 +1986,14 @@ class SafeerMintBrowser(Gtk.Window):
     def switch_to_tab(self, tab_id):
         self.active_tab_id = tab_id
         target = None
-        for t in self.tabs:
-            if t["id"] == tab_id:
-                target = t
-                t["tab_box"].get_style_context().add_class("active-tab")
-                t["tab_box"].get_style_context().remove_class("inactive-tab")
+        for tab in self.tabs:
+            if tab["id"] == tab_id:
+                target = tab
+                tab["tab_box"].get_style_context().add_class("active-tab")
+                tab["tab_box"].get_style_context().remove_class("inactive-tab")
             else:
-                t["tab_box"].get_style_context().remove_class("active-tab")
-                t["tab_box"].get_style_context().add_class("inactive-tab")
+                tab["tab_box"].get_style_context().remove_class("active-tab")
+                tab["tab_box"].get_style_context().add_class("inactive-tab")
 
         if not target:
             return
@@ -1952,17 +2015,17 @@ class SafeerMintBrowser(Gtk.Window):
             uri = webview.get_uri() or ""
             title = webview.get_title() or ""
 
-            for t in self.tabs:
-                if t["id"] == tab_id:
-                    t["uri"] = uri
+            for tab_item in self.tabs:
+                if tab_item["id"] == tab_id:
+                    tab_item["uri"] = uri
                     if "ui/home.html" in uri:
                         h_title = t("home_title")
-                        t["title"] = h_title
-                        t["icon"] = "🍃"
-                        if "title_label" in t and t["title_label"]:
-                            t["title_label"].set_text(h_title)
-                        if "icon_label" in t and t["icon_label"]:
-                            t["icon_label"].set_text("🍃")
+                        tab_item["title"] = h_title
+                        tab_item["icon"] = "🍃"
+                        if "title_label" in tab_item and tab_item["title_label"]:
+                            tab_item["title_label"].set_text(h_title)
+                        if "icon_label" in tab_item and tab_item["icon_label"]:
+                            tab_item["icon_label"].set_text("🍃")
                         # Inject live custom portals into home.html
                         portals = self.config.get_portals()
                         portals_json = json.dumps(portals)
@@ -1993,21 +2056,21 @@ class SafeerMintBrowser(Gtk.Window):
         if not title:
             return
 
-        for t in self.tabs:
-            if t["id"] == tab_id:
-                t["title"] = title
-                t["title_label"].set_text(title)
+        for tab in self.tabs:
+            if tab["id"] == tab_id:
+                tab["title"] = title
+                tab["title_label"].set_text(title)
                 t_lower = title.lower()
                 if "google" in t_lower:
-                    t["icon_label"].set_text("🌐")
+                    tab["icon_label"].set_text("🌐")
                 elif "youtube" in t_lower:
-                    t["icon_label"].set_text("▶️")
+                    tab["icon_label"].set_text("▶️")
                 elif "facebook" in t_lower or "messenger" in t_lower:
-                    t["icon_label"].set_text("💬")
+                    tab["icon_label"].set_text("💬")
                 elif "gmail" in t_lower or "pošta" in t_lower:
-                    t["icon_label"].set_text("✉️")
+                    tab["icon_label"].set_text("✉️")
                 else:
-                    t["icon_label"].set_text("🌐")
+                    tab["icon_label"].set_text("🌐")
                 break
 
         if self.active_tab_id == tab_id:
@@ -2016,9 +2079,9 @@ class SafeerMintBrowser(Gtk.Window):
     def on_tab_uri_changed(self, tab_id, webview, prop):
         uri = webview.get_uri()
         if uri and "ui/home.html" not in uri:
-            for t in self.tabs:
-                if t["id"] == tab_id:
-                    t["uri"] = uri
+            for tab in self.tabs:
+                if tab["id"] == tab_id:
+                    tab["uri"] = uri
                     break
             if self.active_tab_id == tab_id and not self.url_entry.is_focus():
                 self.url_entry.set_text(self.format_clean_url(uri))
@@ -2098,41 +2161,59 @@ class SafeerMintBrowser(Gtk.Window):
         self.web_context.connect("download-started", self.on_download_started)
 
     def on_download_started(self, context, download):
-        dl_dir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) or os.path.expanduser("~/Prejemi")
+        download.connect("decide-destination", self.on_decide_destination)
+
+    def on_decide_destination(self, download, suggested_filename):
+        dl_dir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) or os.path.expanduser("~/Prenosi")
         os.makedirs(dl_dir, exist_ok=True)
 
         req = download.get_request()
         uri = req.get_uri() if req else ""
-        suggested = download.get_response().get_suggested_filename() if download.get_response() else ""
-        if not suggested:
-            suggested = os.path.basename(urllib.parse.urlparse(uri).path) or "prenos_datoteke"
+        if not suggested_filename:
+            suggested_filename = os.path.basename(urllib.parse.urlparse(uri).path) or "prenos_datoteke"
 
-        target_path = os.path.join(dl_dir, suggested)
-        base, ext = os.path.splitext(suggested)
-        counter = 1
-        while os.path.exists(target_path):
-            target_path = os.path.join(dl_dir, f"{base}_{counter}{ext}")
-            counter += 1
+        dialog = Gtk.FileChooserDialog(
+            title=f"📥 {t('save_download', 'Shrani prenos')} — Safeer Browser",
+            parent=self,
+            action=Gtk.FileChooserAction.SAVE
+        )
+        dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
+        btn_save = dialog.add_button(t("save", "Shrani"), Gtk.ResponseType.OK)
+        btn_save.get_style_context().add_class("btn-primary-glow")
+        dialog.set_current_folder(dl_dir)
+        dialog.set_current_name(suggested_filename)
+        dialog.set_do_overwrite_confirmation(True)
 
-        dest_uri = f"file://{target_path}"
-        download.set_destination(dest_uri)
+        resp = dialog.run()
+        if resp == Gtk.ResponseType.OK:
+            target_path = dialog.get_filename()
+            dialog.destroy()
+            if target_path:
+                dest_uri = f"file://{target_path}"
+                download.set_destination(dest_uri)
 
-        dl_data = {
-            "id": str(uuid.uuid4())[:8],
-            "filename": os.path.basename(target_path),
-            "path": target_path,
-            "progress": 0.0,
-            "status": "running",
-            "time": datetime.now().strftime("%H:%M:%S")
-        }
-        self.downloads.insert(0, dl_data)
+                dl_data = {
+                    "id": str(uuid.uuid4())[:8],
+                    "filename": os.path.basename(target_path),
+                    "path": target_path,
+                    "progress": 0.0,
+                    "status": "running",
+                    "time": datetime.now().strftime("%H:%M:%S")
+                }
+                self.downloads.insert(0, dl_data)
 
-        self.btn_downloads.set_label("⬇️ 0%")
-        self.btn_downloads.get_style_context().add_class("active")
+                self.btn_downloads.set_label("⬇️ 0%")
+                self.btn_downloads.get_style_context().add_class("active")
 
-        download.connect("notify::estimated-progress", lambda d, p: self.on_download_progress(dl_data, d))
-        download.connect("finished", lambda d: self.on_download_finished(dl_data))
-        download.connect("failed", lambda d, err: self.on_download_failed(dl_data, err))
+                download.connect("notify::estimated-progress", lambda d, p: self.on_download_progress(dl_data, d))
+                download.connect("finished", lambda d: self.on_download_finished(dl_data))
+                download.connect("failed", lambda d, err: self.on_download_failed(dl_data, err))
+                return True
+        else:
+            dialog.destroy()
+            download.cancel()
+            return True
+        return False
 
     def on_download_progress(self, dl_data, download):
         prog = download.get_estimated_progress()
@@ -3013,9 +3094,9 @@ class SafeerMintBrowser(Gtk.Window):
         portals = self.config.get_portals()
         portals_json = json.dumps(portals)
         js = f"if (window.setCustomPortals) {{ window.setCustomPortals({portals_json}); }}"
-        for t in self.tabs:
-            wv = t.get("webview")
-            uri = t.get("uri", "")
+        for tab in self.tabs:
+            wv = tab.get("webview")
+            uri = tab.get("uri", "")
             if wv and ("home.html" in uri or uri == "safeer://home"):
                 wv.run_javascript(js, None, None, None)
 
@@ -3023,9 +3104,9 @@ class SafeerMintBrowser(Gtk.Window):
         """Osveži jezik na vseh odprtih zavihkih z domačo stranjo."""
         lang = get_current_language()
         js = f"if (window.setAppLanguage) {{ window.setAppLanguage('{lang}'); }}"
-        for t in self.tabs:
-            wv = t.get("webview")
-            uri = t.get("uri", "")
+        for tab in self.tabs:
+            wv = tab.get("webview")
+            uri = tab.get("uri", "")
             if wv and ("home.html" in uri or uri == "safeer://home"):
                 wv.run_javascript(js, None, None, None)
 
@@ -3033,9 +3114,9 @@ class SafeerMintBrowser(Gtk.Window):
         """Osveži privzeti iskalnik na vseh odprtih zavihkih z domačo stranjo."""
         engine = self.config.get("search_engine", "google")
         js = f"if (window.setSearchEngine) {{ window.setSearchEngine('{engine}'); }}"
-        for t in self.tabs:
-            wv = t.get("webview")
-            uri = t.get("uri", "")
+        for tab in self.tabs:
+            wv = tab.get("webview")
+            uri = tab.get("uri", "")
             if wv and ("home.html" in uri or uri == "safeer://home"):
                 wv.run_javascript(js, None, None, None)
 
@@ -3317,7 +3398,7 @@ class SafeerMintBrowser(Gtk.Window):
         if hasattr(self, 'btn_customizer'):
             self.btn_customizer.set_tooltip_text(f"{t('customizer_title')}")
         if hasattr(self, 'btn_keyboard'):
-            self.btn_keyboard.set_tooltip_text(f"{t('tab_themes')}")
+            self.btn_keyboard.set_tooltip_text(t('virtual_keyboard', 'Navidezna tipkovnica'))
         if hasattr(self, 'btn_reader'):
             self.btn_reader.set_tooltip_text(t('reader_mode'))
         if hasattr(self, 'btn_pip'):
@@ -3332,8 +3413,14 @@ class SafeerMintBrowser(Gtk.Window):
             self.btn_reload_drawer.set_tooltip_text(f"{t('reload')}")
         if hasattr(self, 'btn_popout'):
             self.btn_popout.set_tooltip_text(t('open_file'))
+        if hasattr(self, 'btn_expand_drawer'):
+            self.btn_expand_drawer.set_tooltip_text(f"{t('sidebar_display')}")
         if hasattr(self, 'btn_close_drawer'):
             self.btn_close_drawer.set_tooltip_text(t('close'))
+        if hasattr(self, 'btn_add_sidebar'):
+            self.btn_add_sidebar.set_tooltip_text(f"{t('add_portal')}")
+        if hasattr(self, 'btn_settings_sidebar'):
+            self.btn_settings_sidebar.set_tooltip_text(f"{t('settings')}")
 
         self.update_tab_titles_for_language()
         self.broadcast_language_update()

@@ -26,7 +26,7 @@ Sodoben, hiter in zasebnosti prijazen namizni spletni brskalnik, razvit posebej 
 3. **100% Nativna integracija v Linux Mint**:
    - Usklajen z Linux Mint temnim načinom (Mint-Y Dark).
    - Nizka poraba pomnilnika RAM in hipen zagon (pogon WebKitGTK 4.1).
-   - Chrome User-Agent za 100% združljivost z vsemi Google in Facebook prijavami.
+   - WebKit/Safari User-Agent za popolno združljivost s spletnimi standardi in nemoteno delovanje Googlovih ter drugih storitev.
 
 ---
 

@@ -125,7 +125,9 @@ TRANSLATIONS = {
         "audio_mute": "Mute Tab Audio",
         "audio_unmute": "Unmute Tab Audio",
         "pip_video": "Picture-in-Picture (PiP)",
-        "switch_to_tab": "Switch to tab"
+        "switch_to_tab": "Switch to tab",
+        "virtual_keyboard": "Virtual Keyboard",
+        "save_download": "Save Download"
     },
     "sl": {
         "customizer_subtitle": "Prilagodite videz, barvne teme, CSS sloge, bližnjice in skripte po meri",
@@ -235,7 +237,9 @@ TRANSLATIONS = {
         "audio_mute": "Utišaj zavihek",
         "audio_unmute": "Vklopi zvok zavihka",
         "pip_video": "Slika v sliki (PiP)",
-        "switch_to_tab": "Preklopi na zavihek"
+        "switch_to_tab": "Preklopi na zavihek",
+        "virtual_keyboard": "Navidezna tipkovnica",
+        "save_download": "Shrani prenos"
     },
     "de": {
         "customizer_subtitle": "Personalisieren Sie Ihr Surferlebnis • Themes, CSS, Favoriten & Skripte",
@@ -345,7 +349,9 @@ TRANSLATIONS = {
         "audio_mute": "Tab stummschalten",
         "audio_unmute": "Tab-Stummschaltung aufheben",
         "pip_video": "Bild-in-Bild (PiP)",
-        "switch_to_tab": "Zu Tab wechseln"
+        "switch_to_tab": "Zu Tab wechseln",
+        "virtual_keyboard": "Virtuelle Tastatur",
+        "save_download": "Download speichern"
     },
     "es": {
         "customizer_subtitle": "Personaliza tu experiencia • Temas, CSS personalizado, sitios y scripts",
@@ -455,7 +461,9 @@ TRANSLATIONS = {
         "audio_mute": "Silenciar pestaña",
         "audio_unmute": "Activar sonido de pestaña",
         "pip_video": "Imagen en imagen (PiP)",
-        "switch_to_tab": "Cambiar a pestaña"
+        "switch_to_tab": "Cambiar a pestaña",
+        "virtual_keyboard": "Teclado virtual",
+        "save_download": "Guardar descarga"
     },
     "fr": {
         "customizer_subtitle": "Personnalisez votre navigation • Thèmes, CSS personnalisé, sites et scripts",
@@ -565,7 +573,9 @@ TRANSLATIONS = {
         "audio_mute": "Couper le son de l'onglet",
         "audio_unmute": "Réactiver le son de l'onglet",
         "pip_video": "Image dans l'image (PiP)",
-        "switch_to_tab": "Aller à l'onglet"
+        "switch_to_tab": "Aller à l'onglet",
+        "virtual_keyboard": "Clavier virtuel",
+        "save_download": "Enregistrer le téléchargement"
     },
     "it": {
         "customizer_subtitle": "Personalizza la navigazione • Temi, CSS personalizzato, preferiti e script",
@@ -675,7 +685,9 @@ TRANSLATIONS = {
         "audio_mute": "Silenzia scheda",
         "audio_unmute": "Riattiva audio scheda",
         "pip_video": "Picture-in-Picture (PiP)",
-        "switch_to_tab": "Passa alla scheda"
+        "switch_to_tab": "Passa alla scheda",
+        "virtual_keyboard": "Tastiera virtuale",
+        "save_download": "Salva download"
     }
 }
 

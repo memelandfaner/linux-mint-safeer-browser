@@ -279,7 +279,7 @@ const defaultPortals = [
   { id: "p2", title: "YouTube", url: "https://www.youtube.com", mark: "▶️", bg: "linear-gradient(145deg, #4a0b0b, #cc0000)" },
   { id: "p3", title: "24ur.com", url: "https://www.24ur.com", mark: "📰", bg: "linear-gradient(145deg, #0a2040, #1256a8)" },
   { id: "p4", title: "RTV SLO", url: "https://www.rtvslo.si", mark: "🇸🇮", bg: "linear-gradient(145deg, #04364a, #0284c7)" },
-  { id: "p5", title: "Filmi & Serije", url: "https://hydrahd.ws/", mark: "🎬", bg: "linear-gradient(145deg, #062a38, #0277a3)" },
+  { id: "p5", title: "RTV 365", url: "https://365.rtvslo.si", mark: "🎬", bg: "linear-gradient(145deg, #062a38, #0277a3)" },
   { id: "p6", title: "ChatGPT AI", url: "https://chatgpt.com", mark: "🤖", bg: "linear-gradient(145deg, #063c2f, #10a37f)" },
   { id: "p7", title: "CryptoQuant", url: "https://cryptoquant.com", mark: "📊", bg: "linear-gradient(145deg, #3d2303, #d97706)" },
   { id: "p8", title: "GitHub", url: "https://github.com", mark: "🐙", bg: "linear-gradient(145deg, #1b1f24, #24292e)" }
@@ -324,10 +324,18 @@ function renderPortals() {
     card.className = 'portal-card';
     card.href = portal.url;
     card.style.background = portal.bg || `linear-gradient(145deg, #0f172a, ${portal.color || '#00d2ff'})`;
-    card.innerHTML = `
-      <span class="portal-mark">${portal.mark || '🌐'}</span>
-      <span class="portal-title">${portal.title}</span>
-    `;
+
+    const markSpan = document.createElement('span');
+    markSpan.className = 'portal-mark';
+    markSpan.textContent = portal.mark || '🌐';
+
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'portal-title';
+    titleSpan.textContent = portal.title || '';
+
+    card.appendChild(markSpan);
+    card.appendChild(titleSpan);
+
     card.addEventListener('click', (e) => {
       e.preventDefault();
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {

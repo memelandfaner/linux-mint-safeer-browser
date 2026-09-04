@@ -84,6 +84,21 @@ READER_MODE_JS = r"""
             el.removeAttribute('id');
         });
 
+        // HTML Escape helper to prevent XSS injection
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        const safeTitle = escapeHtml(pageTitle);
+        const safeAuthor = escapeHtml(pageAuthor);
+        const safeDate = escapeHtml(pageDate);
+
         // Compute estimated reading time
         const fullText = clone.innerText || '';
         const wordCount = fullText.trim().split(/\s+/).filter(Boolean).length;
@@ -92,7 +107,8 @@ READER_MODE_JS = r"""
         // Format lead image HTML
         let imgHtml = '';
         if (leadImg && !leadImg.includes('logo') && !leadImg.includes('icon')) {
-            imgHtml = `<div class="reader-lead-img"><img src="${leadImg}" alt="Lead Image" /></div>`;
+            const safeImg = escapeHtml(leadImg);
+            imgHtml = `<div class="reader-lead-img"><img src="${safeImg}" alt="Lead Image" /></div>`;
         }
 
         // Reader Mode Full HTML
@@ -101,7 +117,7 @@ READER_MODE_JS = r"""
 <html lang="sl" data-reader-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <title>📖 ${pageTitle} — Safeer Reader</title>
+    <title>📖 ${safeTitle} — Safeer Reader</title>
     <style>
         :root {
             --reader-bg: #141720;
@@ -312,10 +328,10 @@ READER_MODE_JS = r"""
     </div>
 
     <article class="reader-article-wrap">
-        <h1 class="reader-title">${pageTitle}</h1>
+        <h1 class="reader-title">${safeTitle}</h1>
         <div class="reader-byline">
-            ${pageAuthor ? `<span>✍️ <b>${pageAuthor}</b></span>` : ''}
-            ${pageDate ? `<span>📅 ${pageDate}</span>` : ''}
+            ${safeAuthor ? `<span>✍️ <b>${safeAuthor}</b></span>` : ''}
+            ${safeDate ? `<span>📅 ${safeDate}</span>` : ''}
             <span>🛡️ Brez oglasov in sledilcev</span>
         </div>
         ${imgHtml}

@@ -51,7 +51,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
             "name": "Primer: Konzola obvestilo",
             "pattern": "*",
             "code": "// Safeer Uporabniška skripta (Tampermonkey slog)\nconsole.log('🛡️ Safeer Custom Script teče na: ' + window.location.href);",
-            "enabled": True,
+            "enabled": False,
             "run_at": "end"
         }
     ],
@@ -82,7 +82,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         {"id": "p2", "title": "YouTube", "url": "https://www.youtube.com", "mark": "▶️", "bg": "linear-gradient(145deg, #4a0b0b, #cc0000)", "color": "#cc0000"},
         {"id": "p3", "title": "24ur.com", "url": "https://www.24ur.com", "mark": "📰", "bg": "linear-gradient(145deg, #0a2040, #1256a8)", "color": "#1256a8"},
         {"id": "p4", "title": "RTV SLO", "url": "https://www.rtvslo.si", "mark": "🇸🇮", "bg": "linear-gradient(145deg, #04364a, #0284c7)", "color": "#0284c7"},
-        {"id": "p5", "title": "Filmi & Serije", "url": "https://hydrahd.ws/", "mark": "🎬", "bg": "linear-gradient(145deg, #062a38, #0277a3)", "color": "#0277a3"},
+        {"id": "p5", "title": "RTV 365", "url": "https://365.rtvslo.si", "mark": "🎬", "bg": "linear-gradient(145deg, #062a38, #0277a3)", "color": "#0277a3"},
         {"id": "p6", "title": "ChatGPT AI", "url": "https://chatgpt.com", "mark": "🤖", "bg": "linear-gradient(145deg, #063c2f, #10a37f)", "color": "#10a37f"},
         {"id": "p7", "title": "CryptoQuant", "url": "https://cryptoquant.com", "mark": "📊", "bg": "linear-gradient(145deg, #3d2303, #d97706)", "color": "#f59e0b"},
         {"id": "p8", "title": "GitHub", "url": "https://github.com", "mark": "🐙", "bg": "linear-gradient(145deg, #1b1f24, #24292e)", "color": "#24292e"}
@@ -112,6 +112,20 @@ class ConfigManager:
                     # If youtube was previously in integrations, remove it as requested
                     if "integrations" in merged and "youtube" in merged["integrations"]:
                         del merged["integrations"]["youtube"]
+                    # Migration: migrate hydrahd.ws to 365.rtvslo.si and disable sample script
+                    migrated = False
+                    for p in merged.get("custom_portals", []):
+                        if "hydrahd.ws" in p.get("url", ""):
+                            p["url"] = "https://365.rtvslo.si"
+                            if p.get("title") in ("Filmi & Serije", "Filmi"):
+                                p["title"] = "RTV 365"
+                            migrated = True
+                    for s in merged.get("user_scripts", []):
+                        if s.get("id") == "sample_banner_cleaner" and s.get("enabled") is True:
+                            s["enabled"] = False
+                            migrated = True
+                    if migrated:
+                        self.save_settings(merged)
                     return merged
             except Exception as e:
                 print(f"[Config] Napaka pri branju nastavitev: {e}")
