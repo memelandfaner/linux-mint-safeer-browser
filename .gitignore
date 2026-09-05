@@ -9,3 +9,7 @@ htmlcov/
 *.swo
 *~
 .DS_Store
+build/
+dist/
+*.deb
+*.tar.gz

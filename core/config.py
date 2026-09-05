@@ -5,6 +5,7 @@ Manages user preferences, modular sidebar integrations, and virtual keyboard set
 """
 
 import os
+import re
 import json
 import uuid
 import urllib.parse
@@ -437,4 +438,44 @@ class ConfigManager:
         default_p = [dict(p) for p in DEFAULT_SETTINGS["custom_portals"]]
         self.save_portals(default_p)
         return default_p
+
+    def import_bookmarks_from_html(self, file_path: str) -> int:
+        """
+        Uvozi zaznamke iz izvožene HTML datoteke (Firefox, Chrome, Brave, Edge itd.).
+        Prepreči podvajanje obstoječih povezav in shrani v konfiguracijo.
+        Vrne število na novo dodanih zaznamkov.
+        """
+        try:
+            from core.bookmarks_importer import parse_bookmarks_html
+            items = parse_bookmarks_html(file_path)
+            if not items:
+                return 0
+
+            portals = self.get_portals()
+            existing_urls = {re.sub(r"/+$", "", p.get("url", "").strip()).lower() for p in portals if p.get("url")}
+
+            added_count = 0
+            for item in items:
+                u = item.get("url", "").strip()
+                norm_key = re.sub(r"/+$", "", u).lower()
+                if norm_key in existing_urls:
+                    continue
+                p_id = "p_" + str(uuid.uuid4())[:8]
+                portals.append({
+                    "id": p_id,
+                    "title": item.get("title", "").strip() or "Uvožen zaznamek",
+                    "url": u,
+                    "mark": item.get("mark", "🌐"),
+                    "bg": item.get("bg", f"linear-gradient(145deg, #091a28, {item.get('color', '#00d2ff')})"),
+                    "color": item.get("color", "#00d2ff")
+                })
+                existing_urls.add(norm_key)
+                added_count += 1
+
+            if added_count > 0:
+                self.save_portals(portals)
+            return added_count
+        except Exception as e:
+            print(f"[ConfigManager] Napaka pri uvozu zaznamkov: {e}")
+            return 0
 

@@ -3017,6 +3017,11 @@ class SafeerMintBrowser(Gtk.Window):
         btn_add_p_tab.get_style_context().add_class("btn-primary-glow")
         portals_top_bar.pack_end(btn_add_p_tab, False, False, 0)
 
+        btn_import_p_tab = Gtk.Button(label=f"📥 {t('import_bookmarks')}")
+        btn_import_p_tab.get_style_context().add_class("nav-btn")
+        btn_import_p_tab.set_tooltip_text(t("import_bookmarks_desc"))
+        portals_top_bar.pack_end(btn_import_p_tab, False, False, 0)
+
         btn_res_p_tab = Gtk.Button(label=f"🔄 {t('reset_default')}")
         btn_res_p_tab.get_style_context().add_class("btn-delete")
         portals_top_bar.pack_end(btn_res_p_tab, False, False, 0)
@@ -3114,6 +3119,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         populate_tab_portals()
         btn_add_p_tab.connect("clicked", lambda b: self.open_portal_editor_dialog(None, on_saved=populate_tab_portals))
+        btn_import_p_tab.connect("clicked", lambda b: self.open_bookmarks_import_dialog(on_imported=populate_tab_portals))
         def on_reset_tab_click(b):
             self.config.reset_portals()
             self.broadcast_portals_update()
@@ -3454,6 +3460,56 @@ class SafeerMintBrowser(Gtk.Window):
 
         dialog.destroy()
 
+    def open_bookmarks_import_dialog(self, on_imported=None):
+        """Odpre izbirnik datotek za uvoz zaznamkov iz standardne HTML datoteke (Firefox, Chrome, Brave itd.)."""
+        file_chooser = Gtk.FileChooserNative(
+            title=f"📥 {t('import_file_title')}",
+            parent=self,
+            action=Gtk.FileChooserAction.OPEN,
+            accept_label=t("import_bookmarks"),
+            cancel_label=t("cancel")
+        )
+        filter_html = Gtk.FileFilter()
+        filter_html.set_name(t("import_html_filter"))
+        filter_html.add_mime_type("text/html")
+        filter_html.add_pattern("*.html")
+        filter_html.add_pattern("*.htm")
+        file_chooser.add_filter(filter_html)
+
+        filter_all = Gtk.FileFilter()
+        filter_all.set_name(t("all_files"))
+        filter_all.add_pattern("*")
+        file_chooser.add_filter(filter_all)
+
+        res = file_chooser.run()
+        if res == Gtk.ResponseType.ACCEPT:
+            filename = file_chooser.get_filename()
+            file_chooser.destroy()
+            if filename and os.path.exists(filename):
+                count = self.config.import_bookmarks_from_html(filename)
+                self.broadcast_portals_update()
+                if on_imported:
+                    on_imported()
+
+                if count > 0:
+                    msg = t("import_success").replace("{count}", str(count))
+                    msg_type = Gtk.MessageType.INFO
+                else:
+                    msg = t("import_no_new")
+                    msg_type = Gtk.MessageType.WARNING
+
+                info_dlg = Gtk.MessageDialog(
+                    transient_for=self,
+                    flags=0,
+                    message_type=msg_type,
+                    buttons=Gtk.ButtonsType.OK,
+                    text=f"📥 {msg}"
+                )
+                info_dlg.run()
+                info_dlg.destroy()
+        else:
+            file_chooser.destroy()
+
     def open_portals_dialog(self):
         """Samostojno okno za upravljanje priljubljenih strani in multimedije."""
         dialog = Gtk.Dialog(
@@ -3484,6 +3540,11 @@ class SafeerMintBrowser(Gtk.Window):
         btn_add = Gtk.Button(label=f"➕ {t('add_portal')}")
         btn_add.get_style_context().add_class("nav-btn")
         header_box.pack_end(btn_add, False, False, 0)
+
+        btn_import = Gtk.Button(label=f"📥 {t('import_bookmarks')}")
+        btn_import.get_style_context().add_class("nav-btn")
+        btn_import.set_tooltip_text(t("import_bookmarks_desc"))
+        header_box.pack_end(btn_import, False, False, 0)
 
         btn_reset = Gtk.Button(label=f"🔄 {t('reset_default')}")
         btn_reset.get_style_context().add_class("btn-delete")
@@ -3588,6 +3649,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         populate_portals()
         btn_add.connect("clicked", lambda b: self.open_portal_editor_dialog(None, on_saved=populate_portals))
+        btn_import.connect("clicked", lambda b: self.open_bookmarks_import_dialog(on_imported=populate_portals))
         def on_reset(b):
             self.config.reset_portals()
             self.broadcast_portals_update()
@@ -3631,6 +3693,8 @@ class SafeerMintBrowser(Gtk.Window):
                     self.open_portals_dialog()
                 elif service == "add_portal":
                     self.open_portal_editor_dialog(None)
+                elif service == "import_bookmarks":
+                    self.open_bookmarks_import_dialog()
                 else:
                     self.toggle_sidebar_panel(service)
         except Exception as e:
