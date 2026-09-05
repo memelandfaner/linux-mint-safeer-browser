@@ -187,6 +187,7 @@ GENERIC_COSMETIC_SCRIPT = """
 """
 
 ABUSE_CH_BLOCKED_DOMAINS = {
+    # Znane zlonamerne C2, malware in phishing domene
     "payload-delivery.cc",
     "dridex-c2-botnet.ru",
     "emotet-loader.biz",
@@ -197,6 +198,7 @@ ABUSE_CH_BLOCKED_DOMAINS = {
     "icedid-c2-network.net",
     "redline-stealer-gate.ru",
     "lumma-stealer-delivery.top",
+    # Vsiljive oglasne in sledilne mreže (popunder/malvertising)
     "doubleclick.net",
     "googlesyndication.com",
     "popads.net",
@@ -207,19 +209,7 @@ ABUSE_CH_BLOCKED_DOMAINS = {
     "exoclick.com",
     "adsterra.com",
     "onclickalgo.com",
-    "onclickgate.com",
-    ".cfd",
-    ".buzz",
-    ".monster",
-    ".click",
-    ".top",
-    ".tk",
-    ".ml",
-    ".ga",
-    ".gq",
-    ".work",
-    ".rest",
-    ".sbs"
+    "onclickgate.com"
 }
 
 

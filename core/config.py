@@ -7,7 +7,45 @@ Manages user preferences, modular sidebar integrations, and virtual keyboard set
 import os
 import json
 import uuid
+import urllib.parse
 from typing import Dict, Any
+
+
+def normalize_web_url(url: str) -> str:
+    """Validate and normalize a user-supplied web URL to safe http/https schemes."""
+    if not url:
+        return ""
+    cleaned = url.strip()
+    if not cleaned:
+        return ""
+
+    # If colon is present, determine if it is host:port or a URI scheme
+    if ":" in cleaned:
+        first_part, rest = cleaned.split(":", 1)
+        port_candidate = rest.split("/", 1)[0]
+        if port_candidate.isdigit():
+            cleaned = "http://" + cleaned
+        else:
+            try:
+                parsed = urllib.parse.urlparse(cleaned)
+                if parsed.scheme.lower() not in ("http", "https"):
+                    return ""
+                if not (parsed.netloc or parsed.hostname):
+                    return ""
+                return cleaned
+            except Exception:
+                return ""
+    else:
+        cleaned = "https://" + cleaned
+
+    try:
+        parsed = urllib.parse.urlparse(cleaned)
+        if parsed.scheme.lower() in ("http", "https") and (parsed.netloc or parsed.hostname):
+            return cleaned
+        return ""
+    except Exception:
+        return ""
+
 
 CONFIG_DIR = os.path.expanduser("~/.config/safeer-mint")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
@@ -60,6 +98,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "sidebar_width": 680,
     "search_engine": "google",
     "adblock_enabled": True,
+    "hardware_acceleration": "on_demand",  # "on_demand", "always", "never"
+    "permissions_policy": "ask",          # "ask", "allow", "deny"
     "homepage": "safeer://home",
     "integrations": {
         "messenger": {
@@ -184,8 +224,9 @@ class ConfigManager:
         """Doda poljubno novo spletno stran v stransko orodno vrstico."""
         if not name or not url:
             return ""
-        if not url.startswith("http://") and not url.startswith("https://"):
-            url = "https://" + url
+        norm_url = normalize_web_url(url)
+        if not norm_url:
+            return ""
 
         item_id = "custom_" + str(uuid.uuid4())[:8]
         if "integrations" not in self.settings:
@@ -193,7 +234,7 @@ class ConfigManager:
 
         self.settings["integrations"][item_id] = {
             "name": name.strip(),
-            "url": url.strip(),
+            "url": norm_url,
             "icon": icon.strip() if icon.strip() else "🌐",
             "enabled": True,
             "color": "#00d2ff"
@@ -284,13 +325,16 @@ class ConfigManager:
 
     def add_portal(self, title: str, url: str, mark: str = "🌐", bg: str = "", color: str = "#00d2ff") -> str:
         """Doda novo priljubljeno stran."""
+        norm_url = normalize_web_url(url)
+        if not norm_url:
+            return ""
         p_id = "p_" + str(uuid.uuid4())[:8]
         if not bg:
             bg = f"linear-gradient(145deg, #091a28, {color})"
         new_portal = {
             "id": p_id,
             "title": title.strip() or "Priljubljena stran",
-            "url": url.strip() or "https://",
+            "url": norm_url,
             "mark": mark.strip() or "🌐",
             "bg": bg,
             "color": color
@@ -302,11 +346,14 @@ class ConfigManager:
 
     def update_portal(self, portal_id: str, title: str, url: str, mark: str, bg: str = "", color: str = "") -> bool:
         """Posodobi obstoječo priljubljeno stran."""
+        norm_url = normalize_web_url(url)
+        if not norm_url:
+            return False
         portals = self.get_portals()
         for p in portals:
             if p.get("id") == portal_id:
                 p["title"] = title.strip()
-                p["url"] = url.strip()
+                p["url"] = norm_url
                 p["mark"] = mark.strip()
                 if color:
                     p["color"] = color

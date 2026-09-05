@@ -7,7 +7,10 @@ SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 cd "$DIR"
 
-SOCK_FILE="$HOME/.config/safeer-mint/safeer.sock"
+CONFIG_DIR="$HOME/.config/safeer-mint"
+mkdir -p "$CONFIG_DIR"
+SOCK_FILE="$CONFIG_DIR/safeer.sock"
+LOCK_FILE="$CONFIG_DIR/safeer.lock"
 
 # Če Safeer že teče, nemudoma posreduj povezavo prek Unix socketa v nov zavihek
 if [ -S "$SOCK_FILE" ]; then
@@ -41,8 +44,24 @@ except Exception:
     sys.exit(1)
 " 2>/dev/null && exit 0
     fi
-    # Če je socket neaktiven (stale socket), ga odstranimo
-    rm -f "$SOCK_FILE"
+
+    # Socket ni odziven (stale socket) — varno ga odstranimo z atomskim flock zaklepom
+    (
+        flock -x 200 2>/dev/null || true
+        if ! python3 -c "
+import socket
+try:
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(0.5)
+    s.connect('$SOCK_FILE')
+    s.close()
+    exit(0)
+except Exception:
+    exit(1)
+" 2>/dev/null; then
+            rm -f "$SOCK_FILE"
+        fi
+    ) 200>"$LOCK_FILE"
 fi
 
 # 🚀 Strojno pospeševanje & VA-API Zero-Copy video cevovod (Linux Mint / Ubuntu)

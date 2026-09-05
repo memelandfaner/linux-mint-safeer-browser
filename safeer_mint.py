@@ -17,8 +17,8 @@ import urllib.parse
 from datetime import datetime
 import gi
 
-# Suppress GTK deprecation and driver warnings for clean, smooth console output
-warnings.filterwarnings("ignore")
+# Suppress specific non-critical PyGObject deprecation warnings while keeping runtime errors visible
+warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"gi\..*")
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('WebKit2', '4.1')
@@ -32,7 +32,7 @@ GLib.set_application_name("Safeer Browser")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
-from core.config import ConfigManager, SEARCH_ENGINES
+from core.config import ConfigManager, SEARCH_ENGINES, normalize_web_url
 from core.i18n import t, set_language, get_current_language, SUPPORTED_LANGUAGES
 from core.adblock import (
     YOUTUBE_ADBLOCK_SCRIPT,
@@ -45,6 +45,26 @@ from core.reader import READER_MODE_JS
 # Native WebKitGTK user agent matching Safari/WebKit engine to prevent Google CAPTCHA bot triggers
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
 DOCK_WIDTH = 54
+
+
+def is_safe_web_url(url: str) -> bool:
+    """Verifies that an external or navigation URL uses an authorized protocol."""
+    if not url:
+        return False
+    u = url.strip()
+    if u == "safeer://home" or u == "about:blank":
+        return True
+    if u.startswith("file://") and "/ui/" in u:
+        return True
+    try:
+        parsed = urllib.parse.urlparse(u)
+        scheme = parsed.scheme.lower()
+        if scheme in ("http", "https"):
+            return bool(parsed.netloc or parsed.hostname)
+        return False
+    except Exception:
+        return False
+
 
 
 class SafeerMintBrowser(Gtk.Window):
@@ -129,6 +149,13 @@ class SafeerMintBrowser(Gtk.Window):
         except Exception:
             pass
         try:
+            if hasattr(self, "lock_fd") and self.lock_fd:
+                import fcntl
+                try:
+                    fcntl.flock(self.lock_fd, fcntl.LOCK_UN)
+                    self.lock_fd.close()
+                except Exception:
+                    pass
             sock_path = os.path.join(self.config.config_dir, "safeer.sock")
             if os.path.exists(sock_path):
                 os.remove(sock_path)
@@ -137,9 +164,20 @@ class SafeerMintBrowser(Gtk.Window):
         return False
 
     def setup_ipc_socket(self):
-        """Lokalni Unix socket za vodenje ene same instance (odpiranje povezav iz drugih aplikacij v novih zavihkih)."""
+        """Lokalni Unix socket za vodenje ene same instance z atomskim fcntl zaklepom."""
         sock_path = os.path.join(self.config.config_dir, "safeer.sock")
+        lock_path = os.path.join(self.config.config_dir, "safeer.lock")
         try:
+            import fcntl
+            os.makedirs(self.config.config_dir, exist_ok=True)
+            self.lock_fd = open(lock_path, "w")
+            try:
+                fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except (BlockingIOError, OSError):
+                # Druga instanca že teče in drži zaklep
+                print("[IPC Socket] Druga instanca Safeer že teče; socket upravlja primarni proces.")
+                return
+
             if os.path.exists(sock_path):
                 try:
                     os.remove(sock_path)
@@ -183,13 +221,17 @@ class SafeerMintBrowser(Gtk.Window):
         if not url:
             return
         url_clean = url.strip()
-        # Varnost: dovoli samo varne spletne protokole in domačo stran (prepovej javascript:, file:, data: ipd.)
-        if url_clean.startswith("http://") or url_clean.startswith("https://") or url_clean == "safeer://home":
-            self.new_tab(url=url_clean, switch=True)
-        elif not ("://" in url_clean):
-            self.new_tab(url=url_clean, switch=True)
+        if not url_clean:
+            return
+        if url_clean == "safeer://home":
+            self.new_tab(url="safeer://home", switch=True)
+            return
+
+        norm_url = normalize_web_url(url_clean)
+        if norm_url and is_safe_web_url(norm_url):
+            self.new_tab(url=norm_url, switch=True)
         else:
-            print(f"[IPC Varnost] Zavrnjen nevaren protokol v URL: {url_clean}")
+            print(f"[IPC Varnost] Zavrnjen neveljaven ali nevaren URL: {url_clean}")
 
     def setup_persistent_storage(self):
         """Omogoči trajne seje, LocalStorage in IndexedDB za Messenger, Gmail, YouTube itd."""
@@ -1259,6 +1301,12 @@ class SafeerMintBrowser(Gtk.Window):
             req = navigation_action.get_request()
             uri = req.get_uri() if req else ""
             if uri:
+                if not is_safe_web_url(uri):
+                    print(f"[Create WebView Security] Zavrnjen nevaren protokol: {uri}")
+                    return None
+                if is_threat_domain(uri):
+                    self.show_threat_warning(uri)
+                    return None
                 if webview == self.sidebar_webview:
                     self.sidebar_webview.load_uri(uri)
                 else:
@@ -1268,13 +1316,17 @@ class SafeerMintBrowser(Gtk.Window):
         return None
 
     def on_decide_policy(self, webview, decision, decision_type):
-        """Obravnava zahteve za nova okna (target=_blank) in navigacijo."""
+        """Obravnava zahteve za nova okna (target=_blank) in navigacijo z dosledno sanitizacijo protokolov."""
         if decision_type == WebKit2.PolicyDecisionType.NEW_WINDOW_ACTION:
             try:
                 nav_action = decision.get_navigation_action()
                 req = nav_action.get_request()
                 uri = req.get_uri() if req else ""
                 if uri:
+                    if not is_safe_web_url(uri):
+                        print(f"[Policy Security] Blokiran nedovoljen protokol za novo okno: {uri}")
+                        decision.ignore()
+                        return True
                     if is_threat_domain(uri):
                         self.show_threat_warning(uri)
                         decision.ignore()
@@ -1292,20 +1344,24 @@ class SafeerMintBrowser(Gtk.Window):
                 nav_action = decision.get_navigation_action()
                 req = nav_action.get_request()
                 uri = req.get_uri() if req else ""
-                if uri and is_threat_domain(uri):
-                    self.show_threat_warning(uri)
-                    decision.ignore()
-                    return True
+                if uri:
+                    if not is_safe_web_url(uri):
+                        print(f"[Policy Security] Blokiran nedovoljen protokol navigacije: {uri}")
+                        decision.ignore()
+                        return True
+                    if is_threat_domain(uri):
+                        self.show_threat_warning(uri)
+                        decision.ignore()
+                        return True
 
-                nav_type = nav_action.get_navigation_type()
-                mouse_btn = nav_action.get_mouse_button()
-                modifiers = nav_action.get_modifiers()
-                # Srednji klik ali Ctrl + klik odpre zavihek v ozadju SAMO ob dejanskem kliku na povezavo!
-                if nav_type == WebKit2.NavigationType.LINK_CLICKED and (mouse_btn == 2 or (modifiers & Gdk.ModifierType.CONTROL_MASK)):
-                    if uri:
+                    nav_type = nav_action.get_navigation_type()
+                    mouse_btn = nav_action.get_mouse_button()
+                    modifiers = nav_action.get_modifiers()
+                    # Srednji klik ali Ctrl + klik odpre zavihek v ozadju SAMO ob dejanskem kliku na povezavo!
+                    if nav_type == WebKit2.NavigationType.LINK_CLICKED and (mouse_btn == 2 or (modifiers & Gdk.ModifierType.CONTROL_MASK)):
                         self.new_tab(url=uri, switch=False)
-                    decision.ignore()
-                    return True
+                        decision.ignore()
+                        return True
             except Exception as e:
                 print(f"[Policy Navigation] Napaka: {e}")
             decision.use()
@@ -1571,10 +1627,16 @@ class SafeerMintBrowser(Gtk.Window):
         settings.set_enable_encrypted_media(True)
         settings.set_user_agent(USER_AGENT)
 
-        # Strojno pospeševanje & 60fps Zero-Copy renderiranje (WebKitGTK 2025/2026)
+        # Strojno pospeševanje & stabilno renderiranje (WebKitGTK ON_DEMAND)
         try:
             if hasattr(WebKit2, "HardwareAccelerationPolicy"):
-                settings.set_hardware_acceleration_policy(WebKit2.HardwareAccelerationPolicy.ALWAYS)
+                hw_pref = self.config.get("hardware_acceleration", "on_demand")
+                if hw_pref == "always":
+                    settings.set_hardware_acceleration_policy(WebKit2.HardwareAccelerationPolicy.ALWAYS)
+                elif hw_pref == "never":
+                    settings.set_hardware_acceleration_policy(WebKit2.HardwareAccelerationPolicy.NEVER)
+                else:
+                    settings.set_hardware_acceleration_policy(WebKit2.HardwareAccelerationPolicy.ON_DEMAND)
             if hasattr(settings, "set_enable_accelerated_2d_canvas"):
                 settings.set_enable_accelerated_2d_canvas(True)
             if hasattr(settings, "set_enable_mediasource"):
@@ -1584,16 +1646,70 @@ class SafeerMintBrowser(Gtk.Window):
         except Exception:
             pass
 
-        # Samodejno zavrni zahteve za kamero/mikrofon/geolokacijo
+        # Obravnava zahtev za dovoljenja (kamera, mikrofon, geolokacija)
         webview.connect("permission-request", self.on_permission_request)
 
     def on_permission_request(self, webview, request):
-        """Zavrni zahteve za dostop do kamere, mikrofona ali geolokacije za zaščito zasebnosti."""
+        """Obravnava zahteve za dostop do kamere, mikrofona ali geolokacije z možnostjo privolitve uporabnika."""
         try:
-            request.deny()
+            policy = self.config.get("permissions_policy", "ask")
+            if policy == "deny":
+                request.deny()
+                return True
+            elif policy == "allow":
+                request.allow()
+                return True
+
+            perm_name = "dostop do naprav"
+            req_class = request.__class__.__name__
+            if "UserMedia" in req_class:
+                is_audio = getattr(request, "is_for_audio_device", lambda: False)()
+                is_video = getattr(request, "is_for_video_device", lambda: False)()
+                if is_audio and is_video:
+                    perm_name = "mikrofon in spletno kamero"
+                elif is_audio:
+                    perm_name = "mikrofon"
+                elif is_video:
+                    perm_name = "spletno kamero"
+            elif "Geolocation" in req_class:
+                perm_name = "geolokacijo naprave"
+            elif "Notification" in req_class:
+                perm_name = "pošiljanje sistemskih obvestil"
+
+            uri = webview.get_uri() or ""
+            domain = ""
+            try:
+                domain = urllib.parse.urlparse(uri).netloc or uri
+            except Exception:
+                domain = uri
+
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=Gtk.DialogFlags.MODAL,
+                type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.NONE,
+                text=f"Dovoljenje za {perm_name}"
+            )
+            dialog.format_secondary_text(f"Spletna stran '{domain}' zahteva dovoljenje za: {perm_name}.\nAli dovolite dostop?")
+            dialog.add_button(t("cancel", "Zavrni"), Gtk.ResponseType.NO)
+            dialog.add_button("Dovoli", Gtk.ResponseType.YES)
+            dialog.set_default_response(Gtk.ResponseType.NO)
+
+            res = dialog.run()
+            dialog.destroy()
+
+            if res == Gtk.ResponseType.YES:
+                request.allow()
+            else:
+                request.deny()
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            print(f"[Permissions] Napaka pri obravnavi dovoljenja: {e}")
+            try:
+                request.deny()
+            except Exception:
+                pass
+            return True
 
     def create_keyboard_panel(self):
         self.keyboard_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -1951,8 +2067,14 @@ class SafeerMintBrowser(Gtk.Window):
             wv.load_uri(f"file://{home_path}")
             tab_title.set_text("Safeer Domača Stran")
             tab_icon.set_text("🍃")
-        else:
+        elif is_safe_web_url(target):
             wv.load_uri(target)
+        else:
+            print(f"[New Tab Security] Zavrnjen neveljaven ali nevaren URL: {target}")
+            home_path = os.path.join(BASE_DIR, "ui", "home.html")
+            wv.load_uri(f"file://{home_path}")
+            tab_title.set_text("Safeer Domača Stran")
+            tab_icon.set_text("🍃")
 
         if switch:
             self.switch_to_tab(tab_id)
