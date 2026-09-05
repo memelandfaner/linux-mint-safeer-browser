@@ -9,7 +9,7 @@ import re
 import json
 import uuid
 import urllib.parse
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 
 
 def normalize_web_url(url: str) -> str:
@@ -439,6 +439,45 @@ class ConfigManager:
         self.save_portals(default_p)
         return default_p
 
+    def import_bookmarks_items(self, items: List[Dict[str, Any]]) -> Tuple[int, int]:
+        """
+        Doda seznam zaznamkov med priljubljene portale, prepreči podvajanje in shrani.
+        Vrne (dodani_zaznamki, preskoceni_duplikati).
+        """
+        if not items:
+            return 0, 0
+
+        portals = self.get_portals()
+        existing_urls = {re.sub(r"/+$", "", p.get("url", "").strip()).lower() for p in portals if p.get("url")}
+
+        added_count = 0
+        skipped_count = 0
+
+        for item in items:
+            u = item.get("url", "").strip()
+            norm_key = re.sub(r"/+$", "", u).lower()
+            if norm_key in existing_urls:
+                skipped_count += 1
+                continue
+            p_id = "p_" + str(uuid.uuid4())[:8]
+            portals.append({
+                "id": p_id,
+                "title": item.get("title", "").strip() or "Uvožen zaznamek",
+                "url": u,
+                "mark": item.get("mark", "🌐"),
+                "bg": item.get("bg", f"linear-gradient(145deg, #091a28, {item.get('color', '#00d2ff')})"),
+                "color": item.get("color", "#00d2ff"),
+                "domain": item.get("domain", ""),
+                "favicon": item.get("favicon", ""),
+                "folder": item.get("folder", "")
+            })
+            existing_urls.add(norm_key)
+            added_count += 1
+
+        if added_count > 0:
+            self.save_portals(portals)
+        return added_count, skipped_count
+
     def import_bookmarks_from_html(self, file_path: str) -> int:
         """
         Uvozi zaznamke iz izvožene HTML datoteke (Firefox, Chrome, Brave, Edge itd.).
@@ -448,34 +487,42 @@ class ConfigManager:
         try:
             from core.bookmarks_importer import parse_bookmarks_html
             items = parse_bookmarks_html(file_path)
-            if not items:
-                return 0
-
-            portals = self.get_portals()
-            existing_urls = {re.sub(r"/+$", "", p.get("url", "").strip()).lower() for p in portals if p.get("url")}
-
-            added_count = 0
-            for item in items:
-                u = item.get("url", "").strip()
-                norm_key = re.sub(r"/+$", "", u).lower()
-                if norm_key in existing_urls:
-                    continue
-                p_id = "p_" + str(uuid.uuid4())[:8]
-                portals.append({
-                    "id": p_id,
-                    "title": item.get("title", "").strip() or "Uvožen zaznamek",
-                    "url": u,
-                    "mark": item.get("mark", "🌐"),
-                    "bg": item.get("bg", f"linear-gradient(145deg, #091a28, {item.get('color', '#00d2ff')})"),
-                    "color": item.get("color", "#00d2ff")
-                })
-                existing_urls.add(norm_key)
-                added_count += 1
-
-            if added_count > 0:
-                self.save_portals(portals)
-            return added_count
+            added, _ = self.import_bookmarks_items(items)
+            return added
         except Exception as e:
-            print(f"[ConfigManager] Napaka pri uvozu zaznamkov: {e}")
+            print(f"[ConfigManager] Napaka pri uvozu zaznamkov iz HTML: {e}")
             return 0
+
+    def auto_import_from_browser(self, browser_type: str = "all") -> Dict[str, Any]:
+        """
+        Samodejno uvozi zaznamke neposredno iz profilov nameščenih brskalnikov.
+        browser_type: 'all', 'firefox', 'chrome', 'brave'
+        Vrne slovar z rezultati: {'added': int, 'skipped': int, 'total': int, 'stats': dict}
+        """
+        try:
+            from core.bookmarks_importer import (
+                auto_import_all_profiles,
+                import_from_firefox_profiles,
+                import_from_chromium_profiles
+            )
+            if browser_type == "firefox":
+                items = import_from_firefox_profiles()
+                stats = {"Firefox": len(items)}
+            elif browser_type in ["chrome", "brave", "chromium"]:
+                items = import_from_chromium_profiles()
+                stats = {"Chrome/Brave": len(items)}
+            else:
+                items, stats = auto_import_all_profiles()
+
+            added, skipped = self.import_bookmarks_items(items)
+            return {
+                "added": added,
+                "skipped": skipped,
+                "total": len(items),
+                "stats": stats
+            }
+        except Exception as e:
+            print(f"[ConfigManager] Napaka pri samodejnem uvozu: {e}")
+            return {"added": 0, "skipped": 0, "total": 0, "stats": {}}
+
 

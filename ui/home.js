@@ -370,7 +370,32 @@ function renderPortals() {
 
     const markSpan = document.createElement('span');
     markSpan.className = 'portal-mark';
-    markSpan.textContent = portal.mark || '🌐';
+
+    let domain = portal.domain || '';
+    if (!domain && portal.url) {
+      try {
+        domain = new URL(portal.url).hostname;
+      } catch (e) {}
+    }
+
+    if (domain && domain.includes('.')) {
+      const img = document.createElement('img');
+      img.src = portal.favicon || `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+      img.alt = '';
+      img.className = 'portal-favicon';
+      img.style.width = '24px';
+      img.style.height = '24px';
+      img.style.borderRadius = '5px';
+      img.style.objectFit = 'contain';
+      img.style.verticalAlign = 'middle';
+      img.onerror = function() {
+        img.remove();
+        markSpan.textContent = portal.mark || '🌐';
+      };
+      markSpan.appendChild(img);
+    } else {
+      markSpan.textContent = portal.mark || '🌐';
+    }
 
     const titleSpan = document.createElement('span');
     titleSpan.className = 'portal-title';

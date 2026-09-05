@@ -8,12 +8,14 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_NAME="safeer-browser"
 VERSION="1.0.4"
-ARCH="amd64"
+ARCH="all"
 DEB_PACKAGE="${PKG_NAME}_${VERSION}_${ARCH}.deb"
+DEB_PACKAGE_AMD64="${PKG_NAME}_${VERSION}_amd64.deb"
+TAR_PACKAGE="safeer-browser-linux.tar.gz"
 BUILD_ROOT="$DIR/build/deb"
 
 echo "=========================================================="
-echo "📦 Gradnja Debian paketa: $DEB_PACKAGE"
+echo "📦 Gradnja Debian paketa: $DEB_PACKAGE (in $DEB_PACKAGE_AMD64)"
 echo "=========================================================="
 
 # 1. Clean previous build tree
@@ -140,6 +142,12 @@ if [ -x /usr/bin/gtk-update-icon-cache ]; then
     /usr/bin/gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
 fi
 
+# Register Safeer Browser into Debian alternatives system for default browser
+if [ -x /usr/sbin/update-alternatives ] || [ -x /usr/bin/update-alternatives ]; then
+    update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/safeer 100 || true
+    update-alternatives --install /usr/bin/gnome-www-browser gnome-www-browser /usr/bin/safeer 100 || true
+fi
+
 exit 0
 EOF
 chmod 755 "$BUILD_ROOT/DEBIAN/postinst"
@@ -155,6 +163,10 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     if [ -x /usr/bin/gtk-update-icon-cache ]; then
         /usr/bin/gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
     fi
+    if [ -x /usr/sbin/update-alternatives ] || [ -x /usr/bin/update-alternatives ]; then
+        update-alternatives --remove x-www-browser /usr/bin/safeer 2>/dev/null || true
+        update-alternatives --remove gnome-www-browser /usr/bin/safeer 2>/dev/null || true
+    fi
 fi
 
 exit 0
@@ -169,19 +181,46 @@ chmod 755 "$BUILD_ROOT/DEBIAN/postinst"
 chmod 755 "$BUILD_ROOT/DEBIAN/postrm"
 chmod 755 "$BUILD_ROOT/usr/bin/safeer"
 
-# 8. Build Debian package
+# 8. Build Debian package (all architecture)
 echo "🔨 Izdelava paketa z dpkg-deb..."
 dpkg-deb --build --root-owner-group "$BUILD_ROOT" "$DIR/$DEB_PACKAGE"
 
-# 9. Verify package
+# Create amd64 clone for compatibility
+cp "$DIR/$DEB_PACKAGE" "$DIR/$DEB_PACKAGE_AMD64"
+
+# 9. Build portable tar.gz package
+echo "📦 Izdelava prenosnega arhiva: $TAR_PACKAGE..."
+tar -czf "$DIR/$TAR_PACKAGE" \
+    --exclude="__pycache__" \
+    --exclude="*.pyc" \
+    --exclude=".git" \
+    --exclude="build" \
+    -C "$DIR" \
+    safeer_mint.py core ui assets safeer-mint.sh install.sh uninstall.sh safeer-browser.desktop README.md LICENSE
+
+# 10. Generate SHA256SUMS
+echo "🔒 Računanje SHA256 kontrolnih vsot..."
+cd "$DIR"
+sha256sum "$DEB_PACKAGE" "$DEB_PACKAGE_AMD64" "$TAR_PACKAGE" > "$DIR/SHA256SUMS"
+
+# 11. Copy to safeer-web assets if repo exists
+WEB_ASSETS="$DIR/../safeer-web/assets/desktop"
+if [ -d "$WEB_ASSETS" ]; then
+    echo "🌐 Sinhronizacija s spletno stranjo safeer-web..."
+    cp "$DIR/$DEB_PACKAGE" "$WEB_ASSETS/"
+    cp "$DIR/$DEB_PACKAGE_AMD64" "$WEB_ASSETS/"
+    cp "$DIR/$TAR_PACKAGE" "$WEB_ASSETS/"
+    cp "$DIR/SHA256SUMS" "$WEB_ASSETS/"
+fi
+
+# 12. Verify package
 echo ""
 echo "=========================================================="
-echo "✅ PAKET USPEŠNO ZGRAJEN:"
-echo "   Datoteka: $DIR/$DEB_PACKAGE"
-SIZE=$(du -h "$DIR/$DEB_PACKAGE" | cut -f1)
-SHA=$(sha256sum "$DIR/$DEB_PACKAGE" | cut -d' ' -f1)
-echo "   Velikost: $SIZE"
-echo "   SHA-256 : $SHA"
+echo "✅ PAKETI USPEŠNO ZGRAJENI:"
+echo "   All-Arch .deb: $DIR/$DEB_PACKAGE"
+echo "   AMD64    .deb: $DIR/$DEB_PACKAGE_AMD64"
+echo "   Portable tar : $DIR/$TAR_PACKAGE"
+cat "$DIR/SHA256SUMS"
 echo "=========================================================="
 echo ""
 echo "Preverjanje vsebine paketa:"

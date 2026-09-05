@@ -3527,54 +3527,134 @@ class SafeerMintBrowser(Gtk.Window):
         dialog.destroy()
 
     def open_bookmarks_import_dialog(self, on_imported=None):
-        """Odpre izbirnik datotek za uvoz zaznamkov iz standardne HTML datoteke (Firefox, Chrome, Brave itd.)."""
-        file_chooser = Gtk.FileChooserNative(
-            title=f"📥 {t('import_file_title')}",
+        """Odpre interaktivni dialog za 1-klik uvoz zaznamkov neposredno iz Firefoxa, Chroma, Brave ali HTML datoteke."""
+        from core.bookmarks_importer import detect_browser_profiles
+
+        detected = detect_browser_profiles()
+
+        dialog = Gtk.Dialog(
+            title=f"📥 {t('import_1click_title')}",
             parent=self,
-            action=Gtk.FileChooserAction.OPEN,
-            accept_label=t("import_bookmarks"),
-            cancel_label=t("cancel")
+            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT
         )
-        filter_html = Gtk.FileFilter()
-        filter_html.set_name(t("import_html_filter"))
-        filter_html.add_mime_type("text/html")
-        filter_html.add_pattern("*.html")
-        filter_html.add_pattern("*.htm")
-        file_chooser.add_filter(filter_html)
+        dialog.set_default_size(520, 360)
+        dialog.set_resizable(False)
+        dialog.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
+        dialog.get_style_context().add_class("customizer-dialog")
 
-        filter_all = Gtk.FileFilter()
-        filter_all.set_name(t("all_files"))
-        filter_all.add_pattern("*")
-        file_chooser.add_filter(filter_all)
+        btn_cancel = dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
+        btn_cancel.get_style_context().add_class("customizer-close-btn")
 
-        res = file_chooser.run()
-        if res == Gtk.ResponseType.ACCEPT:
-            filename = file_chooser.get_filename()
-            file_chooser.destroy()
-            if filename and os.path.exists(filename):
-                count = self.config.import_bookmarks_from_html(filename)
-                self.broadcast_portals_update()
-                if on_imported:
-                    on_imported()
+        content = dialog.get_content_area()
+        content.set_spacing(12)
+        content.set_margin_top(16)
+        content.set_margin_bottom(16)
+        content.set_margin_start(20)
+        content.set_margin_end(20)
 
-                if count > 0:
-                    msg = t("import_success").replace("{count}", str(count))
-                    msg_type = Gtk.MessageType.INFO
-                else:
-                    msg = t("import_no_new")
-                    msg_type = Gtk.MessageType.WARNING
+        # Header Title & Description
+        head_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        lbl_h1 = Gtk.Label()
+        lbl_h1.set_markup(f"<span size='large' weight='bold' color='#00d2ff'>📥 {t('import_1click_title')}</span>")
+        lbl_h1.set_xalign(0)
+        lbl_desc = Gtk.Label()
+        lbl_desc.set_text(t("import_bookmarks_desc"))
+        lbl_desc.set_line_wrap(True)
+        lbl_desc.set_xalign(0)
+        lbl_desc.get_style_context().add_class("dim-label")
+        head_box.pack_start(lbl_h1, False, False, 0)
+        head_box.pack_start(lbl_desc, False, False, 0)
+        content.pack_start(head_box, False, False, 0)
 
-                info_dlg = Gtk.MessageDialog(
-                    transient_for=self,
-                    flags=0,
-                    message_type=msg_type,
-                    buttons=Gtk.ButtonsType.OK,
-                    text=f"📥 {msg}"
-                )
-                info_dlg.run()
-                info_dlg.destroy()
-        else:
-            file_chooser.destroy()
+        # Actions Box
+        actions_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+
+        def handle_import_result(res):
+            dialog.destroy()
+            added = res.get("added", 0)
+            skipped = res.get("skipped", 0)
+            self.broadcast_portals_update()
+            if on_imported:
+                on_imported()
+
+            if added > 0:
+                msg = t("import_success").replace("{count}", str(added)).replace("{skipped}", str(skipped))
+                msg_type = Gtk.MessageType.INFO
+            else:
+                msg = t("import_no_new")
+                msg_type = Gtk.MessageType.WARNING
+
+            info_dlg = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=msg_type,
+                buttons=Gtk.ButtonsType.OK,
+                text=f"📥 {msg}"
+            )
+            info_dlg.run()
+            info_dlg.destroy()
+
+        # 1. Firefox Option
+        if "firefox" in detected:
+            btn_ff = Gtk.Button(label=t("import_from_firefox"))
+            btn_ff.get_style_context().add_class("suggested-action")
+            btn_ff.connect("clicked", lambda b: handle_import_result(self.config.auto_import_from_browser("firefox")))
+            actions_box.pack_start(btn_ff, False, False, 0)
+
+        # 2. Chrome / Brave Option
+        if "chrome" in detected or "brave" in detected or "chromium" in detected:
+            btn_cr = Gtk.Button(label=t("import_from_chrome"))
+            btn_cr.get_style_context().add_class("suggested-action")
+            btn_cr.connect("clicked", lambda b: handle_import_result(self.config.auto_import_from_browser("chrome")))
+            actions_box.pack_start(btn_cr, False, False, 0)
+
+        # 3. Import All Option (if both or multiple detected)
+        if len(detected) > 1:
+            btn_all = Gtk.Button(label=t("import_all_auto"))
+            btn_all.connect("clicked", lambda b: handle_import_result(self.config.auto_import_from_browser("all")))
+            actions_box.pack_start(btn_all, False, False, 0)
+
+        # 4. Netscape HTML file chooser fallback
+        def open_file_chooser_sub(b):
+            dialog.destroy()
+            file_chooser = Gtk.FileChooserNative(
+                title=f"📥 {t('import_file_title')}",
+                parent=self,
+                action=Gtk.FileChooserAction.OPEN,
+                accept_label=t("import_bookmarks"),
+                cancel_label=t("cancel")
+            )
+            filter_html = Gtk.FileFilter()
+            filter_html.set_name(t("import_html_filter"))
+            filter_html.add_mime_type("text/html")
+            filter_html.add_pattern("*.html")
+            filter_html.add_pattern("*.htm")
+            file_chooser.add_filter(filter_html)
+
+            filter_all = Gtk.FileFilter()
+            filter_all.set_name(t("all_files"))
+            filter_all.add_pattern("*")
+            file_chooser.add_filter(filter_all)
+
+            res = file_chooser.run()
+            if res == Gtk.ResponseType.ACCEPT:
+                filename = file_chooser.get_filename()
+                file_chooser.destroy()
+                if filename and os.path.exists(filename):
+                    count = self.config.import_bookmarks_from_html(filename)
+                    handle_import_result({"added": count, "skipped": 0})
+            else:
+                file_chooser.destroy()
+
+        btn_html = Gtk.Button(label=t("import_from_html_btn"))
+        btn_html.connect("clicked", open_file_chooser_sub)
+        actions_box.pack_start(btn_html, False, False, 0)
+
+        content.pack_start(actions_box, True, True, 0)
+        dialog.show_all()
+        res = dialog.run()
+        if res == Gtk.ResponseType.CANCEL:
+            dialog.destroy()
 
     def open_portals_dialog(self):
         """Samostojno okno za upravljanje priljubljenih strani in multimedije."""
