@@ -3023,7 +3023,7 @@ class SafeerMintBrowser(Gtk.Window):
         portals_tab_box.pack_start(portals_top_bar, False, False, 0)
 
         p_scroll = Gtk.ScrolledWindow()
-        p_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        p_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         p_scroll.set_vexpand(True)
         p_scroll.set_hexpand(True)
         p_scroll.set_min_content_height(340)
@@ -3037,9 +3037,36 @@ class SafeerMintBrowser(Gtk.Window):
                 p_list_box.remove(child)
 
             portals = self.config.get_portals()
-            for p in portals:
-                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            for idx, p in enumerate(portals):
+                p_id = p.get("id")
+                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
                 row.get_style_context().add_class("item-card-row")
+
+                # Reordering buttons (Move Up / Move Down)
+                reorder_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+                btn_up = Gtk.Button(label="⬆️")
+                btn_up.set_tooltip_text(t("move_up", "Premakni navzgor"))
+                btn_up.get_style_context().add_class("nav-btn")
+                btn_up.set_sensitive(idx > 0)
+                def on_move_tab_up(b, pid=p_id):
+                    self.config.move_portal_up(pid)
+                    self.broadcast_portals_update()
+                    populate_tab_portals()
+                btn_up.connect("clicked", on_move_tab_up)
+
+                btn_down = Gtk.Button(label="⬇️")
+                btn_down.set_tooltip_text(t("move_down", "Premakni navzdol"))
+                btn_down.get_style_context().add_class("nav-btn")
+                btn_down.set_sensitive(idx < len(portals) - 1)
+                def on_move_tab_down(b, pid=p_id):
+                    self.config.move_portal_down(pid)
+                    self.broadcast_portals_update()
+                    populate_tab_portals()
+                btn_down.connect("clicked", on_move_tab_down)
+
+                reorder_box.pack_start(btn_up, False, False, 0)
+                reorder_box.pack_start(btn_down, False, False, 0)
+                row.pack_start(reorder_box, False, False, 2)
 
                 badge = Gtk.Label(label=p.get("mark", "🌐"))
                 badge.set_width_chars(3)
@@ -3047,30 +3074,40 @@ class SafeerMintBrowser(Gtk.Window):
                 row.pack_start(badge, False, False, 4)
 
                 info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-                lbl_title = Gtk.Label(label=f"<b>{GLib.markup_escape_text(p.get('title', ''))}</b>")
+                info_box.set_hexpand(True)
+
+                escaped_title = GLib.markup_escape_text(p.get('title', ''))
+                lbl_title = Gtk.Label(label=f"<b>{escaped_title}</b>")
                 lbl_title.set_use_markup(True)
                 lbl_title.set_xalign(0.0)
+                lbl_title.set_ellipsize(Pango.EllipsizeMode.END)
+
                 lbl_url = Gtk.Label(label=p.get('url', ''))
                 lbl_url.set_xalign(0.0)
+                lbl_url.set_ellipsize(Pango.EllipsizeMode.END)
                 lbl_url.get_style_context().add_class("text-muted")
+
                 info_box.pack_start(lbl_title, False, False, 0)
                 info_box.pack_start(lbl_url, False, False, 0)
                 row.pack_start(info_box, True, True, 0)
 
+                actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
                 btn_edit = Gtk.Button(label=f"✏️ {t('edit')}")
                 btn_edit.get_style_context().add_class("nav-btn")
                 btn_edit.connect("clicked", lambda b, prt=p: self.open_portal_editor_dialog(prt, on_saved=populate_tab_portals))
-                row.pack_end(btn_edit, False, False, 4)
+                actions_box.pack_start(btn_edit, False, False, 0)
 
                 btn_del = Gtk.Button(label="🗑️")
+                btn_del.set_tooltip_text(t("delete", "Izbriši"))
                 btn_del.get_style_context().add_class("btn-delete")
-                def on_delete_tab(b, pid=p.get("id")):
+                def on_delete_tab(b, pid=p_id):
                     self.config.delete_portal(pid)
                     self.broadcast_portals_update()
                     populate_tab_portals()
                 btn_del.connect("clicked", on_delete_tab)
-                row.pack_end(btn_del, False, False, 0)
+                actions_box.pack_start(btn_del, False, False, 0)
 
+                row.pack_end(actions_box, False, False, 0)
                 p_list_box.pack_start(row, False, False, 0)
 
             p_list_box.show_all()
@@ -3407,7 +3444,7 @@ class SafeerMintBrowser(Gtk.Window):
             p_bg = f"linear-gradient(145deg, #091a28, {p_color})"
 
             if is_edit:
-                self.config.update_portal(portal["id"], title=p_title, url=p_url, mark=p_mark, bg=p_bg, color=p_color)
+                self.config.update_portal(portal.get("id"), title=p_title, url=p_url, mark=p_mark, bg=p_bg, color=p_color)
             else:
                 self.config.add_portal(title=p_title, url=p_url, mark=p_mark, bg=p_bg, color=p_color)
 
@@ -3439,7 +3476,7 @@ class SafeerMintBrowser(Gtk.Window):
         content.set_margin_end(16)
 
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        lbl_head = Gtk.Label(label=f"<b>⭐ {t('portals_title')}</b>")
+        lbl_head = Gtk.Label(label=f"<b>⭐ {GLib.markup_escape_text(t('portals_title'))}</b>")
         lbl_head.set_use_markup(True)
         lbl_head.set_xalign(0.0)
         header_box.pack_start(lbl_head, True, True, 0)
@@ -3458,7 +3495,7 @@ class SafeerMintBrowser(Gtk.Window):
         content.pack_start(lbl_sub, False, False, 0)
 
         scroll = Gtk.ScrolledWindow()
-        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
         scroll.set_hexpand(True)
         scroll.set_min_content_height(360)
@@ -3472,40 +3509,78 @@ class SafeerMintBrowser(Gtk.Window):
                 list_box.remove(child)
 
             portals = self.config.get_portals()
-            for p in portals:
-                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            for idx, p in enumerate(portals):
+                p_id = p.get("id")
+                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
                 row.get_style_context().add_class("user-script-row")
                 row.set_margin_top(4)
                 row.set_margin_bottom(4)
 
+                # Reordering buttons (Move Up / Move Down)
+                reorder_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+                btn_up = Gtk.Button(label="⬆️")
+                btn_up.set_tooltip_text(t("move_up", "Premakni navzgor"))
+                btn_up.get_style_context().add_class("nav-btn")
+                btn_up.set_sensitive(idx > 0)
+                def on_move_p_up(b, pid=p_id):
+                    self.config.move_portal_up(pid)
+                    self.broadcast_portals_update()
+                    populate_portals()
+                btn_up.connect("clicked", on_move_p_up)
+
+                btn_down = Gtk.Button(label="⬇️")
+                btn_down.set_tooltip_text(t("move_down", "Premakni navzdol"))
+                btn_down.get_style_context().add_class("nav-btn")
+                btn_down.set_sensitive(idx < len(portals) - 1)
+                def on_move_p_down(b, pid=p_id):
+                    self.config.move_portal_down(pid)
+                    self.broadcast_portals_update()
+                    populate_portals()
+                btn_down.connect("clicked", on_move_p_down)
+
+                reorder_box.pack_start(btn_up, False, False, 0)
+                reorder_box.pack_start(btn_down, False, False, 0)
+                row.pack_start(reorder_box, False, False, 2)
+
                 badge = Gtk.Label(label=p.get("mark", "🌐"))
                 badge.set_width_chars(3)
-                row.pack_start(badge, False, False, 6)
+                row.pack_start(badge, False, False, 4)
 
                 info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-                lbl_title = Gtk.Label(label=f"<b>{p.get('title', '')}</b>")
+                info_box.set_hexpand(True)
+
+                escaped_title = GLib.markup_escape_text(p.get('title', ''))
+                lbl_title = Gtk.Label(label=f"<b>{escaped_title}</b>")
                 lbl_title.set_use_markup(True)
                 lbl_title.set_xalign(0.0)
+                lbl_title.set_ellipsize(Pango.EllipsizeMode.END)
+
                 lbl_url = Gtk.Label(label=p.get('url', ''))
                 lbl_url.set_xalign(0.0)
+                lbl_url.set_ellipsize(Pango.EllipsizeMode.END)
                 lbl_url.get_style_context().add_class("text-muted")
+
                 info_box.pack_start(lbl_title, False, False, 0)
                 info_box.pack_start(lbl_url, False, False, 0)
                 row.pack_start(info_box, True, True, 0)
 
+                actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
                 btn_edit = Gtk.Button(label=f"✏️ {t('edit')}")
                 btn_edit.get_style_context().add_class("nav-btn")
                 btn_edit.connect("clicked", lambda b, prt=p: self.open_portal_editor_dialog(prt, on_saved=populate_portals))
-                row.pack_end(btn_edit, False, False, 4)
+                actions_box.pack_start(btn_edit, False, False, 0)
 
                 btn_del = Gtk.Button(label="🗑️")
+                btn_del.set_tooltip_text(t("delete", "Izbriši"))
                 btn_del.get_style_context().add_class("btn-delete")
-                def on_delete(b, pid=p.get("id")):
+                def on_delete(b, pid=p_id):
                     self.config.delete_portal(pid)
                     self.broadcast_portals_update()
                     populate_portals()
                 btn_del.connect("clicked", on_delete)
-                row.pack_end(btn_del, False, False, 0)
+                actions_box.pack_start(btn_del, False, False, 0)
+
+                row.pack_end(actions_box, False, False, 0)
 
                 list_box.pack_start(row, False, False, 0)
 

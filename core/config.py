@@ -326,11 +326,29 @@ class ConfigManager:
     # Upravljanje Priljubljenih Strani in Portalov
     # -------------------------------------------------------------------------
     def get_portals(self):
-        """Vrne seznam priljubljenih strani in portalov."""
+        """Vrne seznam priljubljenih strani in portalov ter zagotovi enolične ID-je."""
         portals = self.get("custom_portals", [])
         if not portals:
-            portals = list(DEFAULT_SETTINGS["custom_portals"])
+            portals = [dict(p) for p in DEFAULT_SETTINGS["custom_portals"]]
             self.set("custom_portals", portals)
+
+        modified = False
+        seen_ids = set()
+        for idx, p in enumerate(portals):
+            curr_id = p.get("id")
+            if not curr_id or curr_id in seen_ids:
+                p["id"] = f"p_{idx}_{str(uuid.uuid4())[:8]}"
+                modified = True
+            seen_ids.add(p["id"])
+            if not p.get("mark"):
+                p["mark"] = "🌐"
+                modified = True
+            if not p.get("title"):
+                p["title"] = p.get("url", "Priljubljena stran")
+                modified = True
+
+        if modified:
+            self.save_portals(portals)
         return portals
 
     def save_portals(self, portals):
@@ -380,17 +398,43 @@ class ConfigManager:
         return False
 
     def delete_portal(self, portal_id: str) -> bool:
-        """Izbriše priljubljeno stran."""
+        """Izbriše priljubljeno stran glede na ID ali URL."""
+        if not portal_id:
+            return False
         portals = self.get_portals()
-        new_portals = [p for p in portals if p.get("id") != portal_id]
+        new_portals = [p for p in portals if p.get("id") != portal_id and p.get("url") != portal_id]
         if len(new_portals) != len(portals):
             self.save_portals(new_portals)
             return True
         return False
 
+    def move_portal_up(self, portal_id: str) -> bool:
+        """Premakne priljubljeno stran eno mesto navzgor."""
+        if not portal_id:
+            return False
+        portals = self.get_portals()
+        for idx, p in enumerate(portals):
+            if p.get("id") == portal_id and idx > 0:
+                portals[idx], portals[idx - 1] = portals[idx - 1], portals[idx]
+                self.save_portals(portals)
+                return True
+        return False
+
+    def move_portal_down(self, portal_id: str) -> bool:
+        """Premakne priljubljeno stran eno mesto navzdol."""
+        if not portal_id:
+            return False
+        portals = self.get_portals()
+        for idx, p in enumerate(portals):
+            if p.get("id") == portal_id and idx < len(portals) - 1:
+                portals[idx], portals[idx + 1] = portals[idx + 1], portals[idx]
+                self.save_portals(portals)
+                return True
+        return False
+
     def reset_portals(self):
         """Ponastavi priljubljene strani na privzete."""
-        default_p = list(DEFAULT_SETTINGS["custom_portals"])
+        default_p = [dict(p) for p in DEFAULT_SETTINGS["custom_portals"]]
         self.save_portals(default_p)
         return default_p
 
