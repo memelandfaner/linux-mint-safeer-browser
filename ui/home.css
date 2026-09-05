@@ -433,3 +433,44 @@ body {
   font-weight: 700;
   text-align: center;
 }
+
+/* Security Disclaimer & Slogan Bar */
+.security-disclaimer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  background: rgba(0, 210, 255, 0.05);
+  border: 1px solid rgba(0, 210, 255, 0.2);
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  backdrop-filter: blur(10px);
+}
+
+.shield-badge-mini {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.disclaimer-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.disclaimer-text strong {
+  color: #e2e8f0;
+}
+
+.slogan-pill {
+  flex-shrink: 0;
+  background: rgba(135, 207, 62, 0.15);
+  color: var(--accent-mint);
+  border: 1px solid rgba(135, 207, 62, 0.35);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}

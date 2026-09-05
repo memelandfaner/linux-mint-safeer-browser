@@ -37,6 +37,9 @@ from core.i18n import t, set_language, get_current_language, SUPPORTED_LANGUAGES
 from core.adblock import (
     YOUTUBE_ADBLOCK_SCRIPT,
     GENERIC_COSMETIC_SCRIPT,
+    GPC_AND_DNT_SCRIPT,
+    ANTI_CLICKJACKING_SCRIPT,
+    strip_tracking_parameters,
     is_threat_domain,
     FORCE_DARK_MODE_CSS
 )
@@ -1316,7 +1319,7 @@ class SafeerMintBrowser(Gtk.Window):
         return None
 
     def on_decide_policy(self, webview, decision, decision_type):
-        """Obravnava zahteve za nova okna (target=_blank) in navigacijo z dosledno sanitizacijo protokolov."""
+        """Obravnava zahteve za nova okna (target=_blank) in navigacijo z dosledno sanitizacijo protokolov in zaščito zasebnosti."""
         if decision_type == WebKit2.PolicyDecisionType.NEW_WINDOW_ACTION:
             try:
                 nav_action = decision.get_navigation_action()
@@ -1328,9 +1331,12 @@ class SafeerMintBrowser(Gtk.Window):
                         decision.ignore()
                         return True
                     if is_threat_domain(uri):
+                        self.config.increment_threats_blocked(1)
                         self.show_threat_warning(uri)
                         decision.ignore()
                         return True
+                    if self.config.get("tracking_protection_enabled", True):
+                        uri = strip_tracking_parameters(uri)
                     if webview == self.sidebar_webview:
                         self.sidebar_webview.load_uri(uri)
                     else:
@@ -1350,9 +1356,18 @@ class SafeerMintBrowser(Gtk.Window):
                         decision.ignore()
                         return True
                     if is_threat_domain(uri):
+                        self.config.increment_threats_blocked(1)
                         self.show_threat_warning(uri)
                         decision.ignore()
                         return True
+
+                    # Napredno odstranjevanje sledilnih parametrov (UTM, fbclid, gclid, si, itd.)
+                    if self.config.get("tracking_protection_enabled", True):
+                        clean_uri = strip_tracking_parameters(uri)
+                        if clean_uri != uri:
+                            decision.ignore()
+                            webview.load_uri(clean_uri)
+                            return True
 
                     nav_type = nav_action.get_navigation_type()
                     mouse_btn = nav_action.get_mouse_button()
@@ -1836,6 +1851,7 @@ class SafeerMintBrowser(Gtk.Window):
             return
 
         if is_threat_domain(text):
+            self.config.increment_threats_blocked(1)
             self.show_threat_warning(text)
             return
 
@@ -1852,6 +1868,9 @@ class SafeerMintBrowser(Gtk.Window):
                 target = f"{engine_info['url']}{urllib.parse.quote_plus(text)}"
         else:
             target = text
+
+        if self.config.get("tracking_protection_enabled", True):
+            target = strip_tracking_parameters(target)
 
         wv = self.get_active_webview()
         if wv:
@@ -1935,7 +1954,18 @@ class SafeerMintBrowser(Gtk.Window):
         content_mgr.register_script_message_handler("safeer")
         content_mgr.connect("script-message-received::safeer", self.on_js_message)
 
-        # YouTube Adblock script
+        # 1. Global Privacy Control (GPC) & Do Not Track (DNT) W3C Engine
+        if self.config.get("gpc_dnt_enabled", True):
+            gpc_script = WebKit2.UserScript(
+                GPC_AND_DNT_SCRIPT,
+                WebKit2.UserContentInjectedFrames.ALL_FRAMES,
+                WebKit2.UserScriptInjectionTime.START,
+                None,
+                None
+            )
+            content_mgr.add_script(gpc_script)
+
+        # 2. YouTube Adblock script
         yt_script = WebKit2.UserScript(
             YOUTUBE_ADBLOCK_SCRIPT,
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
@@ -1945,7 +1975,7 @@ class SafeerMintBrowser(Gtk.Window):
         )
         content_mgr.add_script(yt_script)
 
-        # Cosmetic script
+        # 3. Cosmetic script
         gen_script = WebKit2.UserScript(
             GENERIC_COSMETIC_SCRIPT,
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
@@ -1954,6 +1984,16 @@ class SafeerMintBrowser(Gtk.Window):
             ["*://*.google.com/*", "*://*.google.si/*", "*://*.facebook.com/*", "*://*.messenger.com/*", "*://accounts.google.com/*", "*://*.banka.si/*"]
         )
         content_mgr.add_script(gen_script)
+
+        # 4. Anti-Clickjacking & Invisible Overlay Shield
+        clickjack_script = WebKit2.UserScript(
+            ANTI_CLICKJACKING_SCRIPT,
+            WebKit2.UserContentInjectedFrames.ALL_FRAMES,
+            WebKit2.UserScriptInjectionTime.END,
+            None,
+            ["file://*"]
+        )
+        content_mgr.add_script(clickjack_script)
 
         # Custom User Scripts Injection (Tampermonkey Engine)
         user_scripts = self.config.get_user_scripts()
@@ -2148,11 +2188,17 @@ class SafeerMintBrowser(Gtk.Window):
                             tab_item["title_label"].set_text(h_title)
                         if "icon_label" in tab_item and tab_item["icon_label"]:
                             tab_item["icon_label"].set_text("🍃")
-                        # Inject live custom portals into home.html
+                        # Inject live custom portals and shield metrics into home.html
                         portals = self.config.get_portals()
                         portals_json = json.dumps(portals)
                         lang = get_current_language()
-                        js = f"if (window.setCustomPortals) {{ window.setCustomPortals({portals_json}); }} if (window.setAppLanguage) {{ window.setAppLanguage('{lang}'); }}"
+                        ads_blocked = self.config.get("total_ads_blocked", 0)
+                        threats_blocked = self.config.get("total_threats_blocked", 0)
+                        js = (
+                            f"if (window.setCustomPortals) {{ window.setCustomPortals({portals_json}); }} "
+                            f"if (window.setAppLanguage) {{ window.setAppLanguage('{lang}'); }} "
+                            f"if (window.setShieldMetrics) {{ window.setShieldMetrics({ads_blocked}, {threats_blocked}); }}"
+                        )
                         webview.run_javascript(js, None, None, None)
                     break
 
@@ -3478,6 +3524,12 @@ class SafeerMintBrowser(Gtk.Window):
                 self.config.set("language", lang)
                 set_language(lang)
                 self.update_ui_language()
+            elif action == "increment_ads":
+                count = int(data.get("count", 1))
+                self.config.increment_ads_blocked(count)
+            elif action == "increment_threats":
+                count = int(data.get("count", 1))
+                self.config.increment_threats_blocked(count)
             elif action == "open_sidebar":
                 service = data.get("service")
                 if service == "settings":

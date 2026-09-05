@@ -11,8 +11,11 @@ const homeI18n = {
     shield_subtitle: "Linux Mint Suverena Izdaja",
     shield_status: "🛡️ ZAŠČITA AKTIVNA",
     lbl_ads: "Blokirani oglasi",
+    lbl_threats: "Preprečene grožnje",
     lbl_speed: "Odzivnost",
     lbl_oss: "Odprta koda",
+    security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Lokalni zaščitni sloj pred botneti, zlonamerno kodo in sledilci.",
+    slogan_safe: "Varnejši na spletu. Brez oglasov.",
     search_placeholder: "Iščite z Google ali vnesite spletni naslov...",
     search_submit: "Išči",
     quick_lbl: "Hitre možnosti:",
@@ -34,8 +37,11 @@ const homeI18n = {
     shield_subtitle: "Linux Mint Sovereign Edition",
     shield_status: "🛡️ SHIELD ACTIVE",
     lbl_ads: "Ads Blocked",
+    lbl_threats: "Threats Blocked",
     lbl_speed: "Latency",
     lbl_oss: "Open Source",
+    security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Local protection against botnets, malware, and trackers.",
+    slogan_safe: "Safer on the web. Zero ads.",
     search_placeholder: "Search with Google or enter web address...",
     search_submit: "Search",
     quick_lbl: "Quick Options:",
@@ -57,8 +63,11 @@ const homeI18n = {
     shield_subtitle: "Linux Mint Souveräne Edition",
     shield_status: "🛡️ SCHUTZ AKTIV",
     lbl_ads: "Blockierte Werbung",
+    lbl_threats: "Blockierte Bedrohungen",
     lbl_speed: "Latenz",
     lbl_oss: "Open Source",
+    security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Lokaler Schutz gegen Botnetze, Schadsoftware und Tracker.",
+    slogan_safe: "Sicherer im Web. Keine Werbung.",
     search_placeholder: "Mit Google suchen oder Adresse eingeben...",
     search_submit: "Suchen",
     quick_lbl: "Schnellzugriff:",
@@ -80,8 +89,11 @@ const homeI18n = {
     shield_subtitle: "Edición Soberana Linux Mint",
     shield_status: "🛡️ ESCUDO ACTIVO",
     lbl_ads: "Anuncios bloqueados",
+    lbl_threats: "Amenazas bloqueadas",
     lbl_speed: "Latencia",
     lbl_oss: "Código Abierto",
+    security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Protección local contra botnets, malware y rastreadores.",
+    slogan_safe: "Más seguro en la web. Cero anuncios.",
     search_placeholder: "Buscar en Google o escribir dirección...",
     search_submit: "Buscar",
     quick_lbl: "Accesos rápidos:",
@@ -103,8 +115,11 @@ const homeI18n = {
     shield_subtitle: "Édition Souveraine Linux Mint",
     shield_status: "🛡️ BOUCLIER ACTIF",
     lbl_ads: "Publicités bloquées",
+    lbl_threats: "Menaces bloquées",
     lbl_speed: "Latence",
     lbl_oss: "Open Source",
+    security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Protection locale contre les botnets, logiciels malveillants et traceurs.",
+    slogan_safe: "Plus sûr sur le web. Zéro publicité.",
     search_placeholder: "Rechercher avec Google ou entrer une adresse...",
     search_submit: "Chercher",
     quick_lbl: "Outils rapides:",
@@ -126,8 +141,11 @@ const homeI18n = {
     shield_subtitle: "Edizione Sovrana Linux Mint",
     shield_status: "🛡️ PROTEZIONE ATTIVA",
     lbl_ads: "Pubblicità bloccate",
+    lbl_threats: "Minacce bloccate",
     lbl_speed: "Latenza",
     lbl_oss: "Open Source",
+    security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Protezione locale contro botnet, malware e tracciamento.",
+    slogan_safe: "Più sicuro sul web. Zero pubblicità.",
     search_placeholder: "Cerca con Google o inserisci un indirizzo...",
     search_submit: "Cerca",
     quick_lbl: "Strumenti rapidi:",
@@ -156,7 +174,13 @@ function changeHomeLanguage(lang, notifyBackend = true) {
 
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
-    if (dict[key]) el.textContent = dict[key];
+    if (dict[key]) {
+      if (dict[key].includes('<')) {
+        el.innerHTML = dict[key];
+      } else {
+        el.textContent = dict[key];
+      }
+    }
   });
 
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
@@ -191,6 +215,13 @@ function changeHomeLanguage(lang, notifyBackend = true) {
 
 window.setAppLanguage = function(lang) {
   changeHomeLanguage(lang, false);
+};
+
+window.setShieldMetrics = function(ads, threats) {
+  const elAds = document.getElementById('adsCount');
+  if (elAds) elAds.textContent = Number(ads || 0).toLocaleString();
+  const elThreats = document.getElementById('threatsCount');
+  if (elThreats) elThreats.textContent = Number(threats || 0).toLocaleString();
 };
 
 const searchUrls = {

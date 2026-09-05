@@ -98,6 +98,10 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "sidebar_width": 680,
     "search_engine": "google",
     "adblock_enabled": True,
+    "tracking_protection_enabled": True,  # Odstranjevanje sledilnih parametrov (UTM, fbclid, gclid, si, itd.)
+    "gpc_dnt_enabled": True,             # W3C Global Privacy Control & Do Not Track signal
+    "total_ads_blocked": 0,              # Kumulativno število blokiranih oglasov
+    "total_threats_blocked": 0,          # Kumulativno število preprečenih groženj (C2, malware, phishing)
     "hardware_acceleration": "on_demand",  # "on_demand", "always", "never"
     "permissions_policy": "ask",          # "ask", "allow", "deny"
     "homepage": "safeer://home",
@@ -191,6 +195,16 @@ class ConfigManager:
     def set(self, key: str, value: Any) -> bool:
         self.settings[key] = value
         return self.save_settings()
+
+    def increment_ads_blocked(self, count: int = 1):
+        """Increments the cumulative blocked ads counter and saves settings."""
+        current = self.get("total_ads_blocked", 0)
+        self.set("total_ads_blocked", current + count)
+
+    def increment_threats_blocked(self, count: int = 1):
+        """Increments the cumulative blocked threats counter and saves settings."""
+        current = self.get("total_threats_blocked", 0)
+        self.set("total_threats_blocked", current + count)
 
     def toggle_virtual_keyboard(self) -> bool:
         new_state = not self.settings.get("virtual_keyboard_enabled", False)
