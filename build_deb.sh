@@ -38,6 +38,8 @@ find "$BUILD_ROOT/usr/lib/safeer-browser" -name "*.pyc" -delete 2>/dev/null || t
 # 3. Create launcher scripts in /usr/bin
 cat << 'EOF' > "$BUILD_ROOT/usr/bin/safeer"
 #!/usr/bin/env bash
+export PULSE_LATENCY_MSEC=120
+export GST_PULSE_BUFFER_MS=120
 exec python3 /usr/lib/safeer-browser/safeer_mint.py "$@"
 EOF
 chmod 755 "$BUILD_ROOT/usr/bin/safeer"

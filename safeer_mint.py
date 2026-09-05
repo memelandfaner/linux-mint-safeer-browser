@@ -20,6 +20,10 @@ import gi
 # Suppress specific non-critical PyGObject deprecation warnings while keeping runtime errors visible
 warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"gi\..*")
 
+# 🎵 Gladko predvajanje zvoka brez prekinitev (PipeWire / PulseAudio 120ms varnostni medpomnilnik)
+os.environ.setdefault("PULSE_LATENCY_MSEC", "120")
+os.environ.setdefault("GST_PULSE_BUFFER_MS", "120")
+
 gi.require_version('Gtk', '3.0')
 gi.require_version('WebKit2', '4.1')
 from gi.repository import Gtk, Gdk, WebKit2, GLib, Gio, Pango
@@ -39,6 +43,7 @@ from core.adblock import (
     GENERIC_COSMETIC_SCRIPT,
     GPC_AND_DNT_SCRIPT,
     ANTI_CLICKJACKING_SCRIPT,
+    TAB_THROTTLER_SCRIPT,
     strip_tracking_parameters,
     is_threat_domain,
     FORCE_DARK_MODE_CSS
@@ -250,7 +255,25 @@ class SafeerMintBrowser(Gtk.Window):
                 local_storage_directory=os.path.join(data_dir, "localstorage"),
                 websql_directory=os.path.join(data_dir, "websql")
             )
+            # Pametno upravljanje pomnilnika: redno čiščenje odvečnih medpomnilnikov in JS Garbage Collection
+            try:
+                mps = WebKit2.MemoryPressureSettings()
+                mps.set_conservative_threshold(0.35)  # Sproži GC in sprosti slike pri 35% RAM-a
+                mps.set_strict_threshold(0.55)        # Agresivno sprosti nepotrebne medpomnilnike pri 55% RAM-a
+                mps.set_kill_threshold(0.95)
+                mps.set_poll_interval(2)
+                WebKit2.WebsiteDataManager.set_memory_pressure_settings(mps)
+            except Exception as e:
+                print(f"[Memory] Opozorilo pri MemoryPressureSettings: {e}")
+
             self.web_context = WebKit2.WebContext.new_with_website_data_manager(self.website_data_manager)
+
+            # Optimiziran model predpomnilnika za namizje (manjša poraba RAM-a kot privzeti WEB_BROWSER)
+            try:
+                self.web_context.set_cache_model(WebKit2.CacheModel.DOCUMENT_BROWSER)
+            except Exception as e:
+                print(f"[Memory] Opozorilo pri nastavitvi CacheModel: {e}")
+
             cookie_mgr = self.website_data_manager.get_cookie_manager()
             cookie_path = os.path.join(self.config.config_dir, "cookies.sqlite")
             cookie_mgr.set_persistent_storage(cookie_path, WebKit2.CookiePersistentStorage.SQLITE)
@@ -258,6 +281,10 @@ class SafeerMintBrowser(Gtk.Window):
         except Exception as e:
             print(f"[Storage] Opozorilo pri nastavitvi shrambe: {e}")
             self.web_context = WebKit2.WebContext.get_default()
+            try:
+                self.web_context.set_cache_model(WebKit2.CacheModel.DOCUMENT_BROWSER)
+            except Exception:
+                pass
 
     def setup_ui(self, initial_url=None):
         # Main Vertical Box
@@ -1659,6 +1686,9 @@ class SafeerMintBrowser(Gtk.Window):
                 settings.set_enable_mediasource(True)
             if hasattr(settings, "set_enable_back_forward_navigation_gestures"):
                 settings.set_enable_back_forward_navigation_gestures(True)
+            # Onemogoči ohranjanje preteklih strani v RAM-u (prepreči kopičenje odvečnega pomnilnika)
+            if hasattr(settings, "set_enable_page_cache"):
+                settings.set_enable_page_cache(False)
         except Exception:
             pass
 
@@ -1997,6 +2027,16 @@ class SafeerMintBrowser(Gtk.Window):
         )
         content_mgr.add_script(clickjack_script)
 
+        # 5. Pametni optimizator neaktivnih zavihkov (zamrzne animacije in upočasni ozadne procese za prihranek RAM-a in CPU)
+        throttler_script = WebKit2.UserScript(
+            TAB_THROTTLER_SCRIPT,
+            WebKit2.UserContentInjectedFrames.ALL_FRAMES,
+            WebKit2.UserScriptInjectionTime.START,
+            None,
+            None
+        )
+        content_mgr.add_script(throttler_script)
+
         # Custom User Scripts Injection (Tampermonkey Engine)
         user_scripts = self.config.get_user_scripts()
         for s in user_scripts:
@@ -2052,7 +2092,7 @@ class SafeerMintBrowser(Gtk.Window):
         btn_audio.connect("clicked", on_tab_mute_clicked)
         tab_box.pack_start(btn_audio, False, False, 2)
 
-        def on_audio_state_notify(w, param, btn=btn_audio):
+        def on_audio_state_notify(w, param, btn=btn_audio, tid=tab_id):
             playing = w.get_property("is-playing-audio")
             muted = w.get_property("is-muted")
             if playing or muted:
@@ -2061,6 +2101,15 @@ class SafeerMintBrowser(Gtk.Window):
                 btn.show()
             else:
                 btn.hide()
+
+            # Dinamični čuvaj zvoka in procesorja:
+            # Če zavihek v ozadju predvaja zvok (npr. YouTube Music), ga ohrani na polni hitrosti
+            # Če ne predvaja zvoka in ni aktiven, ga uspavaj za prihranek RAM-a in procesorja
+            if tid != self.active_tab_id:
+                if playing:
+                    w.run_javascript("if (window.__safeerResumeTab) window.__safeerResumeTab();", None, None, None)
+                else:
+                    w.run_javascript("if (window.__safeerThrottleTab) window.__safeerThrottleTab();", None, None, None)
 
         wv.connect("notify::is-playing-audio", on_audio_state_notify)
         wv.connect("notify::is-muted", on_audio_state_notify)
@@ -2142,6 +2191,10 @@ class SafeerMintBrowser(Gtk.Window):
         self.tabs_box.remove(tab_to_close["event_box"])
         self.webview_stack.remove(tab_to_close["webview"])
         tab_to_close["webview"].destroy()
+        try:
+            self.web_context.clear_cache()
+        except Exception:
+            pass
 
         if self.active_tab_id == tab_id:
             new_idx = max(0, idx - 1)
@@ -2151,13 +2204,26 @@ class SafeerMintBrowser(Gtk.Window):
         self.active_tab_id = tab_id
         target = None
         for tab in self.tabs:
-            if tab["id"] == tab_id:
+            is_active = (tab["id"] == tab_id)
+            if is_active:
                 target = tab
                 tab["tab_box"].get_style_context().add_class("active-tab")
                 tab["tab_box"].get_style_context().remove_class("inactive-tab")
+                try:
+                    tab["webview"].run_javascript("if (window.__safeerResumeTab) window.__safeerResumeTab();", None, None, None)
+                except Exception:
+                    pass
             else:
                 tab["tab_box"].get_style_context().remove_class("active-tab")
                 tab["tab_box"].get_style_context().add_class("inactive-tab")
+                try:
+                    is_audio = tab["webview"].get_property("is-playing-audio")
+                    if not is_audio:
+                        tab["webview"].run_javascript("if (window.__safeerThrottleTab) window.__safeerThrottleTab();", None, None, None)
+                    else:
+                        tab["webview"].run_javascript("if (window.__safeerResumeTab) window.__safeerResumeTab();", None, None, None)
+                except Exception:
+                    pass
 
         if not target:
             return

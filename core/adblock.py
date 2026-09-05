@@ -213,7 +213,8 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             });
         }
 
-        if (video && video.paused && !video.ended && !video._safeer_user_paused && !isAdActive()) {
+        // Only trigger play if enough data is buffered (readyState >= 3: HAVE_FUTURE_DATA) to avoid audio stutter
+        if (video && video.paused && !video.ended && !video._safeer_user_paused && !isAdActive() && video.readyState >= 3) {
             try { video.play().catch(function() {}); } catch(e) {}
         }
 
@@ -228,8 +229,17 @@ YOUTUBE_ADBLOCK_SCRIPT = """
         }
     }
 
-    // Run supervision every 200ms
-    setInterval(superviseYouTube, 200);
+    // Adaptive supervision: 250ms when ad is active, 1500ms during smooth media playback
+    var _ytSupervisorTimer = null;
+    function scheduleSupervision(intervalMs) {
+        if (_ytSupervisorTimer) clearTimeout(_ytSupervisorTimer);
+        _ytSupervisorTimer = setTimeout(function() {
+            superviseYouTube();
+            var nextInterval = isAdActive() ? 250 : 1500;
+            scheduleSupervision(nextInterval);
+        }, intervalMs);
+    }
+    scheduleSupervision(300);
 
     // Instant playback triggers on navigation
     window.addEventListener('yt-navigate-start', function() {
@@ -237,14 +247,13 @@ YOUTUBE_ADBLOCK_SCRIPT = """
         if (v) {
             v._safeer_user_paused = false;
             v.preload = 'auto';
-            try { v.play().catch(function() {}); } catch(_) {}
         }
-        superviseYouTube();
+        scheduleSupervision(200);
     });
-    window.addEventListener('yt-navigate-finish', superviseYouTube);
-    window.addEventListener('yt-page-data-updated', superviseYouTube);
-    window.addEventListener('popstate', superviseYouTube);
-    document.addEventListener('DOMContentLoaded', superviseYouTube);
+    window.addEventListener('yt-navigate-finish', function() { scheduleSupervision(200); });
+    window.addEventListener('yt-page-data-updated', function() { scheduleSupervision(250); });
+    window.addEventListener('popstate', function() { scheduleSupervision(200); });
+    document.addEventListener('DOMContentLoaded', function() { scheduleSupervision(200); });
 
     // 5. Background Audio Playback (Prevent pause on tab switch / window minimize)
     try {
@@ -285,7 +294,7 @@ GENERIC_COSMETIC_SCRIPT = """
     }
 
     if (document.body) cleanGenericAds();
-    setInterval(cleanGenericAds, 1000);
+    setInterval(cleanGenericAds, 3000);
 })();
 """
 
@@ -351,7 +360,61 @@ ANTI_CLICKJACKING_SCRIPT = """
     }
 
     if (document.body) neutralizeClickjackingOverlays();
-    setInterval(neutralizeClickjackingOverlays, 1500);
+    setInterval(neutralizeClickjackingOverlays, 4000);
+})();
+"""
+
+TAB_THROTTLER_SCRIPT = """
+/* 🍃 Safeer Linux Mint - Background Tab Sleep & Memory Optimizer */
+(function() {
+    if (window._safeer_tab_optimizer) return;
+    window._safeer_tab_optimizer = true;
+
+    var isThrottled = false;
+
+    window.__safeerThrottleTab = function() {
+        if (isThrottled) return;
+        isThrottled = true;
+
+        // 1. Page Visibility API: notify web apps (Facebook, Messenger, Gmail) that tab is hidden
+        try {
+            Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+            Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+            document.dispatchEvent(new Event('visibilitychange'));
+        } catch(e) {}
+
+        // 2. Pause CSS animations on background tabs to eliminate layout & compositor CPU load
+        try {
+            if (!document.getElementById('__safeer_bg_style')) {
+                var s = document.createElement('style');
+                s.id = '__safeer_bg_style';
+                s.textContent = 'html.safeer-tab-bg *, html.safeer-tab-bg *::before, html.safeer-tab-bg *::after { animation-play-state: paused !important; }';
+                (document.head || document.documentElement).appendChild(s);
+            }
+            if (document.documentElement) {
+                document.documentElement.classList.add('safeer-tab-bg');
+            }
+        } catch(e) {}
+    };
+
+    window.__safeerResumeTab = function() {
+        if (!isThrottled) return;
+        isThrottled = false;
+
+        // 1. Page Visibility API: notify web apps that tab is now visible and active
+        try {
+            Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+            Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+            document.dispatchEvent(new Event('visibilitychange'));
+        } catch(e) {}
+
+        // 2. Resume CSS animations
+        try {
+            if (document.documentElement) {
+                document.documentElement.classList.remove('safeer-tab-bg');
+            }
+        } catch(e) {}
+    };
 })();
 """
 

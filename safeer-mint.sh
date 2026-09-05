@@ -68,6 +68,9 @@ fi
 export WEBKIT_FORCE_COMPOSITING_MODE=1
 export WEBKIT_DISABLE_COMPOSITING_MODE=0
 
+# 🎵 Gladko predvajanje zvoka brez prekinitev (PipeWire / PulseAudio 120ms varnostni medpomnilnik)
+export PULSE_LATENCY_MSEC=120
+export GST_PULSE_BUFFER_MS=120
 
 # Zagon s sistemskim pythonom
 exec /usr/bin/python3 "$DIR/safeer_mint.py" "$@"
