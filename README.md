@@ -13,7 +13,7 @@
 ## 🌟 Odprta Koda, Navdih in Spodbuda k Lastnemu Razvoju (Fork & Customize)
 
 > **Kdor obvladuje brskalnik, določa pravila spleta.**  
-> Milijon uporabnikov ima milijon različnih potreb, okusov in prioritet. Safeer je 100 % odprtokoden projekt pod licenco [MIT](LICENSE) prav zato, da služi kot odprta platforma in navdih za skupnost.  
+> Milijon uporabnikov ima milijon različnih potreb, okusov in prioritet. Safeer je 100 % odprtokoden projekt pod licenco [Apache License 2.0](LICENSE) prav zato, da služi kot odprta platforma in navdih za skupnost.  
 >  
 > 👉 **Vabljeni k ustvarjanju lastnih vejic (Fork)!**  
 > Vzemite izvorno kodo v svoje roke, prilagodite varnostne sezname, spremenite grafično podobo, dodajte lastne bližnjice ali preizkusite nove eksperimentalne funkcionalnosti. Internet je boljši, ko ima vsakdo možnost ustvariti brskalnik po svojih lastnih željah in potrebah.
@@ -72,5 +72,5 @@ Skripta `install.sh`:
 ## ⚖️ Pravno Obvestilo in Omejitev Odgovornosti (Disclaimer)
 
 - **Varnostna omejitev**: **Safeer is a security layer, not a guarantee against all online threats.** Noben spletni brskalnik ali varnostni filter ne more zagotoviti 100 % ali absolutne zaščite pred vsemi novimi, ciljanimi ali še neznanimi grožnjami (Zero-Day). Safeer deluje kot lokalni varnostni sloj, ki bistveno zmanjšuje tveganje in blokira znana škodljiva vozlišča, zlonamerne domene in sledilce.
-- **Licenca in Prilagajanje (Forking)**: Projekt je izdan pod odprto licenco [MIT](LICENSE). Prosto ga klonirajte, delite, predelujte in prilagajajte po lastnih željah in potrebah.
+- **Licenca in Prilagajanje (Forking)**: Projekt je izdan pod licenco [Apache License 2.0](LICENSE). Prosto ga klonirajte, delite, predelujte in prilagajajte po lastnih željah in potrebah.
 - **Repozitorij**: [https://github.com/memelandfaner/linux-mint-safeer-browser](https://github.com/memelandfaner/linux-mint-safeer-browser)
