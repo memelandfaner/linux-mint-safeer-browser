@@ -11,6 +11,7 @@ YOUTUBE_ADBLOCK_SCRIPT = """
 /* 🛡️ Safeer Linux Mint - YouTube Zero-Ad & Performance Engine */
 (function() {
     if (window._safeer_linux_yt_active) return;
+    if (window !== window.top && location.pathname.indexOf('/embed/') === -1) return;
     window._safeer_linux_yt_active = true;
 
     // 0. Connection Pre-warming (Preconnect & DNS-prefetch)
@@ -151,13 +152,19 @@ YOUTUBE_ADBLOCK_SCRIPT = """
         if (video && isAdActive()) {
             // Safety check: only accelerate if video is clearly an ad (< 120s) so full videos are NEVER skipped
             if (isFinite(video.duration) && video.duration < 120 && video.duration > 0) {
-                try {
-                    video.playbackRate = 16.0;
-                    video.muted = true;
-                    video.currentTime = video.duration - 0.05;
-                } catch(e) {}
+                if (Math.abs(video.currentTime - video.duration) > 0.3) {
+                    try {
+                        video.playbackRate = 16.0;
+                        video.muted = true;
+                        video.currentTime = video.duration - 0.05;
+                    } catch(e) {}
+                }
             }
             clickSkip();
+        } else if (video) {
+            if (video.playbackRate > 2.0) {
+                try { video.playbackRate = 1.0; } catch(_) {}
+            }
         }
 
         // Clean cosmetic overlay banners
@@ -184,32 +191,30 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             } catch(e) {}
         }
         var video = document.querySelector('video.video-stream, video');
-        if (video) {
-            video.preload = 'auto';
-            if (!video._safeer_instant_hooks) {
-                video._safeer_instant_hooks = true;
-                var onMediaReady = function() {
-                    if (video.paused && !video._safeer_user_paused && !isAdActive()) {
-                        try { video.play().catch(function() {}); } catch(_) {}
-                    }
-                };
-                video.addEventListener('loadstart', onMediaReady);
-                video.addEventListener('loadedmetadata', onMediaReady);
-                video.addEventListener('canplay', onMediaReady);
-                video.addEventListener('canplaythrough', onMediaReady);
-                video.addEventListener('pause', function() {
-                    if (!video.ended && video.readyState >= 2) {
-                        video._safeer_user_paused = true;
-                    }
-                });
-                video.addEventListener('play', function() {
-                    video._safeer_user_paused = false;
-                });
-            }
+        if (video && !video._safeer_instant_hooks) {
+            video._safeer_instant_hooks = true;
+            try { video.preload = 'auto'; } catch(_) {}
+            var onMediaReady = function() {
+                if (video.paused && !video._safeer_user_paused && !isAdActive()) {
+                    try { video.play().catch(function() {}); } catch(_) {}
+                }
+            };
+            video.addEventListener('loadstart', onMediaReady);
+            video.addEventListener('loadedmetadata', onMediaReady);
+            video.addEventListener('canplay', onMediaReady);
+            video.addEventListener('canplaythrough', onMediaReady);
+            video.addEventListener('pause', function() {
+                if (!video.ended && video.readyState >= 2) {
+                    video._safeer_user_paused = true;
+                }
+            });
+            video.addEventListener('play', function() {
+                video._safeer_user_paused = false;
+            });
         }
 
-        if (video && video.paused && !video.ended && !video._safeer_user_paused && isAdActive()) {
-            try { video.play(); } catch(e) {}
+        if (video && video.paused && !video.ended && !video._safeer_user_paused && !isAdActive()) {
+            try { video.play().catch(function() {}); } catch(e) {}
         }
 
         // Ensure watch player remains crisp and visible

@@ -86,8 +86,9 @@ class SafeerMintBrowser(Gtk.Window):
         self.set_default_size(win_w, win_h)
         self.set_position(Gtk.WindowPosition.CENTER)
 
-        # Set WM_CLASS so Linux Mint panel associates the window with safeer-browser.desktop
+        # Set WM_CLASS and prgname so Linux Mint panel associates the window with safeer-browser.desktop
         try:
+            GLib.set_prgname("safeer-browser")
             self.set_wmclass("safeer-browser", "safeer-browser")
         except Exception:
             pass
@@ -1947,6 +1948,7 @@ class SafeerMintBrowser(Gtk.Window):
         wv.connect("load-changed", lambda w, ev: self.on_tab_load_changed(tab_id, w, ev))
         wv.connect("notify::title", lambda w, p: self.on_tab_title_changed(tab_id, w, p))
         wv.connect("notify::uri", lambda w, p: self.on_tab_uri_changed(tab_id, w, p))
+        wv.connect("web-process-terminated", lambda w, reason: self.on_web_process_terminated(tab_id, w, reason))
         wv.connect("create", self.on_create_webview)
         wv.connect("decide-policy", self.on_decide_policy)
 
@@ -2254,6 +2256,20 @@ class SafeerMintBrowser(Gtk.Window):
             if self.active_tab_id == tab_id and not self.url_entry.is_focus():
                 self.url_entry.set_text(self.format_clean_url(uri))
                 self.update_star_status()
+
+    def on_web_process_terminated(self, tab_id, webview, reason):
+        print(f"⚠️ [Safeer WebProcess Guard] Proces zavihka {tab_id} se je ustavil ({reason}). Samodejno obnavljam...")
+        def recover():
+            try:
+                uri = webview.get_uri()
+                if uri and "ui/home.html" not in uri:
+                    webview.load_uri(uri)
+                else:
+                    webview.load_uri(self.get_home_uri())
+            except Exception as e:
+                print(f"[Safeer WebProcess Guard] Napaka pri obnovi: {e}")
+            return False
+        GLib.timeout_add(500, recover)
 
 
     # -------------------------------------------------------------
