@@ -13,7 +13,32 @@ YOUTUBE_ADBLOCK_SCRIPT = """
     if (window._safeer_linux_yt_active) return;
     window._safeer_linux_yt_active = true;
 
-    // 1. JSON.parse Hook: Strip ad placements before YouTube processes them
+    // 0. Connection Pre-warming (Preconnect & DNS-prefetch)
+    try {
+        var preconnects = [
+            'https://googlevideo.com',
+            'https://i.ytimg.com',
+            'https://yt3.ggpht.com',
+            'https://m.youtube.com',
+            'https://www.youtube.com',
+            'https://youtubei.googleapis.com',
+            'https://jnn-pa.googleapis.com'
+        ];
+        preconnects.forEach(function(url) {
+            var link = document.createElement('link');
+            link.rel = 'preconnect';
+            link.href = url;
+            link.crossOrigin = 'anonymous';
+            document.head.appendChild(link);
+
+            var dnsLink = document.createElement('link');
+            dnsLink.rel = 'dns-prefetch';
+            dnsLink.href = url;
+            document.head.appendChild(dnsLink);
+        });
+    } catch(e) {}
+
+    // 1. JSON.parse Hook: Strip ad placements and delay-play tracking beacons before YouTube processes them
     try {
         var origParse = JSON.parse;
         JSON.parse = function() {
@@ -25,8 +50,14 @@ YOUTUBE_ADBLOCK_SCRIPT = """
                     if (val.adSlots) delete val.adSlots;
                     if (val.adPlayback) delete val.adPlayback;
                     if (val.playbackTracking) {
-                        val.playbackTracking.videostatsPlaybackUrl = { baseUrl: '' };
-                        val.playbackTracking.videostatsDelayplayUrl = { baseUrl: '' };
+                        try {
+                            delete val.playbackTracking.videostatsPlaybackUrl;
+                            delete val.playbackTracking.videostatsDelayplayUrl;
+                            delete val.playbackTracking.videostatsWatchtimeUrl;
+                            delete val.playbackTracking.ptrackingUrl;
+                            delete val.playbackTracking.qoeUrl;
+                            delete val.playbackTracking.atrUrl;
+                        } catch(_) {}
                     }
                 }
             } catch(e) {}
@@ -48,6 +79,16 @@ YOUTUBE_ADBLOCK_SCRIPT = """
                                 if (data.adPlacements) delete data.adPlacements;
                                 if (data.playerAds) delete data.playerAds;
                                 if (data.adSlots) delete data.adSlots;
+                                if (data.playbackTracking) {
+                                    try {
+                                        delete data.playbackTracking.videostatsPlaybackUrl;
+                                        delete data.playbackTracking.videostatsDelayplayUrl;
+                                        delete data.playbackTracking.videostatsWatchtimeUrl;
+                                        delete data.playbackTracking.ptrackingUrl;
+                                        delete data.playbackTracking.qoeUrl;
+                                        delete data.playbackTracking.atrUrl;
+                                    } catch(_) {}
+                                }
                                 return new Response(JSON.stringify(data), {
                                     status: resp.status,
                                     statusText: resp.statusText,
@@ -142,7 +183,32 @@ YOUTUBE_ADBLOCK_SCRIPT = """
                 }
             } catch(e) {}
         }
-        if (video && video.paused && !video.ended && isAdActive()) {
+        var video = document.querySelector('video.video-stream, video');
+        if (video) {
+            video.preload = 'auto';
+            if (!video._safeer_instant_hooks) {
+                video._safeer_instant_hooks = true;
+                var onMediaReady = function() {
+                    if (video.paused && !video._safeer_user_paused && !isAdActive()) {
+                        try { video.play().catch(function() {}); } catch(_) {}
+                    }
+                };
+                video.addEventListener('loadstart', onMediaReady);
+                video.addEventListener('loadedmetadata', onMediaReady);
+                video.addEventListener('canplay', onMediaReady);
+                video.addEventListener('canplaythrough', onMediaReady);
+                video.addEventListener('pause', function() {
+                    if (!video.ended && video.readyState >= 2) {
+                        video._safeer_user_paused = true;
+                    }
+                });
+                video.addEventListener('play', function() {
+                    video._safeer_user_paused = false;
+                });
+            }
+        }
+
+        if (video && video.paused && !video.ended && !video._safeer_user_paused && isAdActive()) {
             try { video.play(); } catch(e) {}
         }
 
@@ -159,6 +225,21 @@ YOUTUBE_ADBLOCK_SCRIPT = """
 
     // Run supervision every 200ms
     setInterval(superviseYouTube, 200);
+
+    // Instant playback triggers on navigation
+    window.addEventListener('yt-navigate-start', function() {
+        var v = document.querySelector('video.video-stream, video');
+        if (v) {
+            v._safeer_user_paused = false;
+            v.preload = 'auto';
+            try { v.play().catch(function() {}); } catch(_) {}
+        }
+        superviseYouTube();
+    });
+    window.addEventListener('yt-navigate-finish', superviseYouTube);
+    window.addEventListener('yt-page-data-updated', superviseYouTube);
+    window.addEventListener('popstate', superviseYouTube);
+    document.addEventListener('DOMContentLoaded', superviseYouTube);
 
     // 5. Background Audio Playback (Prevent pause on tab switch / window minimize)
     try {
