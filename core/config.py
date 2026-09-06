@@ -107,6 +107,13 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "permissions_policy": "ask",          # "ask", "allow", "deny"
     "homepage": "safeer://home",
     "integrations": {
+        "remote_control": {
+            "name": "Remote Control",
+            "url": "http://localhost:8080",
+            "icon": "🎮",
+            "enabled": True,
+            "color": "#3b82f6"
+        },
         "messenger": {
             "name": "Facebook Messenger",
             "url": "https://www.messenger.com",
@@ -123,6 +130,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         }
     },
     "custom_portals": [
+        {"id": "p0", "title": "Remote Control", "url": "http://localhost:8080", "mark": "🎮", "bg": "linear-gradient(145deg, #091a28, #3b82f6)", "color": "#3b82f6"},
         {"id": "p1", "title": "Xplore TV", "url": "https://www.xploretv.si/livetv", "mark": "📺", "bg": "linear-gradient(145deg, #7a1024, #e31837)", "color": "#e31837"},
         {"id": "p2", "title": "YouTube", "url": "https://www.youtube.com", "mark": "▶️", "bg": "linear-gradient(145deg, #4a0b0b, #cc0000)", "color": "#cc0000"},
         {"id": "p3", "title": "24ur.com", "url": "https://www.24ur.com", "mark": "📰", "bg": "linear-gradient(145deg, #0a2040, #1256a8)", "color": "#1256a8"},
