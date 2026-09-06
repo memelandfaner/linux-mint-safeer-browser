@@ -37,9 +37,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
 from core.config import ConfigManager, SEARCH_ENGINES, normalize_web_url
+from core.doh_proxy import get_doh_proxy, DOH_PROVIDERS
 from core.i18n import t, set_language, get_current_language, SUPPORTED_LANGUAGES
 from core.adblock import (
     YOUTUBE_ADBLOCK_SCRIPT,
+    ADGUARD_PROTECTION_SCRIPT,
     GENERIC_COSMETIC_SCRIPT,
     GPC_AND_DNT_SCRIPT,
     ANTI_CLICKJACKING_SCRIPT,
@@ -126,6 +128,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         # Configure Persistent Cookie, LocalStorage & IndexedDB Storage
         self.setup_persistent_storage()
+        self.setup_network_security_and_proxy()
         self.setup_downloads_handling()
         self.setup_ipc_socket()
 
@@ -174,6 +177,8 @@ class SafeerMintBrowser(Gtk.Window):
             sock_path = os.path.join(self.config.config_dir, "safeer.sock")
             if os.path.exists(sock_path):
                 os.remove(sock_path)
+            # Ustavi lokalni DoH posrednik, če je aktiven
+            get_doh_proxy(enabled=False)
         except Exception:
             pass
         return False
@@ -291,6 +296,58 @@ class SafeerMintBrowser(Gtk.Window):
                 self.web_context.set_cache_model(WebKit2.CacheModel.DOCUMENT_BROWSER)
             except Exception:
                 pass
+
+    def setup_network_security_and_proxy(self):
+        """Konfigurira šifriran DNS (DoH) ali šifriran tunel (Tor / varen proxy) na WebKit2 ravni."""
+        try:
+            if not hasattr(self, "web_context") or not self.web_context:
+                return
+
+            proxy_mode = self.config.get("secure_proxy_mode", "disabled")
+            doh_enabled = self.config.get("doh_enabled", True)
+            doh_provider = self.config.get("doh_provider", "quad9")
+            custom_doh_url = self.config.get("custom_doh_url", "https://dns.quad9.net/dns-query")
+
+            # Izjeme za lokalna omrežja (bypassi)
+            ignore_hosts = ["localhost", "127.0.0.1", "10.*", "192.168.*", "172.16.*", "172.17.*", "172.18.*", "172.19.*", "172.2*"]
+
+            if proxy_mode == "tor":
+                # Šifriran Tor tunel z oddaljenim DNS razreševanjem
+                tor_url = "socks5://127.0.0.1:9050"
+                proxy_settings = WebKit2.NetworkProxySettings.new(tor_url, ignore_hosts)
+                self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.CUSTOM, proxy_settings)
+                print(f"[Network Security] 🧅 Tor šifriran tunel aktiviran: {tor_url}")
+                # Če je tekel DoH posrednik, ga ustavimo
+                get_doh_proxy(enabled=False)
+
+            elif proxy_mode == "custom":
+                custom_url = self.config.get("secure_proxy_url", "").strip()
+                if custom_url:
+                    proxy_settings = WebKit2.NetworkProxySettings.new(custom_url, ignore_hosts)
+                    self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.CUSTOM, proxy_settings)
+                    print(f"[Network Security] 🔒 Šifriran proxy aktiviran: {custom_url}")
+                    get_doh_proxy(enabled=False)
+                else:
+                    self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.DEFAULT, None)
+
+            elif doh_enabled and doh_provider != "disabled":
+                # Vgrajen lokalni DoH posrednik
+                doh_proxy = get_doh_proxy(provider=doh_provider, custom_url=custom_doh_url, enabled=True)
+                if doh_proxy and doh_proxy.actual_port > 0:
+                    local_proxy_url = f"http://127.0.0.1:{doh_proxy.actual_port}"
+                    proxy_settings = WebKit2.NetworkProxySettings.new(local_proxy_url, ignore_hosts)
+                    self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.CUSTOM, proxy_settings)
+                    prov_label = custom_doh_url if doh_provider == "custom" else doh_provider
+                    print(f"[Network Security] 🛡️ Šifriran DNS (DoH: {prov_label}) aktiviran prek {local_proxy_url}")
+                else:
+                    self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.DEFAULT, None)
+            else:
+                # Privzeta neposredna povezava
+                self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.DEFAULT, None)
+                get_doh_proxy(enabled=False)
+                print("[Network Security] Uporabljam privzeto neposredno omrežno povezavo.")
+        except Exception as e:
+            print(f"[Network Security] Napaka pri nastavljanju proxy/DoH: {e}")
 
     def setup_ui(self, initial_url=None):
         # Main Vertical Box
@@ -1332,6 +1389,51 @@ class SafeerMintBrowser(Gtk.Window):
         self.config.save_settings()
         return False
 
+    def is_download_url(self, url: str) -> bool:
+        """Ugotovi, ali URL vodi neposredno do prenosljive datoteke (arhiv, namestitveni paket, ISO itd.)."""
+        if not url:
+            return False
+        try:
+            parsed = urllib.parse.urlparse(url)
+            path = urllib.parse.unquote(parsed.path.lower())
+            DOWNLOAD_EXTS = (
+                ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tar",
+                ".zip", ".7z", ".rar", ".gz", ".bz2", ".xz", ".zst",
+                ".deb", ".rpm", ".apk", ".dmg", ".exe", ".msi", ".appimage",
+                ".iso", ".img", ".bin", ".torrent"
+            )
+            return any(path.endswith(ext) for ext in DOWNLOAD_EXTS)
+        except Exception:
+            return False
+
+    def start_direct_download(self, uri: str):
+        """Nemudoma sproži prenos datoteke preko WebContext brez odpiranja odvečnih praznih zavihkov."""
+        try:
+            if hasattr(self, "web_context") and self.web_context:
+                print(f"[Safeer Download] Samodejni prenos povezave: {uri}")
+                self.web_context.download_uri(uri)
+                if hasattr(self, "btn_downloads"):
+                    self.btn_downloads.set_label("⬇️ 0%")
+                    self.btn_downloads.get_style_context().add_class("active")
+        except Exception as e:
+            print(f"[Safeer Download] Napaka pri zagonu neposrednega prenosa: {e}")
+
+    def cleanup_download_tab_if_transient(self, webview):
+        """Če se je za prenos datoteke odprl nov začasni zavihek, ga samodejno zapremo, da uporabnik ne ostane na safeer://home."""
+        try:
+            if not hasattr(self, "tabs") or len(self.tabs) <= 1:
+                return
+            for tab_item in list(self.tabs):
+                if tab_item.get("webview") == webview:
+                    bf = webview.get_back_forward_list()
+                    has_history = bool(bf and bf.get_back_item())
+                    if not has_history:
+                        print(f"[Safeer Download] Samodejno zapiram prazen začasni zavihek prenosa: {tab_item['id']}")
+                        GLib.idle_add(self.close_tab, tab_item["id"])
+                    break
+        except Exception as e:
+            print(f"[Safeer Download] Opozorilo pri čiščenju zavihka: {e}")
+
     def on_create_webview(self, webview, navigation_action):
         """Obravnava klice window.open ali povezave target=_blank."""
         try:
@@ -1344,6 +1446,9 @@ class SafeerMintBrowser(Gtk.Window):
                 if is_threat_domain(uri):
                     self.show_threat_warning(uri)
                     return None
+                if self.is_download_url(uri):
+                    self.start_direct_download(uri)
+                    return None
                 if webview == self.sidebar_webview:
                     self.sidebar_webview.load_uri(uri)
                 else:
@@ -1353,7 +1458,7 @@ class SafeerMintBrowser(Gtk.Window):
         return None
 
     def on_decide_policy(self, webview, decision, decision_type):
-        """Obravnava zahteve za nova okna (target=_blank) in navigacijo z dosledno sanitizacijo protokolov in zaščito zasebnosti."""
+        """Obravnava zahteve za nova okna (target=_blank), navigacijo in prenose z dosledno sanitizacijo protokolov."""
         if decision_type == WebKit2.PolicyDecisionType.NEW_WINDOW_ACTION:
             try:
                 nav_action = decision.get_navigation_action()
@@ -1367,6 +1472,10 @@ class SafeerMintBrowser(Gtk.Window):
                     if is_threat_domain(uri):
                         self.config.increment_threats_blocked(1)
                         self.show_threat_warning(uri)
+                        decision.ignore()
+                        return True
+                    if self.is_download_url(uri):
+                        self.start_direct_download(uri)
                         decision.ignore()
                         return True
                     if self.config.get("tracking_protection_enabled", True):
@@ -1395,6 +1504,11 @@ class SafeerMintBrowser(Gtk.Window):
                         decision.ignore()
                         return True
 
+                    if self.is_download_url(uri):
+                        self.start_direct_download(uri)
+                        decision.ignore()
+                        return True
+
                     # Napredno odstranjevanje sledilnih parametrov (UTM, fbclid, gclid, si, itd.)
                     if self.config.get("tracking_protection_enabled", True):
                         clean_uri = strip_tracking_parameters(uri)
@@ -1415,6 +1529,14 @@ class SafeerMintBrowser(Gtk.Window):
                 print(f"[Policy Navigation] Napaka: {e}")
             decision.use()
             return True
+        elif decision_type == WebKit2.PolicyDecisionType.RESPONSE:
+            try:
+                if hasattr(decision, "is_mime_type_supported") and not decision.is_mime_type_supported():
+                    decision.download()
+                    self.cleanup_download_tab_if_transient(webview)
+                    return True
+            except Exception as e:
+                print(f"[Policy Response] Napaka: {e}")
         return False
 
     def open_add_page_dialog(self):
@@ -1630,6 +1752,107 @@ class SafeerMintBrowser(Gtk.Window):
         kb_check.set_active(self.config.get("virtual_keyboard_enabled", False))
         kb_check.connect("toggled", lambda b: self.toggle_virtual_keyboard())
         box.pack_start(kb_check, False, False, 0)
+
+        # 5.1. Downloads Preference Setting
+        dl_check = Gtk.CheckButton(label="📥 Vedno vprašaj, kam shraniti prenos (privzeto: samodejno v mapo Prenosi)")
+        dl_check.set_active(self.config.get("always_ask_download_dir", False))
+        dl_check.connect("toggled", lambda b: self.config.set("always_ask_download_dir", b.get_active()))
+        box.pack_start(dl_check, False, False, 0)
+
+        # 5.1.1. AdGuard Advanced Protection (Vgrajena razširitev)
+        adguard_check = Gtk.CheckButton(label="🛡️ AdGuard Zaščita (Vgrajena razširitev: defusanje anti-adblock zidov & oglasov)")
+        adguard_check.set_active(self.config.get("adguard_protection_enabled", True))
+        adguard_check.connect("toggled", lambda b: self.config.set("adguard_protection_enabled", b.get_active()))
+        box.pack_start(adguard_check, False, False, 0)
+
+        # 5.2. Šifriran DNS (DoH) in Šifriran tunel (Možnosti B in C)
+        sep_sec = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        box.pack_start(sep_sec, False, False, 4)
+
+        title_sec = Gtk.Label(label="<b>🛡️ Šifriran DNS (DoH) & Šifriran tunel (Tor / Proxy)</b>")
+        title_sec.set_use_markup(True)
+        title_sec.set_halign(Gtk.Align.START)
+        box.pack_start(title_sec, False, False, 0)
+
+        # DoH Provider
+        lbl_doh = Gtk.Label(label="Šifriran DNS (DNS-over-HTTPS) za zaščito pred cenzuro:")
+        lbl_doh.set_halign(Gtk.Align.START)
+        box.pack_start(lbl_doh, False, False, 0)
+
+        combo_doh = Gtk.ComboBoxText()
+        combo_doh.append("quad9", "🛡️ Quad9 Secure DoH (9.9.9.9) [Privzeto / Zaščita pred grožnjami]")
+        combo_doh.append("adguard", "🛡️ AdGuard DNS (dns.adguard-dns.com) [Oglasi + Zlonamerna koda]")
+        combo_doh.append("cloudflare", "⚡ Cloudflare DoH (1.1.1.1)")
+        combo_doh.append("google", "🌐 Google Public DoH (8.8.8.8)")
+        combo_doh.append("custom", "🔒 Zasebni DNS / Lasten DoH URL")
+        combo_doh.append("disabled", "🚫 Izklopljeno (Sistemski DNS operaterja)")
+
+        cur_doh = self.config.get("doh_provider", "quad9")
+        if not self.config.get("doh_enabled", True):
+            cur_doh = "disabled"
+        combo_doh.set_active_id(cur_doh)
+
+        entry_custom_doh = Gtk.Entry()
+        entry_custom_doh.set_placeholder_text("https://dns.primer.si/dns-query")
+        entry_custom_doh.set_text(self.config.get("custom_doh_url", "https://dns.quad9.net/dns-query"))
+        entry_custom_doh.set_visible(cur_doh == "custom")
+
+        def on_custom_doh_changed(entry):
+            self.config.set("custom_doh_url", entry.get_text().strip())
+            if combo_doh.get_active_id() == "custom":
+                self.setup_network_security_and_proxy()
+
+        entry_custom_doh.connect("changed", on_custom_doh_changed)
+
+        def on_doh_changed(cb):
+            sel = cb.get_active_id() or "quad9"
+            if sel == "disabled":
+                self.config.set("doh_enabled", False)
+                self.config.set("doh_provider", "disabled")
+            else:
+                self.config.set("doh_enabled", True)
+                self.config.set("doh_provider", sel)
+            entry_custom_doh.set_visible(sel == "custom")
+            self.setup_network_security_and_proxy()
+
+        combo_doh.connect("changed", on_doh_changed)
+        box.pack_start(combo_doh, False, False, 0)
+        box.pack_start(entry_custom_doh, False, False, 2)
+
+        # Šifriran tunel / Proxy (Možnost C)
+        lbl_tun = Gtk.Label(label="Šifriran tunel / Proxy za celoten promet:")
+        lbl_tun.set_halign(Gtk.Align.START)
+        box.pack_start(lbl_tun, False, False, 0)
+
+        combo_tun = Gtk.ComboBoxText()
+        combo_tun.append("disabled", "🚫 Izklopljeno (Brez tunela / Neposredno)")
+        combo_tun.append("tor", "🧅 Tor Omrežje (socks5://127.0.0.1:9050)")
+        combo_tun.append("custom", "⚙️ Lasten šifriran Proxy (SOCKS5 / HTTPS)")
+
+        cur_tun = self.config.get("secure_proxy_mode", "disabled")
+        combo_tun.set_active_id(cur_tun)
+
+        entry_proxy_url = Gtk.Entry()
+        entry_proxy_url.set_placeholder_text("socks5://127.0.0.1:1080 ali http://proxy:8080")
+        entry_proxy_url.set_text(self.config.get("secure_proxy_url", "socks5://127.0.0.1:9050"))
+        entry_proxy_url.set_visible(cur_tun == "custom")
+
+        def on_proxy_url_changed(entry):
+            self.config.set("secure_proxy_url", entry.get_text().strip())
+            if combo_tun.get_active_id() == "custom":
+                self.setup_network_security_and_proxy()
+
+        entry_proxy_url.connect("changed", on_proxy_url_changed)
+
+        def on_tun_changed(cb):
+            sel = cb.get_active_id() or "disabled"
+            self.config.set("secure_proxy_mode", sel)
+            entry_proxy_url.set_visible(sel == "custom")
+            self.setup_network_security_and_proxy()
+
+        combo_tun.connect("changed", on_tun_changed)
+        box.pack_start(combo_tun, False, False, 0)
+        box.pack_start(entry_proxy_url, False, False, 2)
 
         # 6. Customize Themes & UserScripts Button
         btn_custom = Gtk.Button(label="🧩 Prilagodi videz, barvne teme in uporabniške skripte")
@@ -1896,7 +2119,18 @@ class SafeerMintBrowser(Gtk.Window):
             target = "http://" + text
         elif text.startswith("file://"):
             target = text
-        elif not text.startswith("http://") and not text.startswith("https://"):
+        elif text.startswith("http://"):
+            try:
+                parsed = urllib.parse.urlparse(text)
+                host = (parsed.hostname or "").lower()
+                is_local = host in ("localhost", "127.0.0.1") or host.startswith("192.168.") or host.startswith("10.") or host.startswith("172.")
+                if is_local:
+                    target = text
+                else:
+                    target = "https://" + text[7:]
+            except Exception:
+                target = text
+        elif not text.startswith("https://"):
             if "." in text and " " not in text:
                 target = "https://" + text
             else:
@@ -2012,6 +2246,17 @@ class SafeerMintBrowser(Gtk.Window):
             None
         )
         content_mgr.add_script(yt_script)
+
+        # 2.1. Vgrajena AdGuard Zaščitna razširitev (Anti-Adblock Defuser & Cosmetic Rules)
+        if self.config.get("adguard_protection_enabled", True):
+            adg_script = WebKit2.UserScript(
+                ADGUARD_PROTECTION_SCRIPT,
+                WebKit2.UserContentInjectedFrames.ALL_FRAMES,
+                WebKit2.UserScriptInjectionTime.START,
+                None,
+                ["*://*.google.com/*", "*://*.google.si/*", "*://*.banka.si/*"]
+            )
+            content_mgr.add_script(adg_script)
 
         # 3. Cosmetic script
         gen_script = WebKit2.UserScript(
@@ -2329,6 +2574,11 @@ class SafeerMintBrowser(Gtk.Window):
                 self.url_entry.set_text(self.format_clean_url(uri))
                 self.update_star_status()
 
+    def get_home_uri(self) -> str:
+        """Vrne zanesljiv URI do lokalne domače strani Safeer Browserja."""
+        home_path = os.path.join(BASE_DIR, "ui", "home.html")
+        return f"file://{home_path}"
+
     def on_web_process_terminated(self, tab_id, webview, reason):
         print(f"⚠️ [Safeer WebProcess Guard] Proces zavihka {tab_id} se je ustavil ({reason}). Samodejno obnavljam...")
         def recover():
@@ -2413,6 +2663,33 @@ class SafeerMintBrowser(Gtk.Window):
     # -------------------------------------------------------------
     # Downloads Management Engine
     # -------------------------------------------------------------
+    def get_default_downloads_dir(self) -> str:
+        """Vrne zanesljivo pot do sistemske mape za prenose (Prenosi ali Downloads)."""
+        d = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD)
+        if d and os.path.isdir(d):
+            return d
+        prenosi = os.path.expanduser("~/Prenosi")
+        if os.path.isdir(prenosi):
+            return prenosi
+        downloads = os.path.expanduser("~/Downloads")
+        if os.path.isdir(downloads):
+            return downloads
+        os.makedirs(prenosi, exist_ok=True)
+        return prenosi
+
+    def get_unique_download_path(self, folder: str, filename: str) -> str:
+        """Ustvari unikatno ime datoteke v mapi, če datoteka z istim imenom že obstaja (npr. File (1).tar.gz)."""
+        base_name, ext = os.path.splitext(filename)
+        if base_name.lower().endswith(".tar"):
+            base_name, ext2 = os.path.splitext(base_name)
+            ext = ext2 + ext
+        target = os.path.join(folder, filename)
+        counter = 1
+        while os.path.exists(target):
+            target = os.path.join(folder, f"{base_name} ({counter}){ext}")
+            counter += 1
+        return target
+
     def setup_downloads_handling(self):
         self.web_context.connect("download-started", self.on_download_started)
 
@@ -2420,54 +2697,68 @@ class SafeerMintBrowser(Gtk.Window):
         download.connect("decide-destination", self.on_decide_destination)
 
     def on_decide_destination(self, download, suggested_filename):
-        dl_dir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) or os.path.expanduser("~/Prenosi")
+        dl_dir = self.get_default_downloads_dir()
         os.makedirs(dl_dir, exist_ok=True)
 
         req = download.get_request()
         uri = req.get_uri() if req else ""
         if not suggested_filename:
-            suggested_filename = os.path.basename(urllib.parse.urlparse(uri).path) or "prenos_datoteke"
+            parsed_path = urllib.parse.urlparse(uri).path
+            suggested_filename = os.path.basename(parsed_path) or "prenos_datoteke"
+        suggested_filename = urllib.parse.unquote(suggested_filename)
 
-        dialog = Gtk.FileChooserDialog(
-            title=f"📥 {t('save_download', 'Shrani prenos')} — Safeer Browser",
-            parent=self,
-            action=Gtk.FileChooserAction.SAVE
-        )
-        dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
-        btn_save = dialog.add_button(t("save", "Shrani"), Gtk.ResponseType.OK)
-        btn_save.get_style_context().add_class("btn-primary-glow")
-        dialog.set_current_folder(dl_dir)
-        dialog.set_current_name(suggested_filename)
-        dialog.set_do_overwrite_confirmation(True)
+        always_ask = self.config.get("always_ask_download_dir", False)
+        target_path = None
 
-        resp = dialog.run()
-        if resp == Gtk.ResponseType.OK:
-            target_path = dialog.get_filename()
+        if always_ask:
+            dialog = Gtk.FileChooserDialog(
+                title=f"📥 {t('save_download', 'Shrani prenos')} — Safeer Browser",
+                parent=self,
+                action=Gtk.FileChooserAction.SAVE
+            )
+            dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
+            btn_save = dialog.add_button(t("save", "Shrani"), Gtk.ResponseType.OK)
+            btn_save.get_style_context().add_class("btn-primary-glow")
+            dialog.set_current_folder(dl_dir)
+            dialog.set_current_name(suggested_filename)
+            dialog.set_do_overwrite_confirmation(True)
+
+            resp = dialog.run()
+            if resp == Gtk.ResponseType.OK:
+                target_path = dialog.get_filename()
             dialog.destroy()
-            if target_path:
-                dest_uri = f"file://{target_path}"
-                download.set_destination(dest_uri)
-
-                dl_data = {
-                    "id": str(uuid.uuid4())[:8],
-                    "filename": os.path.basename(target_path),
-                    "path": target_path,
-                    "progress": 0.0,
-                    "status": "running",
-                    "time": datetime.now().strftime("%H:%M:%S")
-                }
-                self.downloads.insert(0, dl_data)
-
-                self.btn_downloads.set_label("⬇️ 0%")
-                self.btn_downloads.get_style_context().add_class("active")
-
-                download.connect("notify::estimated-progress", lambda d, p: self.on_download_progress(dl_data, d))
-                download.connect("finished", lambda d: self.on_download_finished(dl_data))
-                download.connect("failed", lambda d, err: self.on_download_failed(dl_data, err))
+            if not target_path:
+                download.cancel()
                 return True
         else:
-            dialog.destroy()
-            download.cancel()
+            target_path = self.get_unique_download_path(dl_dir, suggested_filename)
+
+        if target_path:
+            dest_uri = f"file://{target_path}"
+            download.set_destination(dest_uri)
+
+            dl_data = {
+                "id": str(uuid.uuid4())[:8],
+                "filename": os.path.basename(target_path),
+                "path": target_path,
+                "progress": 0.0,
+                "status": "running",
+                "time": datetime.now().strftime("%H:%M:%S")
+            }
+            self.downloads.insert(0, dl_data)
+
+            self.btn_downloads.set_label("⬇️ 0%")
+            self.btn_downloads.get_style_context().add_class("active")
+
+            download.connect("notify::estimated-progress", lambda d, p: self.on_download_progress(dl_data, d))
+            download.connect("finished", lambda d: self.on_download_finished(dl_data))
+            download.connect("failed", lambda d, err: self.on_download_failed(dl_data, err))
+
+            # Samodejno pospravi morebitni prazen zavihek, ki ga je WebKit odprl le za ta prenos
+            wv = download.get_web_view()
+            if wv:
+                self.cleanup_download_tab_if_transient(wv)
+
             return True
         return False
 
@@ -2480,17 +2771,40 @@ class SafeerMintBrowser(Gtk.Window):
     def on_download_finished(self, dl_data):
         dl_data["status"] = "completed"
         dl_data["progress"] = 1.0
+        fname = dl_data.get("filename", "datoteka")
+
+        # Prijazno obvestilo na namizju Linux Mint
+        try:
+            subprocess.Popen([
+                "notify-send",
+                "-a", "Safeer Browser",
+                "-i", "document-save",
+                "📥 Prenos zaključen",
+                f"Datoteka {fname} je shranjena v mapi Prenosi."
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+        any_running = any(d["status"] == "running" for d in self.downloads)
+        if not any_running:
+            self.btn_downloads.set_label("✅")
+            self.btn_downloads.get_style_context().remove_class("active")
+            GLib.timeout_add(3500, self._reset_download_btn_icon)
+
+    def _reset_download_btn_icon(self):
         any_running = any(d["status"] == "running" for d in self.downloads)
         if not any_running:
             self.btn_downloads.set_label("📥")
             self.btn_downloads.get_style_context().remove_class("active")
+        return False
 
     def on_download_failed(self, dl_data, error):
         dl_data["status"] = "failed"
         any_running = any(d["status"] == "running" for d in self.downloads)
         if not any_running:
-            self.btn_downloads.set_label("📥")
+            self.btn_downloads.set_label("❌")
             self.btn_downloads.get_style_context().remove_class("active")
+            GLib.timeout_add(4000, self._reset_download_btn_icon)
 
     def open_downloads_dialog(self):
         dialog = Gtk.Dialog(title=f"📥 {t('downloads_title')} — Safeer Browser", transient_for=self, flags=0)
@@ -2514,7 +2828,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         btn_open_folder = Gtk.Button(label=t("open_downloads_folder"))
         btn_open_folder.get_style_context().add_class("btn-primary-glow")
-        dl_dir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) or os.path.expanduser("~/Prejemi")
+        dl_dir = self.get_default_downloads_dir()
         btn_open_folder.connect("clicked", lambda b: subprocess.Popen(["xdg-open", dl_dir]))
         header_box.pack_start(btn_open_folder, False, False, 0)
         content.pack_start(header_box, False, False, 0)
@@ -3230,6 +3544,32 @@ class SafeerMintBrowser(Gtk.Window):
         def populate_scripts():
             for child in scripts_vbox.get_children():
                 scripts_vbox.remove(child)
+
+            # Vgrajena sistemska razširitev: AdGuard Zaščita
+            adg_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            adg_row.get_style_context().add_class("item-card-row")
+            adg_sw = Gtk.Switch()
+            adg_sw.set_active(self.config.get("adguard_protection_enabled", True))
+            def on_adg_toggle(widget, state):
+                self.config.set("adguard_protection_enabled", state)
+            adg_sw.connect("state-set", on_adg_toggle)
+            adg_row.pack_start(adg_sw, False, False, 4)
+
+            adg_info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            adg_title = Gtk.Label(label="<b>🛡️ AdGuard Advanced Protection (Vgrajena razširitev)</b>")
+            adg_title.set_use_markup(True)
+            adg_title.set_xalign(0.0)
+            adg_info.pack_start(adg_title, False, False, 0)
+            adg_meta = Gtk.Label(label="Sprotno defusanje anti-adblock zidov, stubs za oglasne API-je in kozmetično čiščenje.")
+            adg_meta.set_xalign(0.0)
+            adg_meta.get_style_context().add_class("text-muted")
+            adg_info.pack_start(adg_meta, False, False, 0)
+            adg_row.pack_start(adg_info, True, True, 0)
+
+            adg_badge = Gtk.Label(label="VGRAJENO")
+            adg_badge.get_style_context().add_class("btn-primary-glow")
+            adg_row.pack_end(adg_badge, False, False, 0)
+            scripts_vbox.pack_start(adg_row, False, False, 0)
 
             scripts = self.config.get_user_scripts()
             if not scripts:

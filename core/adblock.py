@@ -270,6 +270,131 @@ YOUTUBE_ADBLOCK_SCRIPT = """
 })();
 """
 
+ADGUARD_PROTECTION_SCRIPT = """
+/* 🛡️ Safeer Linux Mint - AdGuard Advanced Protection & Anti-Adblock Defuser Engine */
+(function() {
+    if (window._adguard_safeer_active) return;
+    window._adguard_safeer_active = true;
+
+    // 1. Defuse Anti-Adblock checks & variables
+    try {
+        window.canRunAds = true;
+        window.isAdBlockActive = false;
+        window.adblock = false;
+        window.adblockDetected = false;
+        window._adblocker = false;
+
+        // Adsense / Google Publisher Tag stubs
+        if (!window.adsbygoogle) {
+            window.adsbygoogle = [];
+        }
+        window.adsbygoogle.loaded = true;
+        var origPush = window.adsbygoogle.push;
+        window.adsbygoogle.push = function() {
+            try { return origPush ? origPush.apply(this, arguments) : 0; } catch(_) { return 0; }
+        };
+
+        // BlockAdBlock / FuckAdBlock stubs
+        var FakeBlockAdBlock = function(opts) {
+            if (opts && typeof opts.onNotDetected === 'function') {
+                setTimeout(opts.onNotDetected, 10);
+            }
+        };
+        FakeBlockAdBlock.prototype.check = function() { return false; };
+        FakeBlockAdBlock.prototype.clearEvent = function() {};
+        FakeBlockAdBlock.prototype.on = function(detected, fn) {
+            if (!detected && typeof fn === 'function') setTimeout(fn, 10);
+            return this;
+        };
+        FakeBlockAdBlock.prototype.onDetected = function() { return this; };
+        FakeBlockAdBlock.prototype.onNotDetected = function(fn) {
+            if (typeof fn === 'function') setTimeout(fn, 10);
+            return this;
+        };
+        window.BlockAdBlock = FakeBlockAdBlock;
+        window.blockAdBlock = new FakeBlockAdBlock();
+        window.FuckAdBlock = FakeBlockAdBlock;
+        window.fuckAdBlock = window.blockAdBlock;
+        window.Snigel = window.Snigel || {};
+    } catch(e) {}
+
+    // 2. Anti-Adblock Modal Wall Defuser & Scroll Restoration
+    function defuseAntiAdblockWalls() {
+        try {
+            var wallSelectors = [
+                '.fc-ab-root',
+                '.adblock-modal',
+                '.adblock-overlay',
+                '.adblock-wall',
+                '.anti-adblock',
+                '.adblocker-modal',
+                '.sp-message-open',
+                '#adblock-notice',
+                '#adblocker-detected',
+                'div[id*="adblock-dialog"]',
+                'div[class*="adblock-dialog"]',
+                '.tp-backdrop',
+                '.tp-modal'
+            ];
+            var walls = document.querySelectorAll(wallSelectors.join(', '));
+            for (var i = 0; i < walls.length; i++) {
+                try { walls[i].remove(); } catch(_) {}
+            }
+
+            // Restore scrolling if site locked it
+            if (document.body) {
+                var bStyle = window.getComputedStyle(document.body);
+                if (bStyle.overflow === 'hidden' && !document.querySelector('.nav-open, .menu-open, .modal-open')) {
+                    document.body.style.setProperty('overflow', 'auto', 'important');
+                }
+            }
+            if (document.documentElement) {
+                var dStyle = window.getComputedStyle(document.documentElement);
+                if (dStyle.overflow === 'hidden') {
+                    document.documentElement.style.setProperty('overflow', 'auto', 'important');
+                }
+            }
+        } catch(_) {}
+    }
+
+    // 3. AdGuard Advanced Cosmetic Filtering
+    function cleanAdguardCosmetics() {
+        try {
+            var sel = [
+                '.adguard-banner',
+                '[data-ad-unit]',
+                '[data-ad-slot]',
+                '.sponsored-post',
+                '.sponsored-content',
+                '.native-ad-unit',
+                'div[class*="taboola-"]',
+                'div[class*="outbrain-"]',
+                '.rc-sponsored',
+                '.trc_rbox_div',
+                '.trc_related_container'
+            ];
+            var items = document.querySelectorAll(sel.join(', '));
+            for (var j = 0; j < items.length; j++) {
+                try { items[j].remove(); } catch(_) {}
+            }
+        } catch(_) {}
+    }
+
+    function runAdguardProtection() {
+        defuseAntiAdblockWalls();
+        cleanAdguardCosmetics();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', runAdguardProtection);
+    } else {
+        runAdguardProtection();
+    }
+    window.addEventListener('load', runAdguardProtection);
+    setInterval(runAdguardProtection, 2500);
+})();
+"""
+
 GENERIC_COSMETIC_SCRIPT = """
 /* 🛡️ Safeer Linux Mint - Universal Ad & Tracker Shield */
 (function() {
