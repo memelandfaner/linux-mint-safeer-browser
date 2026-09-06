@@ -7,7 +7,7 @@ set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_NAME="safeer-browser"
-VERSION="1.0.7"
+VERSION="1.0.8"
 ARCH="all"
 DEB_PACKAGE="${PKG_NAME}_${VERSION}_${ARCH}.deb"
 TAR_PACKAGE="safeer-browser-linux.tar.gz"
@@ -125,7 +125,7 @@ Version: ${VERSION}
 Section: web
 Priority: optional
 Architecture: ${ARCH}
-Depends: python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, gir1.2-webkit2-4.1, gir1.2-glib-2.0
+Depends: python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, gir1.2-webkit2-4.1, gir1.2-soup-3.0, gir1.2-glib-2.0
 Maintainer: Safeer Sovereign Security Team <support@safeer.org>
 Homepage: https://github.com/memelandfaner/linux-mint-safeer-browser
 Description: Sovereign, ultra-fast, and private web browser for Linux Mint & Ubuntu

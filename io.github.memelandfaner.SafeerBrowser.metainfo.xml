@@ -53,6 +53,9 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.0.8" date="2026-09-06">
+      <description><p>Fix encrypted DNS transport, concurrent connections, YouTube media stability and false malware warnings for advertising domains.</p></description>
+    </release>
     <release version="1.0.7" date="2026-09-06">
       <description>
         <p>Release v1.0.7: Added onboarding setup wizard, bookmarks toolbar, DuckDuckGo default search engine, keyboard shortcuts (Ctrl+Shift+T, Ctrl+Tab, Ctrl+1..9, Ctrl+K), and safe alternatives priority (40).</p>

@@ -10,14 +10,28 @@ import urllib.parse
 YOUTUBE_ADBLOCK_SCRIPT = """
 /* 🛡️ Safeer Linux Mint - YouTube Zero-Ad & Performance Engine */
 (function() {
+    var h = location.hostname.toLowerCase();
+    if (!(h === 'youtube.com' || h.endsWith('.youtube.com') || h === 'youtu.be' || h === 'youtube-nocookie.com' || h.endsWith('.youtube-nocookie.com'))) return;
     if (window._safeer_linux_yt_active) return;
     if (window !== window.top && location.pathname.indexOf('/embed/') === -1) return;
     window._safeer_linux_yt_active = true;
 
+    // Keep reserved ad slots collapsed even when YouTube inserts them later.
+    function installAdCss() {
+        if (document.getElementById('safeer-yt-ad-slots')) return;
+        var parent = document.head || document.documentElement;
+        if (!parent) return;
+        var style = document.createElement('style');
+        style.id = 'safeer-yt-ad-slots';
+        style.textContent = 'ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-promoted-sparkles-web-renderer, ytd-promoted-video-renderer, ytd-display-ad-renderer, ytd-companion-slot-renderer, #player-ads { display:none!important; margin:0!important; padding:0!important; min-height:0!important; }';
+        parent.appendChild(style);
+    }
+    installAdCss();
+    document.addEventListener('DOMContentLoaded', installAdCss);
+
     // 0. Connection Pre-warming (Preconnect & DNS-prefetch)
     try {
         var preconnects = [
-            'https://googlevideo.com',
             'https://i.ytimg.com',
             'https://yt3.ggpht.com',
             'https://m.youtube.com',
@@ -147,29 +161,15 @@ YOUTUBE_ADBLOCK_SCRIPT = """
     function isAdActive() {
         var p = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
         if (p && (p.classList.contains('ad-showing') || p.classList.contains('ad-interrupting'))) return true;
-        if (document.querySelector('.ytp-ad-player-overlay, .ytp-ad-module, .ad-showing')) return true;
+        // YouTube keeps .ytp-ad-module mounted during normal songs too.
+        // Only the player's active-ad state identifies an advertisement.
         return false;
     }
 
     function superviseYouTube() {
-        var video = document.querySelector('video.video-stream, video');
-        if (video && isAdActive()) {
-            // Safety check: only accelerate if video is clearly an ad (< 120s) so full videos are NEVER skipped
-            if (isFinite(video.duration) && video.duration < 120 && video.duration > 0) {
-                if (Math.abs(video.currentTime - video.duration) > 0.3) {
-                    try {
-                        video.playbackRate = 16.0;
-                        video.muted = true;
-                        video.currentTime = video.duration - 0.05;
-                    } catch(e) {}
-                }
-            }
-            clickSkip();
-        } else if (video) {
-            if (video.playbackRate > 2.0) {
-                try { video.playbackRate = 1.0; } catch(_) {}
-            }
-        }
+        // Seeking/accelerating the ad media while WebKit changes its pipeline
+        // can crash GStreamer. Let the player own timing; use its skip control.
+        if (isAdActive()) clickSkip();
 
         // Clean cosmetic overlay banners
         var adOverlays = document.querySelectorAll(
@@ -188,8 +188,7 @@ YOUTUBE_ADBLOCK_SCRIPT = """
         // Auto-dismiss YouTube adblock nag dialogs & confirm buttons
         var dismissBtns = document.querySelectorAll(
             'tp-yt-paper-dialog #dismiss-button, ytd-enforcement-message-view-model #dismiss-button, ' +
-            'ytd-popup-container button.yt-spec-button-shape-next--filled, ' +
-            '#playability-error-confirm-button, yt-confirm-dialog-renderer #confirm-button'
+            'ytd-enforcement-message-view-model button[aria-label="Dismiss"]'
         );
         for (var d = 0; d < dismissBtns.length; d++) {
             try {
@@ -198,34 +197,6 @@ YOUTUBE_ADBLOCK_SCRIPT = """
                 }
             } catch(e) {}
         }
-        var video = document.querySelector('video.video-stream, video');
-        if (video && !video._safeer_instant_hooks) {
-            video._safeer_instant_hooks = true;
-            try { video.preload = 'auto'; } catch(_) {}
-            var onMediaReady = function() {
-                if (video.paused && !video._safeer_user_paused && !isAdActive()) {
-                    try { video.play().catch(function() {}); } catch(_) {}
-                }
-            };
-            video.addEventListener('loadstart', onMediaReady);
-            video.addEventListener('loadedmetadata', onMediaReady);
-            video.addEventListener('canplay', onMediaReady);
-            video.addEventListener('canplaythrough', onMediaReady);
-            video.addEventListener('pause', function() {
-                if (!video.ended && video.readyState >= 2) {
-                    video._safeer_user_paused = true;
-                }
-            });
-            video.addEventListener('play', function() {
-                video._safeer_user_paused = false;
-            });
-        }
-
-        // Only trigger play if enough data is buffered (readyState >= 3: HAVE_FUTURE_DATA) to avoid audio stutter
-        if (video && video.paused && !video.ended && !video._safeer_user_paused && !isAdActive() && video.readyState >= 3) {
-            try { video.play().catch(function() {}); } catch(e) {}
-        }
-
         // Ensure watch player remains crisp and visible
         if (location.pathname.indexOf('/watch') !== -1) {
             var player = document.getElementById('player') || document.getElementById('movie_player');
@@ -416,6 +387,10 @@ GENERIC_COSMETIC_SCRIPT = """
 (function() {
     function cleanGenericAds() {
         var adSelectors = [
+            '[data-component="ad-slot"]', '[data-testid="ad-unit"]',
+            '.ad-placeholder', '.ad-slot-container', '.advertisement-wrapper',
+            '.ad-unit', '.ad-unit-container', '.ad-placement', '.ad-slot-wrapper',
+            '.ads-container', '.ads-wrapper',
             'ins.adsbygoogle',
             'div[id*="google_ads"]',
             'div[id*="dfp-ad"]',
@@ -694,7 +669,10 @@ ABUSE_CH_BLOCKED_DOMAINS = {
     "posta-slovenije-paket.top",
     "dhl-slovenia-slednje.cc",
     "si-pass-prijava.info",
-    # 4. StevenBlack Malware & Vsiljiva oglasna/stavna omrežja (popunder/malvertising)
+}
+
+# Ad/tracker matches are blocked silently and are not classified as malware.
+AD_TRACKER_DOMAINS = {
     "doubleclick.net",
     "googlesyndication.com",
     "popads.net",
@@ -759,7 +737,7 @@ for _domain in ABUSE_CH_BLOCKED_DOMAINS:
     _threat_trie.insert(_domain)
 
 
-def is_threat_domain(url: str) -> bool:
+def _url_host(url: str) -> str:
     """Checks if the given URL or domain belongs to a known malicious C2, malware, or phishing domain using O(k) ReverseDomainTrie."""
     if not url:
         return False
@@ -774,7 +752,20 @@ def is_threat_domain(url: str) -> bool:
     except Exception:
         host = url.lower().strip()
 
-    return _threat_trie.is_blocked(host)
+    return host
+
+
+_ad_trie = ReverseDomainTrie()
+for _domain in AD_TRACKER_DOMAINS:
+    _ad_trie.insert(_domain)
+
+
+def is_threat_domain(url: str) -> bool:
+    return _threat_trie.is_blocked(_url_host(url))
+
+
+def is_ad_domain(url: str) -> bool:
+    return _ad_trie.is_blocked(_url_host(url))
 
 
 FORCE_DARK_MODE_CSS = """

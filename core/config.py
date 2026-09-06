@@ -351,12 +351,28 @@ class ConfigManager:
                 p["id"] = f"p_{idx}_{str(uuid.uuid4())[:8]}"
                 modified = True
             seen_ids.add(p["id"])
-            if not p.get("mark"):
-                p["mark"] = "🌐"
-                modified = True
-            if not p.get("title"):
-                p["title"] = p.get("url", "Priljubljena stran")
-                modified = True
+            if not p.get("mark") or p.get("mark") == "🌐":
+                if p.get("icon"):
+                    p["mark"] = p.get("icon")
+                    modified = True
+                elif not p.get("mark"):
+                    p["mark"] = "🌐"
+                    modified = True
+
+            p_url = (p.get("url") or "").strip()
+            curr_title = (p.get("title") or "").strip()
+            if not curr_title or curr_title == p_url:
+                if p.get("name") and p.get("name").strip() != p_url:
+                    p["title"] = p.get("name").strip()
+                    modified = True
+                elif not curr_title:
+                    try:
+                        parsed = urllib.parse.urlparse(p_url)
+                        netloc = parsed.netloc.replace("www.", "")
+                        p["title"] = netloc if netloc else p_url
+                    except Exception:
+                        p["title"] = p_url or "Priljubljena stran"
+                    modified = True
 
         if modified:
             self.save_portals(portals)

@@ -1,3 +1,11 @@
+safeer-browser (1.0.8-0ubuntu1~noble1) noble; urgency=medium
+
+  * Fix HTTP/2 encrypted DNS and preserve initial tunnel payload.
+  * Separate ad blocking from malware warnings.
+  * Remove aggressive media seeking and playback overrides.
+
+ -- Safeer Sovereign Security Team <support@safeer.org>  Sun, 06 Sep 2026 21:15:00 +0200
+
 safeer-browser (1.0.7-0ubuntu1~noble1) noble; urgency=medium
 
   * Initial PPA release for Linux Mint 22 / Ubuntu 24.04 (Noble Numbat).

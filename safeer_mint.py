@@ -48,6 +48,7 @@ from core.adblock import (
     TAB_THROTTLER_SCRIPT,
     strip_tracking_parameters,
     is_threat_domain,
+    is_ad_domain,
     FORCE_DARK_MODE_CSS
 )
 from core.reader import READER_MODE_JS
@@ -1379,13 +1380,39 @@ class SafeerMintBrowser(Gtk.Window):
         portals = self.config.get_portals()
         for p in portals:
             p_id = p.get("id")
-            p_title = p.get("title", "")
-            p_url = p.get("url", "")
-            p_mark = p.get("mark", "🌐")
+            p_url = (p.get("url") or "").strip()
+            p_title = (p.get("title") or p.get("name") or "").strip()
+            p_mark = (p.get("mark") or p.get("icon") or "🌐").strip()
+
+            # Prefer friendly name or clean domain if title is identical to raw URL
+            if not p_title or p_title == p_url or p_title.startswith("http://") or p_title.startswith("https://"):
+                if p.get("name") and p.get("name").strip() != p_url:
+                    p_title = p.get("name").strip()
+                elif p.get("title") and not (p.get("title").startswith("http://") or p.get("title").startswith("https://")):
+                    p_title = p.get("title").strip()
+                else:
+                    try:
+                        parsed = urllib.parse.urlparse(p_url)
+                        domain = parsed.netloc.replace("www.", "")
+                        if domain:
+                            p_title = domain
+                    except Exception:
+                        pass
+
+            if not p_title:
+                p_title = p_url
+
+            if p_mark in ("🌐", "") and p.get("icon"):
+                p_mark = p.get("icon").strip()
 
             btn_chip = Gtk.Button(label=f"{p_mark} {p_title}")
             btn_chip.get_style_context().add_class("bookmark-chip")
-            btn_chip.set_tooltip_text(f"{p_title}\n{p_url}")
+
+            # Avoid duplicated tooltip lines when title equals or contains full URL
+            if p_title and p_title != p_url:
+                btn_chip.set_tooltip_text(f"{p_title}\n{p_url}")
+            else:
+                btn_chip.set_tooltip_text(p_url)
 
             # Left click opens in active tab
             btn_chip.connect("clicked", lambda b, u=p_url: self.load_url(u))
@@ -1893,8 +1920,12 @@ class SafeerMintBrowser(Gtk.Window):
         integrations = self.config.get("integrations", {})
         for s_id, s_data in integrations.items():
             if s_data.get("enabled", True):
-                btn = Gtk.Button(label=s_data.get("icon", "🌐"))
-                btn.set_tooltip_text(f"{s_data.get('name', 'Stran')}\n{s_data.get('url', '')}")
+                s_name = s_data.get('name', 'Stran').strip()
+                s_url = s_data.get('url', '').strip()
+                if s_name and s_url and s_name != s_url:
+                    btn.set_tooltip_text(f"{s_name}\n{s_url}")
+                else:
+                    btn.set_tooltip_text(s_name or s_url)
                 btn.get_style_context().add_class("dock-btn")
                 if self.active_sidebar_service == s_id:
                     btn.get_style_context().add_class("active")
@@ -2052,6 +2083,9 @@ class SafeerMintBrowser(Gtk.Window):
                 if not is_safe_web_url(uri):
                     print(f"[Create WebView Security] Zavrnjen nevaren protokol: {uri}")
                     return None
+                if self.config.get("adblock_enabled", True) and is_ad_domain(uri) and not is_threat_domain(uri):
+                    self.config.increment_ads_blocked(1)
+                    return None
                 if is_threat_domain(uri):
                     self.show_threat_warning(uri)
                     return None
@@ -2076,6 +2110,10 @@ class SafeerMintBrowser(Gtk.Window):
                 if uri:
                     if not is_safe_web_url(uri):
                         print(f"[Policy Security] Blokiran nedovoljen protokol za novo okno: {uri}")
+                        decision.ignore()
+                        return True
+                    if self.config.get("adblock_enabled", True) and is_ad_domain(uri) and not is_threat_domain(uri):
+                        self.config.increment_ads_blocked(1)
                         decision.ignore()
                         return True
                     if is_threat_domain(uri):
@@ -2105,6 +2143,10 @@ class SafeerMintBrowser(Gtk.Window):
                 if uri:
                     if not is_safe_web_url(uri):
                         print(f"[Policy Security] Blokiran nedovoljen protokol navigacije: {uri}")
+                        decision.ignore()
+                        return True
+                    if self.config.get("adblock_enabled", True) and is_ad_domain(uri) and not is_threat_domain(uri):
+                        self.config.increment_ads_blocked(1)
                         decision.ignore()
                         return True
                     if is_threat_domain(uri):
@@ -3331,7 +3373,7 @@ class SafeerMintBrowser(Gtk.Window):
         )
         dialog.format_secondary_text(
             f"Povezava z '{domain}' je bila prekinjena.\n"
-            "abuse.ch C2 Botnet zaščita je preprečila zlonamerno komunikacijo."
+            "Naslov je naveden v lokalnem seznamu groženj. Dostop je blokiran zaradi varnosti."
         )
         dialog.run()
         dialog.destroy()

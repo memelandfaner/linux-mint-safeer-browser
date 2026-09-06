@@ -441,7 +441,11 @@ function renderPortals() {
 
     const titleSpan = document.createElement('span');
     titleSpan.className = 'portal-title';
-    titleSpan.textContent = portal.title || '';
+    let pTitle = (portal.title || portal.name || '').trim();
+    if (!pTitle || pTitle === portal.url) {
+      pTitle = portal.name || domain.replace(/^www\./, '') || portal.url;
+    }
+    titleSpan.textContent = pTitle;
 
     card.appendChild(markSpan);
     card.appendChild(titleSpan);

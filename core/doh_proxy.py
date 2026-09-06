@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
 Safeer Browser for Linux Mint - DNS-over-HTTPS (DoH) & Encrypted Proxy Engine
-Provides zero-root, zero-leak encrypted DNS resolution (Cloudflare, Quad9, Google)
-and local HTTP/CONNECT proxy tunneling to protect privacy and bypass ISP censorship.
+Encrypted DNS with HTTP/2 support and bounded local HTTP/CONNECT tunneling.
+Public target lookups fail closed; resolver endpoint bootstrap uses the system DNS.
 """
 
 import socket
 import select
 import threading
 import time
-import urllib.request
 import urllib.parse
-import json
-import ssl
+import ipaddress
+import math
+import gi
+gi.require_version("Soup", "3.0")
+from gi.repository import Soup, Gio, GLib
 from typing import Dict, Tuple, Optional, List
 
 # Znani zanesljivi DoH ponudniki
@@ -34,7 +36,7 @@ DOH_PROVIDERS = {
     },
     "google": {
         "name": "Google Public DNS (8.8.8.8)",
-        "url": "https://dns.google/resolve",
+        "url": "https://dns.google/dns-query",
         "fallback_ip": "8.8.8.8"
     }
 }
@@ -53,7 +55,8 @@ class DoHResolver:
         self._cache: Dict[str, Tuple[str, float]] = {}
         self._lock = threading.Lock()
         # SSL kontekst s preverjanjem veljavnosti sistemskih certifikatov
-        self._ssl_context = ssl.create_default_context()
+        self._transport = threading.local()
+        self._pending = {}
 
     def set_provider(self, provider: str, custom_url: str = ""):
         with self._lock:
@@ -71,7 +74,17 @@ class DoHResolver:
         if not hostname:
             return None
 
-        h = hostname.lower().strip()
+        h = hostname.lower().strip().rstrip(".")
+        try:
+            return str(ipaddress.ip_address(h))
+        except ValueError:
+            pass
+        try:
+            h = h.encode("idna").decode("ascii")
+            if len(h) > 253 or any(not label or len(label) > 63 for label in h.split(".")):
+                return None
+        except UnicodeError:
+            return None
 
         # Če je že IPv4 naslov
         parts = h.split(".")
@@ -90,25 +103,30 @@ class DoHResolver:
                 else:
                     del self._cache[h]
 
-        # 2. Pošlji poizvedbo prek DoH
-        ip, ttl = self._query_doh(h, timeout)
-
-        if ip:
+        # Coalesce requests for one host and never fall back to plaintext DNS.
+        with self._lock:
+            generation = (self.provider, self.custom_url)
+            key = (generation, h)
+            event = self._pending.get(key)
+            owner = event is None
+            if owner:
+                event = threading.Event()
+                self._pending[key] = event
+        if not owner:
+            event.wait(timeout + 1)
             with self._lock:
-                # Omeji TTL med 60s in 3600s
-                effective_ttl = max(60.0, min(float(ttl), 3600.0))
-                self._cache[h] = (ip, now + effective_ttl)
-            return ip
-
-        # 3. Varen fallback na lokalni getaddrinfo, če DoH ni dosegljiv
+                entry = self._cache.get(h)
+                return entry[0] if entry and entry[1] > time.time() else None
         try:
-            res = socket.getaddrinfo(h, None, socket.AF_INET)
-            if res:
-                return res[0][4][0]
-        except Exception:
-            pass
-
-        return None
+            ip, ttl = self._query_doh(h, timeout)
+            with self._lock:
+                if generation == (self.provider, self.custom_url):
+                    self._cache[h] = (ip, time.time() + (max(1, min(ttl, 3600)) if ip else 15))
+            return ip
+        finally:
+            with self._lock:
+                self._pending.pop(key, None)
+                event.set()
 
     @staticmethod
     def _build_dns_wire_query(hostname: str) -> bytes:
@@ -123,7 +141,7 @@ class DoHResolver:
 
     @staticmethod
     def _parse_dns_wire_response(data: bytes) -> Tuple[Optional[str], int]:
-        if len(data) < 12:
+        if len(data) < 12 or not data[2] & 0x80 or data[2] & 0x02 or data[3] & 0x0f:
             return None, 300
         try:
             qdcount = int.from_bytes(data[4:6], "big")
@@ -167,59 +185,47 @@ class DoHResolver:
         return None, 300
 
     def _query_doh(self, hostname: str, timeout: float) -> Tuple[Optional[str], int]:
-        if self.provider == "custom" and self.custom_url:
+        if self.provider == "custom":
             base_url = self.custom_url
         else:
             provider_info = DOH_PROVIDERS.get(self.provider, DOH_PROVIDERS["quad9"])
             base_url = provider_info["url"]
 
-        # 1. Poizkusi z uradnim IETF RFC 8484 binarnim DNS sporočilom (POST)
+        # libsoup 3 negotiates HTTP/2 (required by Quad9). It is already used by
+        # WebKitGTK; keep normal certificate validation and bypass proxy recursion.
+        parsed = urllib.parse.urlsplit(base_url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            return None, 15
         try:
-            wire_req_data = self._build_dns_wire_query(hostname)
-            req = urllib.request.Request(
-                base_url,
-                data=wire_req_data,
-                headers={
-                    "Content-Type": "application/dns-message",
-                    "Accept": "application/dns-message",
-                    "User-Agent": "Safeer-DoH-Engine/1.0"
-                }
-            )
-            with urllib.request.urlopen(req, timeout=timeout, context=self._ssl_context) as resp:
-                if resp.status == 200:
-                    resp_data = resp.read()
-                    ip, ttl = self._parse_dns_wire_response(resp_data)
-                    if ip:
-                        return ip, ttl
+            session = getattr(self._transport, "session", None)
+            if session is None:
+                session = Soup.Session()
+                session.set_proxy_resolver(Gio.SimpleProxyResolver.new(None, []))
+                self._transport.session = session
+            session.set_timeout(max(1, math.ceil(timeout)))
+            message = Soup.Message.new("POST", base_url)
+            message.set_flags(Soup.MessageFlags.NO_REDIRECT)
+            message.set_request_body_from_bytes("application/dns-message", GLib.Bytes.new(self._build_dns_wire_query(hostname)))
+            message.get_request_headers().append("Accept", "application/dns-message")
+            stream = session.send(message, None)
+            try:
+                if message.get_status() != 200:
+                    return None, 15
+                if message.get_response_headers().get_content_type()[0] != "application/dns-message":
+                    return None, 15
+                data = bytearray()
+                while len(data) <= 65535:
+                    chunk = stream.read_bytes(min(8192, 65536 - len(data)), None).get_data()
+                    if not chunk:
+                        break
+                    data.extend(chunk)
+                if len(data) > 65535:
+                    return None, 15
+                return self._parse_dns_wire_response(bytes(data))
+            finally:
+                stream.close(None)
         except Exception:
-            pass
-
-        # 2. Varen nadomestni poizvedovalnik prek JSON DoH API-ja (Google, Cloudflare, NextDNS)
-        try:
-            query_url = f"{base_url}?name={urllib.parse.quote(hostname)}&type=A" if "?" not in base_url else f"{base_url}&name={urllib.parse.quote(hostname)}&type=A"
-            req = urllib.request.Request(
-                query_url,
-                headers={
-                    "Accept": "application/dns-json",
-                    "User-Agent": "Safeer-DoH-Engine/1.0"
-                }
-            )
-
-            with urllib.request.urlopen(req, timeout=timeout, context=self._ssl_context) as resp:
-                if resp.status == 200:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    answers = data.get("Answer", [])
-                    for ans in answers:
-                        # Type 1 = A zapis (IPv4)
-                        if ans.get("type") == 1:
-                            target_ip = ans.get("data")
-                            ttl = ans.get("TTL", 300)
-                            if target_ip:
-                                return target_ip, ttl
-        except Exception:
-            pass
-
-        return None, 300
+            return None, 15
 
 
 class LocalDoHProxy:
@@ -237,6 +243,9 @@ class LocalDoHProxy:
         self.is_running = False
         self._server_sock: Optional[socket.socket] = None
         self._thread: Optional[threading.Thread] = None
+        self._slots = threading.BoundedSemaphore(64)
+        self._sockets = set()
+        self._socket_lock = threading.Lock()
 
     def start(self) -> int:
         """Zažene posrednika v ločeni niti in vrne dodeljena lokalna vrata."""
@@ -248,6 +257,7 @@ class LocalDoHProxy:
         self._server_sock.bind((self.bind_host, self.requested_port))
         self.actual_port = self._server_sock.getsockname()[1]
         self._server_sock.listen(128)
+        self._server_sock.settimeout(1.0)
 
         self.is_running = True
         self._thread = threading.Thread(target=self._accept_loop, daemon=True, name="SafeerDoHProxy")
@@ -259,6 +269,14 @@ class LocalDoHProxy:
     def stop(self):
         """Varno ustavi posredniški strežnik."""
         self.is_running = False
+        with self._socket_lock:
+            for sock in list(self._sockets):
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                sock.close()
+            self._sockets.clear()
         if self._server_sock:
             try:
                 self._server_sock.close()
@@ -270,6 +288,11 @@ class LocalDoHProxy:
         while self.is_running:
             try:
                 client_sock, _ = self._server_sock.accept()
+                if not self._slots.acquire(blocking=False):
+                    client_sock.close()
+                    continue
+                with self._socket_lock:
+                    self._sockets.add(client_sock)
                 t = threading.Thread(target=self._handle_client, args=(client_sock,), daemon=True)
                 t.start()
             except Exception:
@@ -287,10 +310,11 @@ class LocalDoHProxy:
                     break
                 req_data += chunk
 
-            if not req_data:
+            if b"\r\n\r\n" not in req_data:
                 client_sock.close()
                 return
 
+            headers, initial_body = req_data.split(b"\r\n\r\n", 1)
             header_line = req_data.split(b"\r\n", 1)[0].decode("latin1", errors="ignore")
             parts = header_line.split()
             if len(parts) < 2:
@@ -302,7 +326,8 @@ class LocalDoHProxy:
             if method == "CONNECT":
                 # HTTPS Tunel: CONNECT example.com:443 HTTP/1.1
                 if ":" in target:
-                    host, port_s = target.split(":", 1)
+                    host, port_s = target.rsplit(":", 1)
+                    host = host.strip("[]")
                     port = int(port_s) if port_s.isdigit() else 443
                 else:
                     host = target
@@ -314,16 +339,21 @@ class LocalDoHProxy:
                     client_sock.close()
                     return
 
-                remote_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                remote_sock.settimeout(10.0)
-                remote_sock.connect((resolved_ip, port))
+                remote_sock = socket.create_connection((resolved_ip, port), timeout=10.0)
+                with self._socket_lock:
+                    self._sockets.add(remote_sock)
+                if not self.is_running:
+                    return
 
                 # Potrdi tunel narocniku
                 client_sock.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
 
                 # Odstrani timeoute za neomejen podatkovni prenos (streaming, web)
-                client_sock.settimeout(None)
-                remote_sock.settimeout(None)
+                client_sock.settimeout(30.0)
+                remote_sock.settimeout(30.0)
+
+                if initial_body:
+                    remote_sock.sendall(initial_body)
 
                 # Dvosmerno pretakanje bajtov med klientom in oddaljenim streznikom
                 self._pipe_sockets(client_sock, remote_sock)
@@ -340,20 +370,23 @@ class LocalDoHProxy:
                     client_sock.close()
                     return
 
-                remote_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                remote_sock.settimeout(10.0)
-                remote_sock.connect((resolved_ip, port))
+                remote_sock = socket.create_connection((resolved_ip, port), timeout=10.0)
+                with self._socket_lock:
+                    self._sockets.add(remote_sock)
+                if not self.is_running:
+                    return
 
                 # Preuredi zahtevek v relativno pot za ciljni streznik
                 path = parsed.path or "/"
                 if parsed.query:
                     path += f"?{parsed.query}"
                 new_first_line = f"{method} {path} {parts[2] if len(parts) > 2 else 'HTTP/1.1'}\r\n".encode("latin1")
-                rest_of_headers = req_data.split(b"\r\n", 1)[1]
+                rest_of_headers = b"\r\n".join(line for line in headers.split(b"\r\n")[1:]
+                    if line.split(b":", 1)[0].lower() not in (b"proxy-authorization", b"proxy-connection")) + b"\r\n\r\n" + initial_body
                 remote_sock.sendall(new_first_line + rest_of_headers)
 
-                client_sock.settimeout(None)
-                remote_sock.settimeout(None)
+                client_sock.settimeout(30.0)
+                remote_sock.settimeout(30.0)
                 self._pipe_sockets(client_sock, remote_sock)
 
             else:
@@ -362,6 +395,10 @@ class LocalDoHProxy:
         except Exception:
             pass
         finally:
+            with self._socket_lock:
+                self._sockets.discard(client_sock)
+                self._sockets.discard(remote_sock)
+            self._slots.release()
             try:
                 client_sock.close()
             except Exception:
@@ -376,13 +413,13 @@ class LocalDoHProxy:
         """Asinhrono dvosmerno posredovanje podatkov z nicelno zakasnitvijo."""
         sockets = [s1, s2]
         bufsize = 65536
-        while True:
+        while self.is_running:
             try:
                 readable, _, exceptional = select.select(sockets, [], sockets, 60.0)
                 if exceptional:
                     break
                 if not readable:
-                    continue
+                    break
 
                 for s in readable:
                     data = s.recv(bufsize)
