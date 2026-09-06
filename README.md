@@ -39,8 +39,8 @@ Paket avtomatsko:
 
 ### Kontrolna vsota (SHA-256):
 ```text
-74ccfe1420db582fe09fdf4ea2c7c192220701f7c5700b6b506cb6069a9819aa  safeer-browser_1.0.7_all.deb
-29e05240c01a04e1b61cd23dae1b72e9881067f50c4d65140295afc30106b138  safeer-browser-linux.tar.gz
+f15c92aa8c4540fb3893b8ddcd7cd25dfbba19a8b9f57763bdc03ca63339c8ae  safeer-browser_1.0.7_all.deb
+c5e91e5c0d009a08e72d7c5f70d6d128913d59dde1e61228c0edda841b786958  safeer-browser-linux.tar.gz
 ```
 
 ---
