@@ -1750,13 +1750,6 @@ class SafeerMintBrowser(Gtk.Window):
         self.btn_customizer.connect("clicked", lambda b: self.open_customizer_dialog())
         self.nav_bar.pack_start(self.btn_customizer, False, False, 0)
 
-        # Virtual Keyboard Button (⌨️)
-        self.btn_keyboard = Gtk.Button(label="⌨️")
-        self.btn_keyboard.get_style_context().add_class("ff-nav-btn")
-        self.btn_keyboard.set_tooltip_text("Navidezna tipkovnica")
-        self.btn_keyboard.connect("clicked", self.toggle_virtual_keyboard)
-        self.nav_bar.pack_start(self.btn_keyboard, False, False, 0)
-
         self.top_bar.pack_start(self.nav_bar, False, False, 0)
 
         # 3. Tier 3: Bookmarks Toolbar (Vrstica priljubljenih strani)
@@ -2954,12 +2947,14 @@ class SafeerMintBrowser(Gtk.Window):
         new_state = self.config.toggle_virtual_keyboard()
         if new_state:
             self.keyboard_box.show_all()
-            self.btn_keyboard.set_label("⌨️ Tipkovnica (Vklopljena)")
-            self.btn_keyboard.get_style_context().add_class("active")
+            if hasattr(self, "btn_keyboard"):
+                self.btn_keyboard.set_label("⌨️ Tipkovnica (Vklopljena)")
+                self.btn_keyboard.get_style_context().add_class("active")
         else:
             self.keyboard_box.hide()
-            self.btn_keyboard.set_label("⌨️ Tipkovnica")
-            self.btn_keyboard.get_style_context().remove_class("active")
+            if hasattr(self, "btn_keyboard"):
+                self.btn_keyboard.set_label("⌨️ Tipkovnica")
+                self.btn_keyboard.get_style_context().remove_class("active")
 
     def on_keyboard_message(self, content_mgr, js_result):
         try:
