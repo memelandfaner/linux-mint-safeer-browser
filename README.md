@@ -1,9 +1,9 @@
 # Safeer Browser — Linux Mint & Ubuntu Edition 🛡️
 
-[![Release](https://img.shields.io/badge/Release-v1.0.6-emerald?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.6)
+[![Release](https://img.shields.io/badge/Release-v1.0.7-emerald?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.7)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux_Mint_%7C_Ubuntu_%7C_Debian-87cf3e?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser)
-[![Package](https://img.shields.io/badge/Package-.deb_(all_%7C_amd64)-cyan?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.6)
+[![Package](https://img.shields.io/badge/Package-.deb_(all_%7C_amd64)-cyan?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.7)
 [![Web](https://img.shields.io/badge/Spletna_stran-Linux_Izdaja-87cf3e?style=flat-square)](https://memelandfaner.github.io/-safeer-browser/linux/)
 
 > **Ultra lahek, suveren in energetsko varčen Linux brskalnik, ki se odpre v pol sekunde, porabi 3-krat manj RAM-a kot Chrome/Firefox in ima vgrajen Instant YouTube predvajalnik brez oglasov ter lokalni ščit pred zlonamernimi domenami.**
@@ -16,8 +16,8 @@
 | :--- | :--- | :--- | :--- |
 | **Čas hladnega zagona** | **< 0.5 s** (hipen) | 2.4 s | 1.9 s |
 | **Poraba RAM (3 zavihki + YT)** | **~180 MB** | 680 MB | 590 MB |
-| **Obremenitev `~/Prenosi/<naslov>.pdf`.rocesorja pri zvoku** | **< 1.5% CPU** | 8–15% CPU | 6–12% CPU |
-| **YouTube v `~/Prenosi/<naslov>.pdf`.zadju** | **Brezplačno & 0 oglasov** | Ustavitev `~/Prenosi/<naslov>.pdf`. Oglasi | Oglasi |
+| **Obremenitev procesorja pri zvoku** | **< 1.5% CPU** | 8–15% CPU | 6–12% CPU |
+| **YouTube v ozadju** | **Brezplačno & 0 oglasov** | Ustavitev / Oglasi | Oglasi |
 | **Lokalna varnost (C2 ščit)** | **Vgrajen O(k) Trie (abuse.ch)** | Osnovni filter | Osnovni filter |
 | **Telemetrija & sledenje** | **0 % (100% lokalno)** | Googlovo sledenje | Telemetrija |
 | **Namestitveni paket** | **1.1 MB (.deb)** | ~110 MB | ~90 MB |
@@ -27,11 +27,11 @@
 ## 📦 Namestitev (Priporočeno)
 
 ### 1. Nativni Debian / Ubuntu / Linux Mint paket (`.deb`):
-Najnovejšo različico prenesite s strani [GitHub Releases](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.6) ali namestite z enim ukazom:
+Najnovejšo različico prenesite s strani [GitHub Releases](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.7) ali namestite z enim ukazom:
 
 ```bash
 # Namestitev z uradnim upraviteljem apt:
-sudo apt install ./safeer-browser_1.0.6_all.deb
+sudo apt install ./safeer-browser_1.0.7_all.deb
 ```
 *Ali pa datoteko `.deb` preprosto dvokliknite v upravitelju datotek (Gdebi / Upravitelj programov).*
 
@@ -42,9 +42,9 @@ Paket avtomatsko:
 
 ### Kontrolne vsote (SHA-256):
 ```text
-89829f09a5c2ab5e935ca536d009cb76ec5cde7a568bf7a988e2186773d36ede  safeer-browser_1.0.6_all.deb
-89829f09a5c2ab5e935ca536d009cb76ec5cde7a568bf7a988e2186773d36ede  safeer-browser_1.0.6_amd64.deb
-3b42016ab6bd1c8b411829219f2dd26825c501aa628f1b4d5bbd29138af9cf11  safeer-browser-linux.tar.gz
+ff48a3c825c62da9d25e32e7c7a104899d372b4e51a338034ca3f0f8d2707b82  safeer-browser_1.0.7_all.deb
+ff48a3c825c62da9d25e32e7c7a104899d372b4e51a338034ca3f0f8d2707b82  safeer-browser_1.0.7_amd64.deb
+4f4154763bc0ebc885aceac5e147dcbb94ede97100d3e3e9533b83694289a6c3  safeer-browser-linux.tar.gz
 ```
 
 ---
@@ -117,5 +117,5 @@ Za razvijalce, ki želijo prispevati ali zagnati brskalnik neposredno iz izvorne
 ## ⚖️ Pravno obvestilo (Security Disclaimer)
 - **Varnostni sloj**: **Safeer is a security layer, not a guarantee against all online threats.** Noben filter ne more zagotoviti 100 % zaščite pred neznanimi grožnjami (Zero-Day). Safeer deluje kot lokalni varnostni sloj, ki bistveno zmanjšuje tveganje in blokira znana škodljiva vozlišča ter sledilce.
 - **Uradni repozitorij**: [https://github.com/memelandfaner/linux-mint-safeer-browser](https://github.com/memelandfaner/linux-mint-safeer-browser)
-- **Prenosi in izdaje**: [GitHub Releases v1.0.6](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.6)
+- **Prenosi in izdaje**: [GitHub Releases v1.0.7](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.7)
 

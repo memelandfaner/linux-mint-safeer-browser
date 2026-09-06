@@ -700,6 +700,101 @@ class SafeerMintBrowser(Gtk.Window):
             color: #ffffff;
         }}
 
+        /* 2b. Bookmarks Toolbar */
+        .bookmarks-toolbar {{
+            background-color: {bg_base};
+            background: {bg_base};
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 2px 10px 4px 10px;
+            min-height: 32px;
+        }}
+        .bookmark-chip {{
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            color: #d1d5db;
+            padding: 2px 8px;
+            font-size: 13px;
+            font-weight: 500;
+            margin-right: 4px;
+            transition: all 100ms ease;
+        }}
+        .bookmark-chip:hover {{
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }}
+        .bookmark-chip-action {{
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            color: #9ca3af;
+            padding: 2px 6px;
+            font-size: 13px;
+            margin-left: 2px;
+        }}
+        .bookmark-chip-action:hover {{
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }}
+
+        /* Bookmarks Popover */
+        .bookmarks-popover {{
+            background-color: {bg_card};
+            background: {bg_card};
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+        }}
+        .bookmark-search-entry {{
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #ffffff;
+            font-size: 13.5px;
+            padding: 4px 8px;
+        }}
+        .bookmark-popover-row {{
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            padding: 2px 4px;
+            transition: background 80ms ease;
+        }}
+        .bookmark-popover-row:hover {{
+            background: rgba(255, 255, 255, 0.08);
+        }}
+        .bookmark-open-btn {{
+            background: transparent;
+            border: none;
+            color: #f3f4f6;
+            font-size: 13.5px;
+            font-weight: 500;
+            padding: 4px 6px;
+        }}
+        .bookmark-row-action {{
+            background: transparent;
+            border: none;
+            color: #9ca3af;
+            padding: 2px 6px;
+            font-size: 13px;
+            border-radius: 4px;
+        }}
+        .bookmark-row-action:hover {{
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+        }}
+        .btn-curr-bookmark {{
+            background: rgba(0, 96, 223, 0.2);
+            border: 1px solid rgba(0, 96, 223, 0.4);
+            border-radius: 6px;
+            color: #38bdf8;
+            font-weight: 600;
+            padding: 6px 10px;
+        }}
+        .btn-curr-bookmark:hover {{
+            background: rgba(0, 96, 223, 0.35);
+            color: #ffffff;
+        }}
+
         /* 4. Left Dock and Sidebar */
         .dock-bar {{
             background-color: {bg_base};
@@ -1020,9 +1115,14 @@ class SafeerMintBrowser(Gtk.Window):
             self.bookmark_current_page()
             return True
 
-        # Ctrl + B: Open Portals / Bookmarks dialog
-        elif ctrl and event.keyval in (Gdk.KEY_b, Gdk.KEY_B):
-            self.open_portals_dialog()
+        # Ctrl + Shift + B: Toggle Bookmarks Toolbar (Universal standard)
+        elif ctrl and shift and event.keyval in (Gdk.KEY_b, Gdk.KEY_B):
+            self.toggle_bookmarks_bar()
+            return True
+
+        # Ctrl + B: Open Favorites / Bookmarks Popover Menu
+        elif ctrl and not shift and event.keyval in (Gdk.KEY_b, Gdk.KEY_B):
+            self.toggle_bookmarks_popover()
             return True
 
         # Ctrl + R or F5: Reload
@@ -1206,6 +1306,268 @@ class SafeerMintBrowser(Gtk.Window):
             ctx.remove_class("active-star")
             self.btn_star.set_tooltip_text(f"{t('bookmark_page')} (Ctrl + D)")
 
+    def load_url(self, url):
+        """Naloži podani URL v aktivni zavihek ali ustvari novega, če ni aktivnega."""
+        if not url:
+            return
+        if url == "safeer://home":
+            self.load_homepage()
+            return
+        if not url.startswith("http://") and not url.startswith("https://") and not url.startswith("file://") and not url.startswith("safeer://"):
+            url = "https://" + url
+        wv = self.get_active_webview()
+        if wv:
+            wv.load_uri(url)
+        else:
+            self.new_tab(url=url, switch=True)
+
+    def toggle_bookmarks_bar(self):
+        """Vklopi ali izklopi prikaz vodoravne vrstice z zaznamki."""
+        if not hasattr(self, 'bookmarks_bar'):
+            return
+        is_visible = not self.bookmarks_bar.get_visible()
+        if is_visible:
+            self.populate_bookmarks_bar()
+            self.bookmarks_bar.show_all()
+        else:
+            self.bookmarks_bar.hide()
+        self.config.set("show_bookmarks_bar", is_visible)
+
+    def populate_bookmarks_bar(self):
+        """Napolni vodoravno vrstico z zaznamki s hitrimi ploščicami priljubljenih strani."""
+        if not hasattr(self, 'bookmarks_bar'):
+            return
+        for child in self.bookmarks_bar.get_children():
+            self.bookmarks_bar.remove(child)
+
+        portals = self.config.get_portals()
+        for p in portals:
+            p_id = p.get("id")
+            p_title = p.get("title", "")
+            p_url = p.get("url", "")
+            p_mark = p.get("mark", "🌐")
+
+            btn_chip = Gtk.Button(label=f"{p_mark} {p_title}")
+            btn_chip.get_style_context().add_class("bookmark-chip")
+            btn_chip.set_tooltip_text(f"{p_title}\n{p_url}")
+
+            # Left click opens in active tab
+            btn_chip.connect("clicked", lambda b, u=p_url: self.load_url(u))
+
+            # Mouse button press (middle click = new tab, right click = context menu)
+            def on_chip_button_press(widget, event, portal=p):
+                if event.button == 2: # Middle click
+                    self.new_tab(url=portal.get("url", ""), switch=True)
+                    return True
+                elif event.button == 3: # Right click
+                    menu = Gtk.Menu()
+
+                    item_open = Gtk.MenuItem(label=t("open", "Odpri"))
+                    item_open.connect("activate", lambda m, u=portal.get("url", ""): self.load_url(u))
+                    menu.append(item_open)
+
+                    item_newtab = Gtk.MenuItem(label=t("open_in_new_tab", "Odpri v novem zavihku"))
+                    item_newtab.connect("activate", lambda m, u=portal.get("url", ""): self.new_tab(url=u, switch=True))
+                    menu.append(item_newtab)
+
+                    menu.append(Gtk.SeparatorMenuItem())
+
+                    item_edit = Gtk.MenuItem(label=f"✏️ {t('edit', 'Uredi')}...")
+                    item_edit.connect("activate", lambda m, prt=portal: self.open_portal_editor_dialog(prt, on_saved=self.broadcast_portals_update))
+                    menu.append(item_edit)
+
+                    item_del = Gtk.MenuItem(label=f"🗑️ {t('delete', 'Odstrani')}")
+                    def on_del_chip(m, pid=portal.get("id")):
+                        self.config.delete_portal(pid)
+                        self.broadcast_portals_update()
+                    item_del.connect("activate", on_del_chip)
+                    menu.append(item_del)
+
+                    menu.show_all()
+                    menu.popup_at_pointer(event)
+                    return True
+                return False
+
+            btn_chip.connect("button-press-event", on_chip_button_press)
+            self.bookmarks_bar.pack_start(btn_chip, False, False, 0)
+
+        # End action buttons: ➕ Add bookmark, ⚙️ Manage bookmarks
+        btn_add = Gtk.Button(label="➕")
+        btn_add.get_style_context().add_class("bookmark-chip-action")
+        btn_add.set_tooltip_text(t("add_new_bookmark"))
+        btn_add.connect("clicked", lambda b: self.open_portal_editor_dialog(None, on_saved=self.broadcast_portals_update))
+        self.bookmarks_bar.pack_end(btn_add, False, False, 0)
+
+        btn_manage = Gtk.Button(label="⚙️")
+        btn_manage.get_style_context().add_class("bookmark-chip-action")
+        btn_manage.set_tooltip_text(t("manage_bookmarks"))
+        btn_manage.connect("clicked", lambda b: self.open_portals_dialog())
+        self.bookmarks_bar.pack_end(btn_manage, False, False, 0)
+
+        self.bookmarks_bar.show_all()
+        if not self.config.get("show_bookmarks_bar", True):
+            self.bookmarks_bar.hide()
+
+    def toggle_bookmarks_popover(self, widget=None):
+        """Odpre ali zapre moderen plavajoči meni za hiter dostop in urejanje priljubljenih strani."""
+        if hasattr(self, '_bookmarks_popover') and self._bookmarks_popover:
+            if self._bookmarks_popover.is_visible():
+                self._bookmarks_popover.popdown()
+                return
+
+        popover = Gtk.Popover.new(self.btn_bookmarks)
+        popover.set_position(Gtk.PositionType.BOTTOM)
+        popover.get_style_context().add_class("bookmarks-popover")
+        self._bookmarks_popover = popover
+
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        main_box.set_margin_top(8)
+        main_box.set_margin_bottom(8)
+        main_box.set_margin_start(10)
+        main_box.set_margin_end(10)
+        main_box.set_size_request(380, -1)
+
+        # Header with actions
+        head_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        lbl_head = Gtk.Label(label=f"<b>⭐ {GLib.markup_escape_text(t('bookmarks_menu'))}</b>")
+        lbl_head.set_use_markup(True)
+        lbl_head.set_xalign(0.0)
+        head_box.pack_start(lbl_head, True, True, 0)
+
+        btn_add_new = Gtk.Button(label="➕")
+        btn_add_new.get_style_context().add_class("nav-btn")
+        btn_add_new.set_tooltip_text(t("add_new_bookmark"))
+        def on_add_new_click(b):
+            popover.popdown()
+            self.open_portal_editor_dialog(None, on_saved=self.broadcast_portals_update)
+        btn_add_new.connect("clicked", on_add_new_click)
+        head_box.pack_end(btn_add_new, False, False, 0)
+
+        btn_manage = Gtk.Button(label="⚙️")
+        btn_manage.get_style_context().add_class("nav-btn")
+        btn_manage.set_tooltip_text(t("manage_bookmarks"))
+        def on_manage_click(b):
+            popover.popdown()
+            self.open_portals_dialog()
+        btn_manage.connect("clicked", on_manage_click)
+        head_box.pack_end(btn_manage, False, False, 0)
+        main_box.pack_start(head_box, False, False, 0)
+
+        # Quick action: Bookmark/Edit current page
+        wv = self.get_active_webview()
+        cur_uri = wv.get_uri() if wv else ""
+        cur_title = wv.get_title() if wv else ""
+        if cur_uri and not cur_uri.startswith("safeer://") and "home.html" not in cur_uri:
+            portals = self.config.get_portals()
+            norm_uri = cur_uri.rstrip("/")
+            existing = next((p for p in portals if p.get("url", "").rstrip("/") == norm_uri), None)
+            if existing:
+                btn_curr = Gtk.Button(label=f"✏️ {t('edit')} »{existing.get('title', '')}«")
+                btn_curr.get_style_context().add_class("btn-curr-bookmark")
+                def on_edit_curr(b):
+                    popover.popdown()
+                    self.open_portal_editor_dialog(existing, on_saved=self.broadcast_portals_update)
+                btn_curr.connect("clicked", on_edit_curr)
+            else:
+                btn_curr = Gtk.Button(label=f"⭐ {t('add_current_page')}")
+                btn_curr.get_style_context().add_class("btn-curr-bookmark")
+                def on_add_curr(b):
+                    popover.popdown()
+                    self.open_portal_editor_dialog(None, prefill={"title": cur_title, "url": cur_uri}, on_saved=self.broadcast_portals_update)
+                btn_curr.connect("clicked", on_add_curr)
+            main_box.pack_start(btn_curr, False, False, 0)
+
+        # Search filter
+        search_entry = Gtk.SearchEntry()
+        search_entry.set_placeholder_text(t("search_bookmarks_placeholder"))
+        search_entry.get_style_context().add_class("bookmark-search-entry")
+        main_box.pack_start(search_entry, False, False, 0)
+
+        # Scrollable list of bookmarks
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_min_content_height(260)
+        scroll.set_max_content_height(380)
+
+        list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        scroll.add(list_box)
+        main_box.pack_start(scroll, True, True, 0)
+
+        def populate_popover_list(query=""):
+            for c in list_box.get_children():
+                list_box.remove(c)
+            portals = self.config.get_portals()
+            q = query.lower().strip()
+            filtered = [p for p in portals if not q or q in p.get("title", "").lower() or q in p.get("url", "").lower()]
+
+            if not filtered:
+                lbl_empty = Gtk.Label(label="Ni najdenih zaznamkov.")
+                lbl_empty.get_style_context().add_class("text-muted")
+                lbl_empty.set_margin_top(12)
+                list_box.pack_start(lbl_empty, False, False, 0)
+            else:
+                for p in filtered:
+                    p_id = p.get("id")
+                    p_title = p.get("title", "")
+                    p_url = p.get("url", "")
+                    p_mark = p.get("mark", "🌐")
+
+                    row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+                    row.get_style_context().add_class("bookmark-popover-row")
+
+                    btn_open = Gtk.Button(label=f"{p_mark}  {p_title}")
+                    btn_open.set_tooltip_text(p_url)
+                    btn_open.set_halign(Gtk.Align.FILL)
+                    lbl_child = btn_open.get_child()
+                    if lbl_child and hasattr(lbl_child, "set_xalign"):
+                        lbl_child.set_xalign(0.0)
+                    btn_open.get_style_context().add_class("bookmark-open-btn")
+                    def on_open(b, u=p_url):
+                        popover.popdown()
+                        self.load_url(u)
+                    btn_open.connect("clicked", on_open)
+                    row.pack_start(btn_open, True, True, 0)
+
+                    btn_edit = Gtk.Button(label="✏️")
+                    btn_edit.get_style_context().add_class("bookmark-row-action")
+                    btn_edit.set_tooltip_text(t("edit"))
+                    def on_edit_item(b, prt=p):
+                        popover.popdown()
+                        self.open_portal_editor_dialog(prt, on_saved=self.broadcast_portals_update)
+                    btn_edit.connect("clicked", on_edit_item)
+                    row.pack_start(btn_edit, False, False, 0)
+
+                    btn_del = Gtk.Button(label="🗑️")
+                    btn_del.get_style_context().add_class("bookmark-row-action")
+                    btn_del.set_tooltip_text(t("delete"))
+                    def on_del_item(b, pid=p_id):
+                        self.config.delete_portal(pid)
+                        self.broadcast_portals_update()
+                        populate_popover_list(search_entry.get_text())
+                    btn_del.connect("clicked", on_del_item)
+                    row.pack_start(btn_del, False, False, 0)
+
+                    list_box.pack_start(row, False, False, 0)
+
+            list_box.show_all()
+
+        populate_popover_list()
+        search_entry.connect("search-changed", lambda e: populate_popover_list(e.get_text()))
+
+        # Bottom toggle for Bookmarks Bar
+        bottom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        chk_bar = Gtk.CheckButton(label=t("toggle_bookmarks_bar"))
+        chk_bar.set_active(self.config.get("show_bookmarks_bar", True))
+        def on_toggle_chk(b):
+            self.toggle_bookmarks_bar()
+        chk_bar.connect("toggled", on_toggle_chk)
+        bottom_box.pack_start(chk_bar, True, True, 0)
+        main_box.pack_start(bottom_box, False, False, 0)
+
+        popover.add(main_box)
+        popover.show_all()
+        popover.popup()
+
     def create_top_bar(self):
         # Master header container (Tabs + Navigation bar in Firefox Proton layout)
         self.top_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -1265,6 +1627,13 @@ class SafeerMintBrowser(Gtk.Window):
         self.btn_home.set_tooltip_text(f"{t('home')} (Alt + Home)")
         self.btn_home.connect("clicked", lambda b: self.load_homepage())
         self.nav_bar.pack_start(self.btn_home, False, False, 0)
+
+        # Bookmarks / Favorites Menu (⭐)
+        self.btn_bookmarks = Gtk.Button(label="⭐")
+        self.btn_bookmarks.get_style_context().add_class("ff-nav-btn")
+        self.btn_bookmarks.set_tooltip_text(f"{t('bookmarks_menu')} (Ctrl + B)")
+        self.btn_bookmarks.connect("clicked", self.toggle_bookmarks_popover)
+        self.nav_bar.pack_start(self.btn_bookmarks, False, False, 0)
 
         # 3. Firefox Awesomebar / URL Box
         self.url_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -1353,6 +1722,14 @@ class SafeerMintBrowser(Gtk.Window):
         self.nav_bar.pack_start(self.btn_keyboard, False, False, 0)
 
         self.top_bar.pack_start(self.nav_bar, False, False, 0)
+
+        # 3. Tier 3: Bookmarks Toolbar (Vrstica priljubljenih strani)
+        self.bookmarks_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.bookmarks_bar.get_style_context().add_class("bookmarks-toolbar")
+        self.top_bar.pack_start(self.bookmarks_bar, False, False, 0)
+        self.populate_bookmarks_bar()
+        if not self.config.get("show_bookmarks_bar", True):
+            self.bookmarks_bar.hide()
 
     def show_shield_status_dialog(self):
         """Prikaže podrobno varnostno poročilo ščita."""
@@ -4369,7 +4746,7 @@ class SafeerMintBrowser(Gtk.Window):
         dialog.destroy()
 
     def broadcast_portals_update(self):
-        """Osveži priljubljene portale na vseh odprtih zavihkih z domačo stranjo."""
+        """Osveži priljubljene portale na vseh odprtih zavihkih z domačo stranjo in v orodnih vrsticah."""
         portals = self.config.get_portals()
         portals_json = json.dumps(portals)
         js = f"if (window.setCustomPortals) {{ window.setCustomPortals({portals_json}); }}"
@@ -4378,6 +4755,10 @@ class SafeerMintBrowser(Gtk.Window):
             uri = tab.get("uri", "")
             if wv and ("home.html" in uri or uri == "safeer://home"):
                 wv.run_javascript(js, None, None, None)
+        if hasattr(self, 'populate_bookmarks_bar'):
+            self.populate_bookmarks_bar()
+        if hasattr(self, 'update_star_status'):
+            self.update_star_status()
 
     def broadcast_language_update(self):
         """Osveži jezik na vseh odprtih zavihkih z domačo stranjo."""
@@ -4850,6 +5231,10 @@ class SafeerMintBrowser(Gtk.Window):
             self.btn_reload.set_tooltip_text(f"{t('reload')} (F5 / Ctrl + R)")
         if hasattr(self, 'btn_home'):
             self.btn_home.set_tooltip_text(f"{t('home')} (Alt + Home)")
+        if hasattr(self, 'btn_bookmarks'):
+            self.btn_bookmarks.set_tooltip_text(f"{t('bookmarks_menu')} (Ctrl + B)")
+        if hasattr(self, 'populate_bookmarks_bar'):
+            self.populate_bookmarks_bar()
         if hasattr(self, 'btn_shield'):
             self.btn_shield.set_tooltip_text(f"{t('app_title')} Cyber Shield: {t('adblock_active')}")
         if hasattr(self, 'url_entry'):
