@@ -1597,35 +1597,88 @@ class SafeerMintBrowser(Gtk.Window):
         dialog.destroy()
 
     def open_settings_dialog(self):
-        """Celovit dialog za nastavitve stranske vrstice in brskalnika."""
+        """Sodoben, pregleden in večjezični studio za nastavitve brskalnika Safeer."""
         dialog = Gtk.Dialog(
             title=f"⚙️ {t('settings')} — Safeer",
             transient_for=self,
             flags=0
         )
-        dialog.set_default_size(540, 580)
+        dialog.set_default_size(780, 640)
+        dialog.set_resizable(True)
+        dialog.set_position(Gtk.WindowPosition.CENTER)
         dialog.get_style_context().add_class("customizer-dialog")
+
         btn_close = dialog.add_button(t("close", "Zapri"), Gtk.ResponseType.CLOSE)
         btn_close.get_style_context().add_class("customizer-close-btn")
 
-        box = dialog.get_content_area()
-        box.set_spacing(12)
-        box.set_margin_top(16)
-        box.set_margin_bottom(16)
-        box.set_margin_start(16)
-        box.set_margin_end(16)
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_start(16)
+        content.set_margin_end(16)
 
-        # 0. Global Language Selection
-        title_lang = Gtk.Label(label=f"<b>🌐 {t('language')}:</b>")
-        title_lang.set_use_markup(True)
-        title_lang.set_halign(Gtk.Align.START)
-        box.pack_start(title_lang, False, False, 0)
+        # -------------------------------------------------------------
+        # Hero Header Banner
+        # -------------------------------------------------------------
+        banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        banner.get_style_context().add_class("customizer-banner")
+
+        icon_lbl = Gtk.Label(label="⚙️")
+        icon_lbl.get_style_context().add_class("banner-icon")
+        banner.pack_start(icon_lbl, False, False, 2)
+
+        title_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        lbl_head = Gtk.Label(label=f"<b><span size='13000'>{GLib.markup_escape_text(t('settings'))}</span></b>")
+        lbl_head.set_use_markup(True)
+        lbl_head.set_xalign(0.0)
+
+        lbl_sub = Gtk.Label(label=f"<span color='#94a3b8'>{GLib.markup_escape_text(t('settings_subtitle'))}</span>")
+        lbl_sub.set_use_markup(True)
+        lbl_sub.set_xalign(0.0)
+
+        title_vbox.pack_start(lbl_head, False, False, 0)
+        title_vbox.pack_start(lbl_sub, False, False, 0)
+        banner.pack_start(title_vbox, True, True, 0)
+        content.pack_start(banner, False, False, 0)
+
+        notebook = Gtk.Notebook()
+        notebook.get_style_context().add_class("customizer-notebook")
+        notebook.set_vexpand(True)
+        notebook.set_hexpand(True)
+        content.pack_start(notebook, True, True, 0)
+
+        # =============================================================
+        # ZAVIHEK 1: 🌐 Splošno (General)
+        # =============================================================
+        tab1_scroll = Gtk.ScrolledWindow()
+        tab1_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        tab1_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        tab1_box.set_margin_top(14)
+        tab1_box.set_margin_bottom(14)
+        tab1_box.set_margin_start(8)
+        tab1_box.set_margin_end(8)
+        tab1_scroll.add(tab1_box)
+
+        # Kartica 1.1: Jezik & Iskalnik
+        card_lang = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        card_lang.get_style_context().add_class("theme-card-box")
+
+        lbl_c_lang = Gtk.Label(label=f"<b><span size='11500'>🌐 {GLib.markup_escape_text(t('card_lang_search'))}</span></b>")
+        lbl_c_lang.set_use_markup(True)
+        lbl_c_lang.set_xalign(0.0)
+        card_lang.pack_start(lbl_c_lang, False, False, 0)
+
+        # Vrstica za jezik
+        row_lang = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        lbl_lang_name = Gtk.Label(label=t('language'))
+        lbl_lang_name.set_xalign(0.0)
+        row_lang.pack_start(lbl_lang_name, True, True, 0)
 
         combo_lang = Gtk.ComboBoxText()
         combo_lang.append("auto", f"🌐 {t('lang_auto')}")
         for code, name in SUPPORTED_LANGUAGES.items():
             combo_lang.append(code, f"{name} ({code.upper()})")
-
         cur_lang_cfg = self.config.get("language", "auto")
         combo_lang.set_active_id(cur_lang_cfg)
 
@@ -1636,18 +1689,18 @@ class SafeerMintBrowser(Gtk.Window):
             self.update_ui_language()
 
         combo_lang.connect("changed", on_lang_changed)
-        box.pack_start(combo_lang, False, False, 0)
+        row_lang.pack_end(combo_lang, False, False, 0)
+        card_lang.pack_start(row_lang, False, False, 2)
 
-        # 0.1. Search Engine Selection
-        title_engine = Gtk.Label(label=f"<b>🔍 {GLib.markup_escape_text(t('search_engine_lbl'))}</b>")
-        title_engine.set_use_markup(True)
-        title_engine.set_halign(Gtk.Align.START)
-        box.pack_start(title_engine, False, False, 0)
+        # Vrstica za iskalnik
+        row_eng = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        lbl_eng_name = Gtk.Label(label=t('search_engine_lbl'))
+        lbl_eng_name.set_xalign(0.0)
+        row_eng.pack_start(lbl_eng_name, True, True, 0)
 
         combo_engine = Gtk.ComboBoxText()
         for eid, einfo in SEARCH_ENGINES.items():
             combo_engine.append(eid, f"{einfo['icon']} {einfo['name']}")
-
         cur_engine = self.config.get("search_engine", "google")
         combo_engine.set_active_id(cur_engine)
 
@@ -1657,135 +1710,94 @@ class SafeerMintBrowser(Gtk.Window):
             self.broadcast_search_engine_update()
 
         combo_engine.connect("changed", on_engine_changed)
-        box.pack_start(combo_engine, False, False, 0)
+        row_eng.pack_end(combo_engine, False, False, 0)
+        card_lang.pack_start(row_eng, False, False, 2)
 
-        sep0 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        box.pack_start(sep0, False, False, 4)
+        tab1_box.pack_start(card_lang, False, False, 0)
 
-        # 1. Permanent Sidebar Toggle
-        title_sidebar = Gtk.Label(label=f"<b>{t('sidebar_display')}</b>")
-        title_sidebar.set_use_markup(True)
-        title_sidebar.set_halign(Gtk.Align.START)
-        box.pack_start(title_sidebar, False, False, 0)
+        # Kartica 1.2: Možnosti prenosa in vnosa
+        card_input = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        card_input.get_style_context().add_class("theme-card-box")
 
-        sb_check = Gtk.CheckButton(label=t('sidebar_enable_chk'))
-        sb_check.set_active(self.config.get("sidebar_enabled", True))
+        lbl_c_input = Gtk.Label(label=f"<b><span size='11500'>📥 {GLib.markup_escape_text(t('card_downloads_input'))}</span></b>")
+        lbl_c_input.set_use_markup(True)
+        lbl_c_input.set_xalign(0.0)
+        card_input.pack_start(lbl_c_input, False, False, 0)
 
-        def on_sb_toggled(btn):
-            enabled = btn.get_active()
-            self.config.set("sidebar_enabled", enabled)
-            if enabled:
-                self.sidebar_box.show()
-                self.icon_dock.show_all()
-                self.content_paned.set_position(DOCK_WIDTH)
-            else:
-                self.sidebar_box.hide()
-                self.content_paned.set_position(0)
-
-        sb_check.connect("toggled", on_sb_toggled)
-        box.pack_start(sb_check, False, False, 0)
-
-        sep1 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        box.pack_start(sep1, False, False, 4)
-
-        # 2. Managing existing sidebar items (with Delete buttons)
-        title_items = Gtk.Label(label=f"<b>{t('sidebar_items')}</b>")
-        title_items.set_use_markup(True)
-        title_items.set_halign(Gtk.Align.START)
-        box.pack_start(title_items, False, False, 0)
-
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_min_content_height(170)
-        items_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        scrolled.add(items_vbox)
-        box.pack_start(scrolled, True, True, 0)
-
-        integrations = self.config.get("integrations", {})
-        for k, v in list(integrations.items()):
-            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-
-            check = Gtk.CheckButton(label=f"{v.get('icon', '')} {v.get('name', '')}")
-            check.set_active(v.get("enabled", True))
-            check.set_tooltip_text(v.get("url", ""))
-
-            def on_item_toggled(btn, item_key=k):
-                self.config.settings["integrations"][item_key]["enabled"] = btn.get_active()
-                self.config.save_settings()
-                self.rebuild_icon_dock()
-
-            check.connect("toggled", on_item_toggled)
-            row.pack_start(check, True, True, 0)
-
-            # Delete button
-            btn_del = Gtk.Button(label="🗑️ Izbriši")
-            btn_del.get_style_context().add_class("btn-delete")
-
-            def on_item_deleted(btn, item_key=k, row_box=row):
-                self.config.remove_integration(item_key)
-                items_vbox.remove(row_box)
-                self.rebuild_icon_dock()
-                if self.active_sidebar_service == item_key:
-                    self.close_sidebar_panel()
-
-            btn_del.connect("clicked", on_item_deleted)
-            row.pack_end(btn_del, False, False, 0)
-
-            items_vbox.pack_start(row, False, False, 0)
-
-        # 3. Add Page Button inside Settings
-        btn_add_inline = Gtk.Button(label="➕ Dodaj novo spletno stran v stransko vrstico")
-        btn_add_inline.get_style_context().add_class("nav-btn")
-        btn_add_inline.connect("clicked", lambda b: [dialog.destroy(), self.open_add_page_dialog()])
-        box.pack_start(btn_add_inline, False, False, 4)
-
-        sep2 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        box.pack_start(sep2, False, False, 4)
-
-        # 4. Force Dark Mode Setting
-        dark_check = Gtk.CheckButton(label="🌙 Prisili temni način na vseh spletnih straneh (Force Dark Mode)")
-        dark_check.set_active(self.config.get("force_dark_mode", True))
-        dark_check.connect("toggled", lambda b: self.toggle_dark_mode())
-        box.pack_start(dark_check, False, False, 0)
-
-        # 5. Virtual Keyboard Setting
-        kb_check = Gtk.CheckButton(label="⌨️ Omogoči navidezno tipkovnico na zaslonu")
-        kb_check.set_active(self.config.get("virtual_keyboard_enabled", False))
-        kb_check.connect("toggled", lambda b: self.toggle_virtual_keyboard())
-        box.pack_start(kb_check, False, False, 0)
-
-        # 5.1. Downloads Preference Setting
-        dl_check = Gtk.CheckButton(label="📥 Vedno vprašaj, kam shraniti prenos (privzeto: samodejno v mapo Prenosi)")
+        dl_check = Gtk.CheckButton(label=t('always_ask_download_chk'))
         dl_check.set_active(self.config.get("always_ask_download_dir", False))
         dl_check.connect("toggled", lambda b: self.config.set("always_ask_download_dir", b.get_active()))
-        box.pack_start(dl_check, False, False, 0)
+        card_input.pack_start(dl_check, False, False, 2)
 
-        # 5.1.1. AdGuard Advanced Protection (Vgrajena razširitev)
-        adguard_check = Gtk.CheckButton(label="🛡️ AdGuard Zaščita (Vgrajena razširitev: defusanje anti-adblock zidov & oglasov)")
+        kb_check = Gtk.CheckButton(label=t('virtual_keyboard_chk'))
+        kb_check.set_active(self.config.get("virtual_keyboard_enabled", False))
+        kb_check.connect("toggled", lambda b: self.toggle_virtual_keyboard())
+        card_input.pack_start(kb_check, False, False, 2)
+
+        tab1_box.pack_start(card_input, False, False, 0)
+
+        lbl_tab1 = Gtk.Label(label=f"🌐 {t('tab_general')}")
+        notebook.append_page(tab1_scroll, lbl_tab1)
+
+        # =============================================================
+        # ZAVIHEK 2: 🛡️ Zasebnost & Šifriranje (Privacy & Security)
+        # =============================================================
+        tab2_scroll = Gtk.ScrolledWindow()
+        tab2_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        tab2_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        tab2_box.set_margin_top(14)
+        tab2_box.set_margin_bottom(14)
+        tab2_box.set_margin_start(8)
+        tab2_box.set_margin_end(8)
+        tab2_scroll.add(tab2_box)
+
+        # Kartica 2.1: Zaščita vsebine & Temni način
+        card_protect = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card_protect.get_style_context().add_class("theme-card-box")
+
+        lbl_c_protect = Gtk.Label(label=f"<b><span size='11500'>🛡️ {GLib.markup_escape_text(t('card_protection_title'))}</span></b>")
+        lbl_c_protect.set_use_markup(True)
+        lbl_c_protect.set_xalign(0.0)
+        card_protect.pack_start(lbl_c_protect, False, False, 0)
+
+        adguard_check = Gtk.CheckButton(label=t('adguard_protection_chk'))
         adguard_check.set_active(self.config.get("adguard_protection_enabled", True))
         adguard_check.connect("toggled", lambda b: self.config.set("adguard_protection_enabled", b.get_active()))
-        box.pack_start(adguard_check, False, False, 0)
+        card_protect.pack_start(adguard_check, False, False, 0)
 
-        # 5.2. Šifriran DNS (DoH) in Šifriran tunel (Možnosti B in C)
-        sep_sec = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        box.pack_start(sep_sec, False, False, 4)
+        lbl_adguard_sub = Gtk.Label(label=f"<span color='#94a3b8' size='9500'>    {GLib.markup_escape_text(t('adguard_desc'))}</span>")
+        lbl_adguard_sub.set_use_markup(True)
+        lbl_adguard_sub.set_xalign(0.0)
+        card_protect.pack_start(lbl_adguard_sub, False, False, 0)
 
-        title_sec = Gtk.Label(label="<b>🛡️ Šifriran DNS (DoH) & Šifriran tunel (Tor / Proxy)</b>")
-        title_sec.set_use_markup(True)
-        title_sec.set_halign(Gtk.Align.START)
-        box.pack_start(title_sec, False, False, 0)
+        dark_check = Gtk.CheckButton(label=f"🌙 {t('force_dark_mode')}")
+        dark_check.set_active(self.config.get("force_dark_mode", True))
+        dark_check.connect("toggled", lambda b: self.toggle_dark_mode())
+        card_protect.pack_start(dark_check, False, False, 4)
 
-        # DoH Provider
-        lbl_doh = Gtk.Label(label="Šifriran DNS (DNS-over-HTTPS) za zaščito pred cenzuro:")
-        lbl_doh.set_halign(Gtk.Align.START)
-        box.pack_start(lbl_doh, False, False, 0)
+        tab2_box.pack_start(card_protect, False, False, 0)
+
+        # Kartica 2.2: Šifriran DNS (DoH)
+        card_doh = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card_doh.get_style_context().add_class("theme-card-box")
+
+        lbl_c_doh = Gtk.Label(label=f"<b><span size='11500'>🔒 {GLib.markup_escape_text(t('card_doh_title'))}</span></b>")
+        lbl_c_doh.set_use_markup(True)
+        lbl_c_doh.set_xalign(0.0)
+        card_doh.pack_start(lbl_c_doh, False, False, 0)
+
+        lbl_doh_sub = Gtk.Label(label=f"<span color='#94a3b8'>{GLib.markup_escape_text(t('doh_provider_lbl'))}</span>")
+        lbl_doh_sub.set_use_markup(True)
+        lbl_doh_sub.set_xalign(0.0)
+        card_doh.pack_start(lbl_doh_sub, False, False, 0)
 
         combo_doh = Gtk.ComboBoxText()
-        combo_doh.append("quad9", "🛡️ Quad9 Secure DoH (9.9.9.9) [Privzeto / Zaščita pred grožnjami]")
-        combo_doh.append("adguard", "🛡️ AdGuard DNS (dns.adguard-dns.com) [Oglasi + Zlonamerna koda]")
-        combo_doh.append("cloudflare", "⚡ Cloudflare DoH (1.1.1.1)")
-        combo_doh.append("google", "🌐 Google Public DoH (8.8.8.8)")
-        combo_doh.append("custom", "🔒 Zasebni DNS / Lasten DoH URL")
-        combo_doh.append("disabled", "🚫 Izklopljeno (Sistemski DNS operaterja)")
+        combo_doh.append("quad9", t('doh_quad9'))
+        combo_doh.append("adguard", t('doh_adguard'))
+        combo_doh.append("cloudflare", t('doh_cloudflare'))
+        combo_doh.append("google", t('doh_google'))
+        combo_doh.append("custom", t('doh_custom'))
+        combo_doh.append("disabled", t('doh_disabled'))
 
         cur_doh = self.config.get("doh_provider", "quad9")
         if not self.config.get("doh_enabled", True):
@@ -1793,9 +1805,10 @@ class SafeerMintBrowser(Gtk.Window):
         combo_doh.set_active_id(cur_doh)
 
         entry_custom_doh = Gtk.Entry()
-        entry_custom_doh.set_placeholder_text("https://dns.primer.si/dns-query")
+        entry_custom_doh.set_placeholder_text("https://dns.adguard-dns.com/dns-query")
         entry_custom_doh.set_text(self.config.get("custom_doh_url", "https://dns.quad9.net/dns-query"))
         entry_custom_doh.set_visible(cur_doh == "custom")
+        entry_custom_doh.get_style_context().add_class("item-card-row")
 
         def on_custom_doh_changed(entry):
             self.config.set("custom_doh_url", entry.get_text().strip())
@@ -1816,18 +1829,29 @@ class SafeerMintBrowser(Gtk.Window):
             self.setup_network_security_and_proxy()
 
         combo_doh.connect("changed", on_doh_changed)
-        box.pack_start(combo_doh, False, False, 0)
-        box.pack_start(entry_custom_doh, False, False, 2)
+        card_doh.pack_start(combo_doh, False, False, 0)
+        card_doh.pack_start(entry_custom_doh, False, False, 2)
 
-        # Šifriran tunel / Proxy (Možnost C)
-        lbl_tun = Gtk.Label(label="Šifriran tunel / Proxy za celoten promet:")
-        lbl_tun.set_halign(Gtk.Align.START)
-        box.pack_start(lbl_tun, False, False, 0)
+        tab2_box.pack_start(card_doh, False, False, 0)
+
+        # Kartica 2.3: Šifriran tunel / Proxy
+        card_proxy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card_proxy.get_style_context().add_class("theme-card-box")
+
+        lbl_c_proxy = Gtk.Label(label=f"<b><span size='11500'>🧅 {GLib.markup_escape_text(t('card_proxy_title'))}</span></b>")
+        lbl_c_proxy.set_use_markup(True)
+        lbl_c_proxy.set_xalign(0.0)
+        card_proxy.pack_start(lbl_c_proxy, False, False, 0)
+
+        lbl_proxy_sub = Gtk.Label(label=f"<span color='#94a3b8'>{GLib.markup_escape_text(t('proxy_mode_lbl'))}</span>")
+        lbl_proxy_sub.set_use_markup(True)
+        lbl_proxy_sub.set_xalign(0.0)
+        card_proxy.pack_start(lbl_proxy_sub, False, False, 0)
 
         combo_tun = Gtk.ComboBoxText()
-        combo_tun.append("disabled", "🚫 Izklopljeno (Brez tunela / Neposredno)")
-        combo_tun.append("tor", "🧅 Tor Omrežje (socks5://127.0.0.1:9050)")
-        combo_tun.append("custom", "⚙️ Lasten šifriran Proxy (SOCKS5 / HTTPS)")
+        combo_tun.append("disabled", t('proxy_disabled'))
+        combo_tun.append("tor", t('proxy_tor'))
+        combo_tun.append("custom", t('proxy_custom'))
 
         cur_tun = self.config.get("secure_proxy_mode", "disabled")
         combo_tun.set_active_id(cur_tun)
@@ -1836,6 +1860,7 @@ class SafeerMintBrowser(Gtk.Window):
         entry_proxy_url.set_placeholder_text("socks5://127.0.0.1:1080 ali http://proxy:8080")
         entry_proxy_url.set_text(self.config.get("secure_proxy_url", "socks5://127.0.0.1:9050"))
         entry_proxy_url.set_visible(cur_tun == "custom")
+        entry_proxy_url.get_style_context().add_class("item-card-row")
 
         def on_proxy_url_changed(entry):
             self.config.set("secure_proxy_url", entry.get_text().strip())
@@ -1851,23 +1876,153 @@ class SafeerMintBrowser(Gtk.Window):
             self.setup_network_security_and_proxy()
 
         combo_tun.connect("changed", on_tun_changed)
-        box.pack_start(combo_tun, False, False, 0)
-        box.pack_start(entry_proxy_url, False, False, 2)
+        card_proxy.pack_start(combo_tun, False, False, 0)
+        card_proxy.pack_start(entry_proxy_url, False, False, 2)
 
-        # 6. Customize Themes & UserScripts Button
-        btn_custom = Gtk.Button(label="🧩 Prilagodi videz, barvne teme in uporabniške skripte")
-        btn_custom.get_style_context().add_class("nav-btn")
-        btn_custom.connect("clicked", lambda b: [dialog.destroy(), self.open_customizer_dialog()])
-        box.pack_start(btn_custom, False, False, 2)
+        tab2_box.pack_start(card_proxy, False, False, 0)
 
-        sep3 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        box.pack_start(sep3, False, False, 4)
+        # Kartica 2.4: Čiščenje podatkov brskanja
+        card_cleanup = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card_cleanup.get_style_context().add_class("theme-card-box")
 
-        # 7. Clear Browsing Data Button (Privacy)
-        btn_clear_data = Gtk.Button(label="🧹 Počisti zgodovino, piškotke in predpomnilnik (Ctrl+Shift+Del)")
+        btn_clear_data = Gtk.Button(label=t('btn_clear_browsing_data'))
         btn_clear_data.get_style_context().add_class("btn-delete")
         btn_clear_data.connect("clicked", lambda b: [dialog.destroy(), self.open_clear_data_dialog()])
-        box.pack_start(btn_clear_data, False, False, 2)
+        card_cleanup.pack_start(btn_clear_data, False, False, 0)
+
+        tab2_box.pack_start(card_cleanup, False, False, 0)
+
+        lbl_tab2 = Gtk.Label(label=f"🛡️ {t('tab_privacy_sec')}")
+        notebook.append_page(tab2_scroll, lbl_tab2)
+
+        # =============================================================
+        # ZAVIHEK 3: 📑 Stranska vrstica (Sidebar)
+        # =============================================================
+        tab3_scroll = Gtk.ScrolledWindow()
+        tab3_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        tab3_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        tab3_box.set_margin_top(14)
+        tab3_box.set_margin_bottom(14)
+        tab3_box.set_margin_start(8)
+        tab3_box.set_margin_end(8)
+        tab3_scroll.add(tab3_box)
+
+        # Kartica 3.1: Prikaz stranske vrstice
+        card_sb = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card_sb.get_style_context().add_class("theme-card-box")
+
+        lbl_c_sb = Gtk.Label(label=f"<b><span size='11500'>📑 {GLib.markup_escape_text(t('sidebar_display'))}</span></b>")
+        lbl_c_sb.set_use_markup(True)
+        lbl_c_sb.set_xalign(0.0)
+        card_sb.pack_start(lbl_c_sb, False, False, 0)
+
+        sb_check = Gtk.CheckButton(label=t('sidebar_enable_chk'))
+        sb_check.set_active(self.config.get("sidebar_enabled", True))
+
+        def on_sb_toggled(btn):
+            enabled = btn.get_active()
+            self.config.set("sidebar_enabled", enabled)
+            if enabled:
+                self.sidebar_box.show()
+                self.icon_dock.show_all()
+                self.content_paned.set_position(DOCK_WIDTH)
+            else:
+                self.sidebar_box.hide()
+                self.content_paned.set_position(0)
+
+        sb_check.connect("toggled", on_sb_toggled)
+        card_sb.pack_start(sb_check, False, False, 0)
+        tab3_box.pack_start(card_sb, False, False, 0)
+
+        # Kartica 3.2: Upravljanje spletnih aplikacij
+        card_apps = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        card_apps.get_style_context().add_class("theme-card-box")
+
+        lbl_c_apps = Gtk.Label(label=f"<b><span size='11500'>🌐 {GLib.markup_escape_text(t('sidebar_items'))}</span></b>")
+        lbl_c_apps.set_use_markup(True)
+        lbl_c_apps.set_xalign(0.0)
+        card_apps.pack_start(lbl_c_apps, False, False, 0)
+
+        items_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card_apps.pack_start(items_vbox, False, False, 0)
+
+        integrations = self.config.get("integrations", {})
+        for k, v in list(integrations.items()):
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            row.get_style_context().add_class("item-card-row")
+
+            check = Gtk.CheckButton(label=f"{v.get('icon', '🌐')}  {v.get('name', '')}")
+            check.set_active(v.get("enabled", True))
+            check.set_tooltip_text(v.get("url", ""))
+
+            def on_item_toggled(btn, item_key=k):
+                self.config.settings["integrations"][item_key]["enabled"] = btn.get_active()
+                self.config.save_settings()
+                self.rebuild_icon_dock()
+
+            check.connect("toggled", on_item_toggled)
+            row.pack_start(check, True, True, 0)
+
+            btn_del = Gtk.Button(label=t('btn_delete'))
+            btn_del.get_style_context().add_class("btn-delete")
+
+            def on_item_deleted(btn, item_key=k, row_box=row):
+                self.config.remove_integration(item_key)
+                items_vbox.remove(row_box)
+                self.rebuild_icon_dock()
+                if self.active_sidebar_service == item_key:
+                    self.close_sidebar_panel()
+
+            btn_del.connect("clicked", on_item_deleted)
+            row.pack_end(btn_del, False, False, 0)
+            items_vbox.pack_start(row, False, False, 0)
+
+        # Gumb Dodaj v stransko vrstico
+        btn_add_inline = Gtk.Button(label=t('btn_add_sidebar'))
+        btn_add_inline.get_style_context().add_class("nav-btn")
+        btn_add_inline.connect("clicked", lambda b: [dialog.destroy(), self.open_add_page_dialog()])
+        card_apps.pack_start(btn_add_inline, False, False, 6)
+
+        tab3_box.pack_start(card_apps, False, False, 0)
+
+        lbl_tab3 = Gtk.Label(label=f"📑 {t('tab_sidebar')}")
+        notebook.append_page(tab3_scroll, lbl_tab3)
+
+        # =============================================================
+        # ZAVIHEK 4: 🎨 Videz & Skripte (Appearance & Tools)
+        # =============================================================
+        tab4_scroll = Gtk.ScrolledWindow()
+        tab4_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        tab4_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        tab4_box.set_margin_top(14)
+        tab4_box.set_margin_bottom(14)
+        tab4_box.set_margin_start(8)
+        tab4_box.set_margin_end(8)
+        tab4_scroll.add(tab4_box)
+
+        card_custom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        card_custom.get_style_context().add_class("theme-card-box")
+
+        lbl_c_custom = Gtk.Label(label=f"<b><span size='11500'>🎨 {GLib.markup_escape_text(t('customizer_title'))}</span></b>")
+        lbl_c_custom.set_use_markup(True)
+        lbl_c_custom.set_xalign(0.0)
+        card_custom.pack_start(lbl_c_custom, False, False, 0)
+
+        lbl_custom_sub = Gtk.Label(label=f"<span color='#94a3b8'>{GLib.markup_escape_text(t('customizer_tab_desc'))}</span>")
+        lbl_custom_sub.set_use_markup(True)
+        lbl_custom_sub.set_xalign(0.0)
+        lbl_custom_sub.set_line_wrap(True)
+        card_custom.pack_start(lbl_custom_sub, False, False, 0)
+
+        btn_custom = Gtk.Button(label=t('btn_open_customizer'))
+        btn_custom.get_style_context().add_class("btn-primary-glow")
+        btn_custom.connect("clicked", lambda b: [dialog.destroy(), self.open_customizer_dialog()])
+        card_custom.pack_start(btn_custom, False, False, 8)
+
+        tab4_box.pack_start(card_custom, False, False, 0)
+
+        lbl_tab4 = Gtk.Label(label=f"🎨 {t('tab_appearance_tools')}")
+        notebook.append_page(tab4_scroll, lbl_tab4)
 
         dialog.show_all()
         dialog.run()
