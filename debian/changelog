@@ -1,3 +1,10 @@
+safeer-browser (1.0.9-0ubuntu1~noble1) noble; urgency=high
+
+  * Restore sidebar button creation for profiles with enabled integrations.
+  * Add GTK regression coverage for saved integrations and dock rebuilding.
+
+ -- Safeer Sovereign Security Team <support@safeer.org>  Sun, 06 Sep 2026 21:30:00 +0200
+
 safeer-browser (1.0.8-0ubuntu1~noble1) noble; urgency=medium
 
   * Fix HTTP/2 encrypted DNS and preserve initial tunnel payload.

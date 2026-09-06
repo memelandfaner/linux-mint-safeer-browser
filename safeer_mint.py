@@ -1920,6 +1920,7 @@ class SafeerMintBrowser(Gtk.Window):
         integrations = self.config.get("integrations", {})
         for s_id, s_data in integrations.items():
             if s_data.get("enabled", True):
+                btn = Gtk.Button(label=s_data.get("icon", "🌐"))
                 s_name = s_data.get('name', 'Stran').strip()
                 s_url = s_data.get('url', '').strip()
                 if s_name and s_url and s_name != s_url:

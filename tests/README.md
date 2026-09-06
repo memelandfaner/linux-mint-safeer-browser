@@ -9,3 +9,5 @@ The ad-domain regression uses the exact reported tpc.googlesyndication.com/sodar
 These are bounded checks, not a guarantee that all websites, videos or future ads will work. No user profile, credentials or browsing history was included in the fixtures.
 
 Longer full-app repeat: at 70.22 seconds after navigation the media clock was 46.15 seconds, paused=false, readyState=4, error=null, with no matched ad slots. No crash occurred in that run.
+
+1.0.9 startup regression: the earlier isolated profiles omitted enabled sidebar integrations. Added a GTK test with enabled/disabled saved integrations, two tooltip branches, active styling, click dispatch and repeated dock rebuild. Run on a graphical display to execute this test (otherwise it is skipped). All ten tests passed on the desktop, and the installed launcher started with the existing user profile without clearing its data.
