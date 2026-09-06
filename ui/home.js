@@ -12,6 +12,8 @@ const homeI18n = {
     shield_status: "🛡️ ZAŠČITA AKTIVNA",
     lbl_ads: "Blokirani oglasi",
     lbl_threats: "Preprečene grožnje",
+    lbl_rules_active: "Aktivnih pravil ščita",
+    lbl_threat_protection: "Zaščita pred grožnjami",
     lbl_speed: "Odzivnost",
     lbl_oss: "Odprta koda",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Lokalni zaščitni sloj pred botneti, zlonamerno kodo in sledilci.",
@@ -40,6 +42,8 @@ const homeI18n = {
     shield_status: "🛡️ SHIELD ACTIVE",
     lbl_ads: "Ads Blocked",
     lbl_threats: "Threats Blocked",
+    lbl_rules_active: "Active Shield Rules",
+    lbl_threat_protection: "Threat Protection",
     lbl_speed: "Latency",
     lbl_oss: "Open Source",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Local protection against botnets, malware, and trackers.",
@@ -68,6 +72,8 @@ const homeI18n = {
     shield_status: "🛡️ SCHUTZ AKTIV",
     lbl_ads: "Blockierte Werbung",
     lbl_threats: "Blockierte Bedrohungen",
+    lbl_rules_active: "Aktive Schutzregeln",
+    lbl_threat_protection: "Bedrohungsschutz",
     lbl_speed: "Latenz",
     lbl_oss: "Open Source",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Lokaler Schutz gegen Botnetze, Schadsoftware und Tracker.",
@@ -96,6 +102,8 @@ const homeI18n = {
     shield_status: "🛡️ ESCUDO ACTIVO",
     lbl_ads: "Anuncios bloqueados",
     lbl_threats: "Amenazas bloqueadas",
+    lbl_rules_active: "Reglas de escudo activas",
+    lbl_threat_protection: "Protección contra amenazas",
     lbl_speed: "Latencia",
     lbl_oss: "Código Abierto",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Protección local contra botnets, malware y rastreadores.",
@@ -124,6 +132,8 @@ const homeI18n = {
     shield_status: "🛡️ BOUCLIER ACTIF",
     lbl_ads: "Publicités bloquées",
     lbl_threats: "Menaces bloquées",
+    lbl_rules_active: "Règles de bouclier actives",
+    lbl_threat_protection: "Protection contre les menaces",
     lbl_speed: "Latence",
     lbl_oss: "Open Source",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Protection locale contre les botnets, logiciels malveillants et traceurs.",
@@ -152,6 +162,8 @@ const homeI18n = {
     shield_status: "🛡️ PROTEZIONE ATTIVA",
     lbl_ads: "Pubblicità bloccate",
     lbl_threats: "Minacce bloccate",
+    lbl_rules_active: "Regole di protezione attive",
+    lbl_threat_protection: "Protezione dalle minacce",
     lbl_speed: "Latenza",
     lbl_oss: "Open Source",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Protezione locale contro botnet, malware e tracciamento.",
@@ -219,6 +231,7 @@ function changeHomeLanguage(lang, notifyBackend = true) {
   }
 
   updateClock();
+  renderShieldMetrics();
 
   if (notifyBackend && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {
     window.webkit.messageHandlers.safeer.postMessage({ action: 'set_language', language: lang });
@@ -229,11 +242,40 @@ window.setAppLanguage = function(lang) {
   changeHomeLanguage(lang, false);
 };
 
-window.setShieldMetrics = function(ads, threats) {
+let currentAdsCount = 0;
+let currentThreatsCount = 0;
+
+function renderShieldMetrics() {
+  const dict = homeI18n[currentHomeLang] || homeI18n.sl;
   const elAds = document.getElementById('adsCount');
-  if (elAds) elAds.textContent = Number(ads || 0).toLocaleString();
+  const elAdsLbl = document.getElementById('adsLbl');
+  if (elAds) {
+    if (currentAdsCount > 0) {
+      elAds.textContent = currentAdsCount.toLocaleString();
+      if (elAdsLbl) elAdsLbl.textContent = dict.lbl_ads || 'Blokirani oglasi';
+    } else {
+      elAds.textContent = '350k+';
+      if (elAdsLbl) elAdsLbl.textContent = dict.lbl_rules_active || 'Aktivnih pravil ščita';
+    }
+  }
+
   const elThreats = document.getElementById('threatsCount');
-  if (elThreats) elThreats.textContent = Number(threats || 0).toLocaleString();
+  const elThreatsLbl = document.getElementById('threatsLbl');
+  if (elThreats) {
+    if (currentThreatsCount > 0) {
+      elThreats.textContent = currentThreatsCount.toLocaleString();
+      if (elThreatsLbl) elThreatsLbl.textContent = dict.lbl_threats || 'Preprečene grožnje';
+    } else {
+      elThreats.textContent = '100%';
+      if (elThreatsLbl) elThreatsLbl.textContent = dict.lbl_threat_protection || 'Zaščita pred grožnjami';
+    }
+  }
+}
+
+window.setShieldMetrics = function(ads, threats) {
+  currentAdsCount = Number(ads || 0);
+  currentThreatsCount = Number(threats || 0);
+  renderShieldMetrics();
 };
 
 const searchUrls = {

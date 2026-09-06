@@ -46,10 +46,14 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             var val = origParse.apply(this, arguments);
             try {
                 if (val && typeof val === 'object') {
-                    if (val.adPlacements) delete val.adPlacements;
-                    if (val.playerAds) delete val.playerAds;
-                    if (val.adSlots) delete val.adSlots;
-                    if (val.adPlayback) delete val.adPlayback;
+                    var stripped = false;
+                    if (val.adPlacements) { delete val.adPlacements; stripped = true; }
+                    if (val.playerAds) { delete val.playerAds; stripped = true; }
+                    if (val.adSlots) { delete val.adSlots; stripped = true; }
+                    if (val.adPlayback) { delete val.adPlayback; stripped = true; }
+                    if (stripped && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {
+                        try { window.webkit.messageHandlers.safeer.postMessage({ action: 'increment_ads', count: 1 }); } catch(_) {}
+                    }
                     if (val.playbackTracking) {
                         try {
                             delete val.playbackTracking.videostatsPlaybackUrl;
@@ -173,8 +177,12 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             'ytd-in-feed-ad-layout-renderer, ytd-banner-promo-renderer-background, ' +
             '.contribYtLightShapeStaticWashLight, .cinematic-renderer, #cinematic-container'
         );
+        var removedOverlays = 0;
         for (var o = 0; o < adOverlays.length; o++) {
-            try { adOverlays[o].remove(); } catch(e) {}
+            try { adOverlays[o].remove(); removedOverlays++; } catch(e) {}
+        }
+        if (removedOverlays > 0 && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {
+            try { window.webkit.messageHandlers.safeer.postMessage({ action: 'increment_ads', count: removedOverlays }); } catch(_) {}
         }
 
         // Auto-dismiss YouTube adblock nag dialogs & confirm buttons
@@ -320,6 +328,7 @@ ADGUARD_PROTECTION_SCRIPT = """
 
     // 2. Anti-Adblock Modal Wall Defuser & Scroll Restoration
     function defuseAntiAdblockWalls() {
+        var removed = 0;
         try {
             var wallSelectors = [
                 '.fc-ab-root',
@@ -338,7 +347,7 @@ ADGUARD_PROTECTION_SCRIPT = """
             ];
             var walls = document.querySelectorAll(wallSelectors.join(', '));
             for (var i = 0; i < walls.length; i++) {
-                try { walls[i].remove(); } catch(_) {}
+                try { walls[i].remove(); removed++; } catch(_) {}
             }
 
             // Restore scrolling if site locked it
@@ -355,10 +364,12 @@ ADGUARD_PROTECTION_SCRIPT = """
                 }
             }
         } catch(_) {}
+        return removed;
     }
 
     // 3. AdGuard Advanced Cosmetic Filtering
     function cleanAdguardCosmetics() {
+        var removed = 0;
         try {
             var sel = [
                 '.adguard-banner',
@@ -375,14 +386,19 @@ ADGUARD_PROTECTION_SCRIPT = """
             ];
             var items = document.querySelectorAll(sel.join(', '));
             for (var j = 0; j < items.length; j++) {
-                try { items[j].remove(); } catch(_) {}
+                try { items[j].remove(); removed++; } catch(_) {}
             }
         } catch(_) {}
+        return removed;
     }
 
     function runAdguardProtection() {
-        defuseAntiAdblockWalls();
-        cleanAdguardCosmetics();
+        var w = defuseAntiAdblockWalls() || 0;
+        var c = cleanAdguardCosmetics() || 0;
+        var total = w + c;
+        if (total > 0 && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {
+            try { window.webkit.messageHandlers.safeer.postMessage({ action: 'increment_ads', count: total }); } catch(_) {}
+        }
     }
 
     if (document.readyState === 'loading') {
@@ -393,9 +409,9 @@ ADGUARD_PROTECTION_SCRIPT = """
     window.addEventListener('load', runAdguardProtection);
     setInterval(runAdguardProtection, 2500);
 })();
-"""
+\"\"\"
 
-GENERIC_COSMETIC_SCRIPT = """
+GENERIC_COSMETIC_SCRIPT = \"\"\"
 /* 🛡️ Safeer Linux Mint - Universal Ad & Tracker Shield */
 (function() {
     function cleanGenericAds() {
@@ -413,8 +429,12 @@ GENERIC_COSMETIC_SCRIPT = """
             '#crt-banner'
         ];
         var ads = document.querySelectorAll(adSelectors.join(', '));
+        var count = 0;
         for (var i = 0; i < ads.length; i++) {
-            try { ads[i].remove(); } catch(e) {}
+            try { ads[i].remove(); count++; } catch(e) {}
+        }
+        if (count > 0 && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {
+            try { window.webkit.messageHandlers.safeer.postMessage({ action: 'increment_ads', count: count }); } catch(_) {}
         }
     }
 

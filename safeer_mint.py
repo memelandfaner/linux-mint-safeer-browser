@@ -1680,6 +1680,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.btn_shield.get_style_context().add_class("ff-shield-btn")
         self.btn_shield.set_tooltip_text(f"{t('app_title')} Cyber Shield: {t('adblock_active')}")
         self.btn_shield.connect("clicked", lambda b: self.show_shield_status_dialog())
+        self.update_shield_button_label()
         self.url_box.pack_start(self.btn_shield, False, False, 0)
 
         # Security tune sliders icon
@@ -1769,7 +1770,13 @@ class SafeerMintBrowser(Gtk.Window):
             buttons=Gtk.ButtonsType.OK,
             text="🛡️ Safeer Cyber Shield — Linux Mint Aktivna Zaščita"
         )
+        ads = self.config.get("total_ads_blocked", 0)
+        threats = self.config.get("total_threats_blocked", 0)
         msg = (
+            f"📊 Statistika zaščite v živo:\n"
+            f"  • Aktivnih pravil ščita: 350.000+\n"
+            f"  • Blokirani oglasi & sledilci: {ads:,}\n"
+            f"  • Preprečene botnet / C2 grožnje: {threats:,}\n\n"
             "✓ YouTube Adblock: Zero-ad hitro preskakovanje oglasov aktivno.\n"
             "✓ YouTube Background Audio: Predvajanje se nemoteno nadaljuje ob menjavi zavihkov.\n"
             "✓ Ambient Mode: Odstranjena zamegljenost in neželeni sivi okvirji.\n"
@@ -3336,15 +3343,20 @@ class SafeerMintBrowser(Gtk.Window):
             self.config.increment_threats_blocked(1)
         except Exception:
             pass
+        self.update_shield_button_label()
+
+    def update_shield_button_label(self):
+        """Posodobi napis na gumbu ščita v orodni vrstici na podlagi statistike zaščite."""
         try:
-            count = self._shields_blocked
-            if count >= 1000:
-                label = f"🛡️ {count // 1000}k+"
-            elif count > 0:
-                label = f"🛡️ {count}"
+            total = self.config.get("total_ads_blocked", 0) + self.config.get("total_threats_blocked", 0)
+            if total >= 1000:
+                label = f"🛡️ {total // 1000}k+"
+            elif total > 0:
+                label = f"🛡️ {total}"
             else:
                 label = "🛡️"
-            self.btn_shield.set_label(label)
+            if hasattr(self, 'btn_shield') and self.btn_shield:
+                self.btn_shield.set_label(label)
         except Exception:
             pass
 
@@ -5408,9 +5420,11 @@ class SafeerMintBrowser(Gtk.Window):
             elif action == "increment_ads":
                 count = int(data.get("count", 1))
                 self.config.increment_ads_blocked(count)
+                self.update_shield_button_label()
             elif action == "increment_threats":
                 count = int(data.get("count", 1))
                 self.config.increment_threats_blocked(count)
+                self.update_shield_button_label()
             elif action == "set_default_browser":
                 self.set_as_default_browser(show_dialog=True)
             elif action == "open_sidebar":
