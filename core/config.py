@@ -81,7 +81,7 @@ SEARCH_ENGINES = {
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "language": "auto",                 # "auto", "en", "sl", "de", "es", "fr", "it"
-    "force_dark_mode": True,           # Prisili temni način na vseh spletnih straneh
+    "force_dark_mode": False,          # Privzeto izklopljen, da ne kvari prikaza zemljevidov in bančnih strani
     "theme": "midnight",                # "midnight", "mint", "neon", "amoled"
     "custom_css": "",                   # Lasten CSS slog uporabnika
     "user_scripts": [
@@ -97,7 +97,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "virtual_keyboard_enabled": False,  # Privzeto izklopljeno kot zahtevano
     "sidebar_enabled": True,            # Trajni vklop/izklop stranske vrstice
     "sidebar_width": 680,
-    "search_engine": "google",
+    "search_engine": "duckduckgo",
     "adblock_enabled": True,
     "adguard_protection_enabled": True,  # Vgrajena napredna AdGuard zaščita (anti-adblock defuser, cosmetic rules)
     "tracking_protection_enabled": True,  # Odstranjevanje sledilnih parametrov (UTM, fbclid, gclid, si, itd.)
@@ -118,34 +118,29 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
             "name": "Remote Control",
             "url": "http://localhost:8080",
             "icon": "🎮",
-            "enabled": True,
+            "enabled": False,
             "color": "#3b82f6"
         },
         "messenger": {
             "name": "Facebook Messenger",
             "url": "https://www.messenger.com",
             "icon": "💬",
-            "enabled": True,
+            "enabled": False,
             "color": "#0084ff"
         },
         "gmail": {
             "name": "Gmail",
             "url": "https://mail.google.com/mail/",
             "icon": "✉️",
-            "enabled": True,
+            "enabled": False,
             "color": "#ea4335"
         }
     },
     "custom_portals": [
-        {"id": "p0", "title": "Remote Control", "url": "http://localhost:8080", "mark": "🎮", "bg": "linear-gradient(145deg, #091a28, #3b82f6)", "color": "#3b82f6"},
-        {"id": "p1", "title": "Xplore TV", "url": "https://www.xploretv.si/livetv", "mark": "📺", "bg": "linear-gradient(145deg, #7a1024, #e31837)", "color": "#e31837"},
-        {"id": "p2", "title": "YouTube", "url": "https://www.youtube.com", "mark": "▶️", "bg": "linear-gradient(145deg, #4a0b0b, #cc0000)", "color": "#cc0000"},
-        {"id": "p3", "title": "24ur.com", "url": "https://www.24ur.com", "mark": "📰", "bg": "linear-gradient(145deg, #0a2040, #1256a8)", "color": "#1256a8"},
-        {"id": "p4", "title": "RTV SLO", "url": "https://www.rtvslo.si", "mark": "🇸🇮", "bg": "linear-gradient(145deg, #04364a, #0284c7)", "color": "#0284c7"},
-        {"id": "p5", "title": "RTV 365", "url": "https://365.rtvslo.si", "mark": "🎬", "bg": "linear-gradient(145deg, #062a38, #0277a3)", "color": "#0277a3"},
-        {"id": "p6", "title": "ChatGPT AI", "url": "https://chatgpt.com", "mark": "🤖", "bg": "linear-gradient(145deg, #063c2f, #10a37f)", "color": "#10a37f"},
-        {"id": "p7", "title": "CryptoQuant", "url": "https://cryptoquant.com", "mark": "📊", "bg": "linear-gradient(145deg, #3d2303, #d97706)", "color": "#f59e0b"},
-        {"id": "p8", "title": "GitHub", "url": "https://github.com", "mark": "🐙", "bg": "linear-gradient(145deg, #1b1f24, #24292e)", "color": "#24292e"}
+        {"id": "p0", "title": "YouTube", "url": "https://www.youtube.com", "mark": "📺", "bg": "linear-gradient(145deg, #4a0b0b, #cc0000)", "color": "#cc0000"},
+        {"id": "p1", "title": "Wikipedia", "url": "https://www.wikipedia.org", "mark": "🌐", "bg": "linear-gradient(145deg, #1e293b, #475569)", "color": "#64748b"},
+        {"id": "p2", "title": "GitHub", "url": "https://github.com", "mark": "🐙", "bg": "linear-gradient(145deg, #1b1f24, #24292e)", "color": "#24292e"},
+        {"id": "p3", "title": "DuckDuckGo", "url": "https://duckduckgo.com", "mark": "🦆", "bg": "linear-gradient(145deg, #3d2303, #de5833)", "color": "#de5833"}
     ]
 }
 

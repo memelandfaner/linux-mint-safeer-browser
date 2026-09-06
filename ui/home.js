@@ -1,6 +1,6 @@
 // Safeer Browser — Linux Mint Edition Start Page Logic
 
-let currentEngine = 'google';
+let currentEngine = 'duckduckgo';
 let currentHomeLang = 'sl';
 
 const homeI18n = {
@@ -16,7 +16,7 @@ const homeI18n = {
     lbl_oss: "Odprta koda",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Lokalni zaščitni sloj pred botneti, zlonamerno kodo in sledilci.",
     slogan_safe: "Varnejši na spletu. Brez oglasov.",
-    search_placeholder: "Iščite z Google ali vnesite spletni naslov...",
+    search_placeholder: "Iščite z DuckDuckGo ali vnesite spletni naslov...",
     search_submit: "Išči",
     quick_lbl: "Hitre možnosti:",
     quick_customizer: "🧩 Teme & Skripte",
@@ -44,7 +44,7 @@ const homeI18n = {
     lbl_oss: "Open Source",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Local protection against botnets, malware, and trackers.",
     slogan_safe: "Safer on the web. Zero ads.",
-    search_placeholder: "Search with Google or enter web address...",
+    search_placeholder: "Search with DuckDuckGo or enter web address...",
     search_submit: "Search",
     quick_lbl: "Quick Options:",
     quick_customizer: "🧩 Themes & Scripts",
@@ -72,7 +72,7 @@ const homeI18n = {
     lbl_oss: "Open Source",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Lokaler Schutz gegen Botnetze, Schadsoftware und Tracker.",
     slogan_safe: "Sicherer im Web. Keine Werbung.",
-    search_placeholder: "Mit Google suchen oder Adresse eingeben...",
+    search_placeholder: "Mit DuckDuckGo suchen oder Adresse eingeben...",
     search_submit: "Suchen",
     quick_lbl: "Schnellzugriff:",
     quick_customizer: "🧩 Themes & Skripte",
@@ -100,7 +100,7 @@ const homeI18n = {
     lbl_oss: "Código Abierto",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Protección local contra botnets, malware y rastreadores.",
     slogan_safe: "Más seguro en la web. Cero anuncios.",
-    search_placeholder: "Buscar en Google o escribir dirección...",
+    search_placeholder: "Buscar con DuckDuckGo o escribir dirección...",
     search_submit: "Buscar",
     quick_lbl: "Accesos rápidos:",
     quick_customizer: "🧩 Temas y Scripts",
@@ -128,7 +128,7 @@ const homeI18n = {
     lbl_oss: "Open Source",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Protection locale contre les botnets, logiciels malveillants et traceurs.",
     slogan_safe: "Plus sûr sur le web. Zéro publicité.",
-    search_placeholder: "Rechercher avec Google ou entrer une adresse...",
+    search_placeholder: "Rechercher avec DuckDuckGo ou entrer une adresse...",
     search_submit: "Chercher",
     quick_lbl: "Outils rapides:",
     quick_customizer: "🧩 Thèmes & Scripts",
@@ -156,7 +156,7 @@ const homeI18n = {
     lbl_oss: "Open Source",
     security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Protezione locale contro botnet, malware e tracciamento.",
     slogan_safe: "Più sicuro sul web. Zero pubblicità.",
-    search_placeholder: "Cerca con Google o inserisci un indirizzo...",
+    search_placeholder: "Cerca con DuckDuckGo o inserisci un indirizzo...",
     search_submit: "Cerca",
     quick_lbl: "Strumenti rapidi:",
     quick_customizer: "🧩 Temi e Script",
@@ -299,7 +299,7 @@ function performSearch(event) {
   } else if (query.includes('.') && !query.includes(' ')) {
     targetUrl = 'https://' + query;
   } else {
-    const baseSearch = searchUrls[currentEngine] || searchUrls.google;
+    const baseSearch = searchUrls[currentEngine] || searchUrls.duckduckgo || searchUrls.google;
     targetUrl = baseSearch + encodeURIComponent(query);
   }
 

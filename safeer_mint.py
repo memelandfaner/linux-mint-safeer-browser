@@ -117,6 +117,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         # Multi-tab state management
         self.tabs = []
+        self.closed_tabs_stack = []
         self.active_tab_id = None
         self.tab_counter = 0
         self._paned_debounce_timer = None
@@ -152,8 +153,11 @@ class SafeerMintBrowser(Gtk.Window):
         if not initial_url:
             GLib.idle_add(self.restore_session)
 
-        # Preveri ali je Safeer privzeti brskalnik (če uporabnik ni izbral 'ne sprašuj več')
-        GLib.idle_add(self.check_default_browser_banner)
+        # Ob prvem zagonu ponudi čarovnik za uvoz in nastavitve, sicer preveri privzeti brskalnik
+        if not self.config.get("first_run_completed", False):
+            GLib.idle_add(self.open_first_run_wizard)
+        else:
+            GLib.idle_add(self.check_default_browser_banner)
 
         # Connect F4 keyboard shortcut to toggle sidebar
         self.connect("key-press-event", self.on_global_key_press)
@@ -1039,11 +1043,38 @@ class SafeerMintBrowser(Gtk.Window):
             self.toggle_fullscreen()
             return True
 
-        # Ctrl + L or F6 focuses URL bar & selects text (Universal browser standard)
-        if (ctrl and event.keyval in (Gdk.KEY_l, Gdk.KEY_L)) or event.keyval == Gdk.KEY_F6:
+        # Ctrl + L, Ctrl + K, or F6 focuses URL bar & selects text (Universal browser standard)
+        if (ctrl and not alt and not shift and event.keyval in (Gdk.KEY_l, Gdk.KEY_L, Gdk.KEY_k, Gdk.KEY_K)) or event.keyval == Gdk.KEY_F6:
             self.url_entry.grab_focus()
             self.url_entry.select_region(0, -1)
             return True
+
+        # Ctrl + Tab / Ctrl + Shift + Tab / Ctrl + PageUp / Ctrl + PageDown: Preklapljanje med odprtimi zavihki
+        if ctrl and not alt and event.keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab, Gdk.KEY_Page_Up, Gdk.KEY_KP_Page_Up, Gdk.KEY_Page_Down, Gdk.KEY_KP_Page_Down):
+            if shift or event.keyval in (Gdk.KEY_ISO_Left_Tab, Gdk.KEY_Page_Up, Gdk.KEY_KP_Page_Up):
+                self.switch_to_prev_tab()
+            else:
+                self.switch_to_next_tab()
+            return True
+
+        # Ctrl + 1..8: Hitri neposredni skok na zavihke 1-8; Ctrl + 9: Skok na zadnji odprti zavihek
+        if ctrl and not shift and not alt:
+            num_keys = {
+                Gdk.KEY_1: 0, Gdk.KEY_KP_1: 0,
+                Gdk.KEY_2: 1, Gdk.KEY_KP_2: 1,
+                Gdk.KEY_3: 2, Gdk.KEY_KP_3: 2,
+                Gdk.KEY_4: 3, Gdk.KEY_KP_4: 3,
+                Gdk.KEY_5: 4, Gdk.KEY_KP_5: 4,
+                Gdk.KEY_6: 5, Gdk.KEY_KP_6: 5,
+                Gdk.KEY_7: 6, Gdk.KEY_KP_7: 6,
+                Gdk.KEY_8: 7, Gdk.KEY_KP_8: 7,
+            }
+            if event.keyval in num_keys:
+                self.switch_to_tab_index(num_keys[event.keyval])
+                return True
+            if event.keyval in (Gdk.KEY_9, Gdk.KEY_KP_9):
+                self.switch_to_last_tab()
+                return True
 
         # Escape while URL bar has focus restores URL and returns focus to webview
         if event.keyval == Gdk.KEY_Escape and self.url_entry.has_focus():
@@ -1074,8 +1105,13 @@ class SafeerMintBrowser(Gtk.Window):
             self.toggle_sidebar_visibility()
             return True
 
-        # Ctrl + T: New tab
-        elif ctrl and event.keyval in (Gdk.KEY_t, Gdk.KEY_T):
+        # Ctrl + Shift + T: Ponovno odpri nazadnje zaprti zavihek
+        elif ctrl and shift and not alt and event.keyval in (Gdk.KEY_t, Gdk.KEY_T):
+            self.restore_closed_tab()
+            return True
+
+        # Ctrl + T: Nov zavihek
+        elif ctrl and not shift and not alt and event.keyval in (Gdk.KEY_t, Gdk.KEY_T):
             self.new_tab()
             return True
 
@@ -2685,6 +2721,11 @@ class SafeerMintBrowser(Gtk.Window):
             # Onemogoči ohranjanje preteklih strani v RAM-u (prepreči kopičenje odvečnega pomnilnika)
             if hasattr(settings, "set_enable_page_cache"):
                 settings.set_enable_page_cache(False)
+            # Onemogoči zlonamerno sledenje povezavam (<a ping>) in DNS vohljanje
+            if hasattr(settings, "set_enable_hyperlink_auditing"):
+                settings.set_enable_hyperlink_auditing(False)
+            if hasattr(settings, "set_enable_dns_prefetching"):
+                settings.set_enable_dns_prefetching(False)
         except Exception:
             pass
 
@@ -3049,6 +3090,139 @@ class SafeerMintBrowser(Gtk.Window):
         self.main_vbox.reorder_child(self.default_infobar, 1)
         self.default_infobar.show_all()
 
+    def open_first_run_wizard(self):
+        """Prikaže čist začetni čarovnik ob prvem zagonu za izbiro iskalnika, uvoz zaznamkov in nastavitev privzetega brskalnika."""
+        if self.config.get("first_run_completed", False):
+            return
+
+        from core.bookmarks_importer import detect_browser_profiles
+        detected = detect_browser_profiles()
+
+        dialog = Gtk.Dialog(
+            title="✨ Dobrodošli v Safeer Browser",
+            parent=self,
+            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT
+        )
+        dialog.set_default_size(520, 460)
+        dialog.set_resizable(False)
+        dialog.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
+        dialog.get_style_context().add_class("customizer-dialog")
+
+        btn_finish = dialog.add_button("Začni z brskanjem 🚀", Gtk.ResponseType.OK)
+        btn_finish.get_style_context().add_class("suggested-action")
+
+        content = dialog.get_content_area()
+        content.set_spacing(14)
+        content.set_margin_top(20)
+        content.set_margin_bottom(20)
+        content.set_margin_start(24)
+        content.set_margin_end(24)
+
+        # Header Title & Subtitle
+        head_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        lbl_h1 = Gtk.Label()
+        lbl_h1.set_markup("<span size='x-large' weight='bold' color='#87cf3e'>🍃 Safeer Browser</span>")
+        lbl_h1.set_xalign(0)
+        lbl_sub = Gtk.Label()
+        lbl_sub.set_markup("<b>Hitra začetna nastavitev za Linux Mint</b>\nPrilagodite brskalnik svojim navadam v manj kot minuti.")
+        lbl_sub.set_xalign(0)
+        lbl_sub.get_style_context().add_class("dim-label")
+        head_box.pack_start(lbl_h1, False, False, 0)
+        head_box.pack_start(lbl_sub, False, False, 0)
+        content.pack_start(head_box, False, False, 0)
+
+        # Separator
+        sep1 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        content.pack_start(sep1, False, False, 0)
+
+        # 1. Search Engine Selection
+        box_search = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        lbl_search = Gtk.Label()
+        lbl_search.set_markup("<b>🔍 Privzeti iskalnik</b>")
+        lbl_search.set_xalign(0)
+        box_search.pack_start(lbl_search, False, False, 0)
+
+        combo_search = Gtk.ComboBoxText()
+        engines_order = [
+            ("duckduckgo", "🦆 DuckDuckGo (Priporočeno — visoka zasebnost)"),
+            ("brave", "🦁 Brave Search (Neodvisen spletni indeks)"),
+            ("google", "🔍 Google"),
+            ("ecosia", "🌲 Ecosia"),
+            ("bing", "🌐 Bing")
+        ]
+        active_engine = self.config.get("search_engine", "duckduckgo")
+        sel_idx = 0
+        for idx, (eid, elabel) in enumerate(engines_order):
+            combo_search.append(eid, elabel)
+            if eid == active_engine:
+                sel_idx = idx
+        combo_search.set_active(sel_idx)
+        box_search.pack_start(combo_search, False, False, 0)
+        content.pack_start(box_search, False, False, 0)
+
+        # 2. Bookmarks Import Checkbox
+        box_bm = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        lbl_bm = Gtk.Label()
+        lbl_bm.set_markup("<b>📥 Zaznamki in priljubljene strani</b>")
+        lbl_bm.set_xalign(0)
+        box_bm.pack_start(lbl_bm, False, False, 0)
+
+        detected_names = []
+        if "firefox" in detected:
+            detected_names.append("Firefox")
+        if "chrome" in detected or "chromium" in detected or "brave" in detected:
+            detected_names.append("Chrome/Brave")
+
+        import_chk = None
+        if detected_names:
+            names_str = " & ".join(detected_names)
+            import_chk = Gtk.CheckButton(label=f"Uvozi moje obstoječe zaznamke iz {names_str} (1-klik)")
+            import_chk.set_active(True)
+            box_bm.pack_start(import_chk, False, False, 0)
+        else:
+            lbl_no_bm = Gtk.Label(label="Zaznamke lahko kadarkoli uvozite v orodni vrstici (zvezdica ⭐ ali Ctrl+B).")
+            lbl_no_bm.set_xalign(0)
+            lbl_no_bm.get_style_context().add_class("dim-label")
+            box_bm.pack_start(lbl_no_bm, False, False, 0)
+        content.pack_start(box_bm, False, False, 0)
+
+        # 3. Default Browser Option
+        box_def = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        lbl_def = Gtk.Label()
+        lbl_def.set_markup("<b>🌐 Privzeti sistemski brskalnik</b>")
+        lbl_def.set_xalign(0)
+        box_def.pack_start(lbl_def, False, False, 0)
+
+        is_already_def = self.is_default_browser()
+        def_chk = None
+        if not is_already_def:
+            def_chk = Gtk.CheckButton(label="Nastavi Safeer kot privzeti brskalnik za odpiranje povezav")
+            def_chk.set_active(False)
+            box_def.pack_start(def_chk, False, False, 0)
+        else:
+            lbl_is_def = Gtk.Label(label="✓ Safeer je že nastavljen kot vaš privzeti brskalnik.")
+            lbl_is_def.set_xalign(0)
+            lbl_is_def.get_style_context().add_class("dim-label")
+            box_def.pack_start(lbl_is_def, False, False, 0)
+        content.pack_start(box_def, False, False, 0)
+
+        dialog.show_all()
+        dialog.run()
+
+        # Apply user choices
+        selected_engine = combo_search.get_active_id() or "duckduckgo"
+        self.config.set("search_engine", selected_engine)
+
+        if import_chk and import_chk.get_active():
+            self.config.auto_import_from_browser("all")
+            self.broadcast_portals_update()
+
+        if def_chk and def_chk.get_active():
+            self.set_as_default_browser(show_dialog=False)
+
+        self.config.set("first_run_completed", True)
+        dialog.destroy()
+
     def load_homepage(self):
         home_path = os.path.join(BASE_DIR, "ui", "home.html")
         wv = self.get_active_webview()
@@ -3131,8 +3305,8 @@ class SafeerMintBrowser(Gtk.Window):
             if "." in text and " " not in text:
                 target = "https://" + text
             else:
-                engine = self.config.get("search_engine", "google")
-                engine_info = SEARCH_ENGINES.get(engine, SEARCH_ENGINES["google"])
+                engine = self.config.get("search_engine", "duckduckgo")
+                engine_info = SEARCH_ENGINES.get(engine, SEARCH_ENGINES.get("duckduckgo", SEARCH_ENGINES["google"]))
                 target = f"{engine_info['url']}{urllib.parse.quote_plus(text)}"
         else:
             target = text
@@ -3449,6 +3623,15 @@ class SafeerMintBrowser(Gtk.Window):
         if not tab_to_close:
             return
 
+        # Zapomni si zaprti zavihek za obnovo (Ctrl + Shift + T)
+        wv = tab_to_close.get("webview")
+        cur_uri = wv.get_uri() if wv else tab_to_close.get("uri", "")
+        cur_title = wv.get_title() if wv else tab_to_close.get("title", "")
+        if cur_uri and not cur_uri.startswith("file://") and cur_uri != "about:blank":
+            self.closed_tabs_stack.append({"uri": cur_uri, "title": cur_title or cur_uri})
+            if len(self.closed_tabs_stack) > 30:
+                self.closed_tabs_stack.pop(0)
+
         if len(self.tabs) <= 1:
             self.load_homepage()
             return
@@ -3507,6 +3690,43 @@ class SafeerMintBrowser(Gtk.Window):
 
         self.set_title(f"{target['title']} — Safeer Browser (Linux Mint)")
         self.update_star_status()
+
+    def restore_closed_tab(self):
+        """Obnovi nazadnje zaprti zavihek (Ctrl + Shift + T)."""
+        if not self.closed_tabs_stack:
+            return
+        last_tab = self.closed_tabs_stack.pop()
+        self.new_tab(url=last_tab["uri"], switch=True)
+
+    def switch_to_next_tab(self):
+        """Preklopi na naslednji zavihek (Ctrl + Tab)."""
+        if len(self.tabs) <= 1:
+            return
+        for i, tab in enumerate(self.tabs):
+            if tab["id"] == self.active_tab_id:
+                next_idx = (i + 1) % len(self.tabs)
+                self.switch_to_tab(self.tabs[next_idx]["id"])
+                return
+
+    def switch_to_prev_tab(self):
+        """Preklopi na prejšnji zavihek (Ctrl + Shift + Tab)."""
+        if len(self.tabs) <= 1:
+            return
+        for i, tab in enumerate(self.tabs):
+            if tab["id"] == self.active_tab_id:
+                prev_idx = (i - 1 + len(self.tabs)) % len(self.tabs)
+                self.switch_to_tab(self.tabs[prev_idx]["id"])
+                return
+
+    def switch_to_tab_index(self, index):
+        """Skoči neposredno na zavihek glede na zaporedno številko 0-7 (Ctrl + 1..8)."""
+        if 0 <= index < len(self.tabs):
+            self.switch_to_tab(self.tabs[index]["id"])
+
+    def switch_to_last_tab(self):
+        """Skoči na zadnji odprti zavihek (Ctrl + 9)."""
+        if self.tabs:
+            self.switch_to_tab(self.tabs[-1]["id"])
 
     def on_tab_load_changed(self, tab_id, webview, event):
         if event == WebKit2.LoadEvent.FINISHED:

@@ -60,13 +60,13 @@
       <form class="search-form" id="searchForm" onsubmit="return handleSearch(event)">
         <div class="search-bar">
           <span class="search-icon">🔍</span>
-          <input type="text" id="searchInput" class="search-input" placeholder="Iščite z Google ali vnesite spletni naslov..." autocomplete="off" autofocus>
+          <input type="text" id="searchInput" class="search-input" placeholder="Iščite z DuckDuckGo ali vnesite spletni naslov..." autocomplete="off" autofocus>
           <button type="submit" class="search-submit" data-i18n="search_submit">Išči</button>
         </div>
 
         <div class="engine-pills">
-          <button type="button" class="pill active" data-engine="google" onclick="setEngine('google', this)">Google</button>
-          <button type="button" class="pill" data-engine="duckduckgo" onclick="setEngine('duckduckgo', this)">DuckDuckGo</button>
+          <button type="button" class="pill active" data-engine="duckduckgo" onclick="setEngine('duckduckgo', this)">DuckDuckGo</button>
+          <button type="button" class="pill" data-engine="google" onclick="setEngine('google', this)">Google</button>
           <button type="button" class="pill" data-engine="brave" onclick="setEngine('brave', this)">Brave</button>
           <button type="button" class="pill" data-engine="youtube" onclick="setEngine('youtube', this)">YouTube</button>
         </div>

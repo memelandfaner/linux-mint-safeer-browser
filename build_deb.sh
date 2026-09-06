@@ -10,12 +10,11 @@ PKG_NAME="safeer-browser"
 VERSION="1.0.7"
 ARCH="all"
 DEB_PACKAGE="${PKG_NAME}_${VERSION}_${ARCH}.deb"
-DEB_PACKAGE_AMD64="${PKG_NAME}_${VERSION}_amd64.deb"
 TAR_PACKAGE="safeer-browser-linux.tar.gz"
 BUILD_ROOT="$DIR/build/deb"
 
 echo "=========================================================="
-echo "📦 Gradnja Debian paketa: $DEB_PACKAGE (in $DEB_PACKAGE_AMD64)"
+echo "📦 Gradnja Debian paketa: $DEB_PACKAGE"
 echo "=========================================================="
 
 # 1. Clean previous build tree
@@ -144,8 +143,8 @@ fi
 
 # Register Safeer Browser into Debian alternatives system for default browser
 if [ -x /usr/sbin/update-alternatives ] || [ -x /usr/bin/update-alternatives ]; then
-    update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/safeer 100 || true
-    update-alternatives --install /usr/bin/gnome-www-browser gnome-www-browser /usr/bin/safeer 100 || true
+    update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/safeer 40 || true
+    update-alternatives --install /usr/bin/gnome-www-browser gnome-www-browser /usr/bin/safeer 40 || true
 fi
 
 exit 0
@@ -185,9 +184,6 @@ chmod 755 "$BUILD_ROOT/usr/bin/safeer"
 echo "🔨 Izdelava paketa z dpkg-deb..."
 dpkg-deb --build --root-owner-group "$BUILD_ROOT" "$DIR/$DEB_PACKAGE"
 
-# Create amd64 clone for compatibility
-cp "$DIR/$DEB_PACKAGE" "$DIR/$DEB_PACKAGE_AMD64"
-
 # 9. Build portable tar.gz package
 echo "📦 Izdelava prenosnega arhiva: $TAR_PACKAGE..."
 tar -czf "$DIR/$TAR_PACKAGE" \
@@ -201,24 +197,26 @@ tar -czf "$DIR/$TAR_PACKAGE" \
 # 10. Generate SHA256SUMS
 echo "🔒 Računanje SHA256 kontrolnih vsot..."
 cd "$DIR"
-sha256sum "$DEB_PACKAGE" "$DEB_PACKAGE_AMD64" "$TAR_PACKAGE" > "$DIR/SHA256SUMS"
+sha256sum "$DEB_PACKAGE" "$TAR_PACKAGE" > "$DIR/SHA256SUMS"
 
 # 11. Copy to safeer-web assets if repo exists
 WEB_ASSETS="$DIR/../safeer-web/assets/desktop"
-if [ -d "$WEB_ASSETS" ]; then
-    echo "🌐 Sinhronizacija s spletno stranjo safeer-web..."
-    cp "$DIR/$DEB_PACKAGE" "$WEB_ASSETS/"
-    cp "$DIR/$DEB_PACKAGE_AMD64" "$WEB_ASSETS/"
-    cp "$DIR/$TAR_PACKAGE" "$WEB_ASSETS/"
-    cp "$DIR/SHA256SUMS" "$WEB_ASSETS/"
-fi
+GH_PAGES_ASSETS="$DIR/../Neimenovana mapa/safeer-gh-pages/assets/desktop"
+for TARGET_DIR in "$WEB_ASSETS" "$GH_PAGES_ASSETS"; do
+    if [ -d "$TARGET_DIR" ]; then
+        echo "🌐 Sinhronizacija s spletnimi viri: $TARGET_DIR..."
+        cp "$DIR/$DEB_PACKAGE" "$TARGET_DIR/"
+        cp "$DIR/$TAR_PACKAGE" "$TARGET_DIR/"
+        cp "$DIR/SHA256SUMS" "$TARGET_DIR/"
+        rm -f "$TARGET_DIR/safeer-browser_1.0.7_amd64.deb"
+    fi
+done
 
 # 12. Verify package
 echo ""
 echo "=========================================================="
 echo "✅ PAKETI USPEŠNO ZGRAJENI:"
 echo "   All-Arch .deb: $DIR/$DEB_PACKAGE"
-echo "   AMD64    .deb: $DIR/$DEB_PACKAGE_AMD64"
 echo "   Portable tar : $DIR/$TAR_PACKAGE"
 cat "$DIR/SHA256SUMS"
 echo "=========================================================="
