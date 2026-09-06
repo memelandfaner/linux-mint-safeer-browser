@@ -131,7 +131,13 @@ class SafeerMintBrowser(Gtk.Window):
 
         # Apply Linux Mint Dark Theme preference
         settings = Gtk.Settings.get_default()
-        settings.set_property("gtk-application-prefer-dark-theme", True)
+        if settings:
+            settings.set_property("gtk-application-prefer-dark-theme", True)
+            try:
+                subprocess.Popen(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-dark"],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
 
         self.setup_ui(initial_url=initial_url)
         self.apply_css()
@@ -1056,7 +1062,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.nav_bar.pack_start(self.url_box, True, True, 4)
 
         # Force Dark Mode Toggle Button (🌙 / ☀️)
-        is_dark = self.config.get("force_dark_mode", False)
+        is_dark = self.config.get("force_dark_mode", True)
         self.btn_dark_mode = Gtk.Button(label="🌙" if is_dark else "☀️")
         self.btn_dark_mode.get_style_context().add_class("ff-nav-btn")
         if is_dark:
@@ -1615,7 +1621,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         # 4. Force Dark Mode Setting
         dark_check = Gtk.CheckButton(label="🌙 Prisili temni način na vseh spletnih straneh (Force Dark Mode)")
-        dark_check.set_active(self.config.get("force_dark_mode", False))
+        dark_check.set_active(self.config.get("force_dark_mode", True))
         dark_check.connect("toggled", lambda b: self.toggle_dark_mode())
         box.pack_start(dark_check, False, False, 0)
 
@@ -2057,7 +2063,7 @@ class SafeerMintBrowser(Gtk.Window):
                     print(f"[UserScript] Opozorilo pri nalaganju skripte '{s.get('name')}': {e}")
 
         # Force Dark Mode if enabled
-        if self.config.get("force_dark_mode", False):
+        if self.config.get("force_dark_mode", True):
             self.apply_dark_mode_to_webview(wv, True)
 
         # Tab Strip Widget
@@ -2284,7 +2290,7 @@ class SafeerMintBrowser(Gtk.Window):
 
             self.add_history_entry(uri, title)
 
-            if self.config.get("force_dark_mode", False) and "ui/home.html" not in uri:
+            if self.config.get("force_dark_mode", True) and "ui/home.html" not in uri:
                 self.inject_dark_mode_js(webview, True)
 
     def on_tab_title_changed(self, tab_id, webview, prop):

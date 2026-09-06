@@ -68,6 +68,10 @@ fi
 export WEBKIT_FORCE_COMPOSITING_MODE=1
 export WEBKIT_DISABLE_COMPOSITING_MODE=0
 
+# 🌙 Zagotovi temno temo za GTK aplikacije in WebKit (Cinnamon & GNOME)
+export GTK_THEME="Mint-Y-Dark-Blue"
+gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null || true
+
 # 🎵 Gladko predvajanje zvoka brez prekinitev (PipeWire / PulseAudio 120ms varnostni medpomnilnik)
 export PULSE_LATENCY_MSEC=120
 export GST_PULSE_BUFFER_MS=120

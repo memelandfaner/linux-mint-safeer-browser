@@ -81,7 +81,7 @@ SEARCH_ENGINES = {
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "language": "auto",                 # "auto", "en", "sl", "de", "es", "fr", "it"
-    "force_dark_mode": False,           # Prisili temni način na vseh spletnih straneh
+    "force_dark_mode": True,           # Prisili temni način na vseh spletnih straneh
     "theme": "midnight",                # "midnight", "mint", "neon", "amoled"
     "custom_css": "",                   # Lasten CSS slog uporabnika
     "user_scripts": [
@@ -215,7 +215,7 @@ class ConfigManager:
 
     def toggle_force_dark(self) -> bool:
         """Trajno vklopi ali izklopi prisilni temni način za vse spletne strani."""
-        cur = self.settings.get("force_dark_mode", False)
+        cur = self.settings.get("force_dark_mode", True)
         self.settings["force_dark_mode"] = not cur
         self.save_settings()
         return not cur
