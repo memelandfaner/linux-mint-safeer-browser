@@ -409,9 +409,9 @@ ADGUARD_PROTECTION_SCRIPT = """
     window.addEventListener('load', runAdguardProtection);
     setInterval(runAdguardProtection, 2500);
 })();
-\"\"\"
+"""
 
-GENERIC_COSMETIC_SCRIPT = \"\"\"
+GENERIC_COSMETIC_SCRIPT = """
 /* 🛡️ Safeer Linux Mint - Universal Ad & Tracker Shield */
 (function() {
     function cleanGenericAds() {
