@@ -53,6 +53,7 @@ from core.adblock import (
     AUTH_SCRIPT_EXCLUSIONS
 )
 from core.reader import READER_MODE_JS
+from core.default_browser import is_default_browser as system_is_default_browser, set_default_browser
 
 # Native WebKitGTK user agent matching Safari/WebKit engine to prevent Google CAPTCHA bot triggers
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
@@ -3038,47 +3039,13 @@ class SafeerMintBrowser(Gtk.Window):
 
 
     def is_default_browser(self):
-        """Preveri ali je Safeer trenutno privzeti spletni brskalnik v sistemu Linux."""
-        try:
-            res = subprocess.run(
-                ["xdg-settings", "get", "default-web-browser"],
-                capture_output=True, text=True, timeout=2
-            )
-            if "safeer" in res.stdout.lower():
-                return True
-            res_mime = subprocess.run(
-                ["xdg-mime", "query", "default", "x-scheme-handler/https"],
-                capture_output=True, text=True, timeout=2
-            )
-            if "safeer" in res_mime.stdout.lower():
-                return True
-        except Exception:
-            pass
-        return False
+        return system_is_default_browser()
 
     def set_as_default_browser(self, show_dialog=True):
-        """Nastavi Safeer kot privzeti spletni brskalnik v sistemu Linux (XDG / Cinnamon / MATE)."""
-        desktop_file = "safeer-browser.desktop"
-        success = False
-        try:
-            subprocess.run(["xdg-settings", "set", "default-web-browser", desktop_file], check=False, timeout=3)
-            mimes = [
-                "x-scheme-handler/http",
-                "x-scheme-handler/https",
-                "text/html",
-                "text/xml",
-                "application/xhtml+xml"
-            ]
-            for m in mimes:
-                subprocess.run(["xdg-mime", "default", desktop_file, m], check=False, timeout=2)
-            try:
-                subprocess.run(["gio", "mime", "x-scheme-handler/https", desktop_file], check=False, timeout=2)
-                subprocess.run(["gio", "mime", "x-scheme-handler/http", desktop_file], check=False, timeout=2)
-            except Exception:
-                pass
-            success = self.is_default_browser()
-        except Exception as e:
-            print(f"[DefaultBrowser] Napaka pri nastavljanju: {e}")
+        """Set and verify the actual per-user default using the desktop's native API."""
+        success, errors = set_default_browser(BASE_DIR)
+        if not success:
+            print("[DefaultBrowser] " + "; ".join(errors))
 
         if show_dialog:
             msg_type = Gtk.MessageType.INFO if success else Gtk.MessageType.WARNING
@@ -5573,12 +5540,12 @@ class SafeerMintBrowser(Gtk.Window):
 
 def main():
     if "--set-default" in sys.argv:
-        desktop_file = "safeer-browser.desktop"
-        subprocess.run(["xdg-settings", "set", "default-web-browser", desktop_file], check=False)
-        for m in ["x-scheme-handler/http", "x-scheme-handler/https", "text/html", "text/xml", "application/xhtml+xml"]:
-            subprocess.run(["xdg-mime", "default", desktop_file, m], check=False)
-        print("✅ Safeer Browser je bil uspešno nastavljen kot privzeti spletni brskalnik!")
-        sys.exit(0)
+        success, errors = set_default_browser(BASE_DIR)
+        if success:
+            print("✅ Safeer je privzet za HTTP, HTTPS, HTML in XHTML.")
+        else:
+            print("Nastavitev ni uspela: " + "; ".join(errors), file=sys.stderr)
+        sys.exit(0 if success else 1)
 
     target_url = None
     if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):

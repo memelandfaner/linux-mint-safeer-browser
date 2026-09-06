@@ -1,3 +1,10 @@
+safeer-browser (1.0.11-0ubuntu1~noble1) noble; urgency=medium
+
+  * Use native GIO registration for default browser instead of timed shell commands.
+  * Repair misplaced desktop MIME metadata and verify all web associations.
+
+ -- Safeer Sovereign Security Team <support@safeer.org>  Sun, 06 Sep 2026 22:05:00 +0200
+
 safeer-browser (1.0.10-0ubuntu1~noble1) noble; urgency=medium
 
   * Preserve login popups, opener callbacks, POST forms and signed links.

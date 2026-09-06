@@ -53,6 +53,9 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.0.11" date="2026-09-06">
+      <description><p>Fix default browser registration and verification.</p></description>
+    </release>
     <release version="1.0.10" date="2026-09-06">
       <description><p>Preserve sign-in popups, forms and verification pages.</p></description>
     </release>
