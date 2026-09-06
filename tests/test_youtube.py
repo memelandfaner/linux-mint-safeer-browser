@@ -23,4 +23,36 @@ video.muted=true;active=false;superviseYouTube();assert.strictEqual(video.muted,
 """
         subprocess.run(['node','-e',fixture+code+checks],check=True)
 
+class PlayerDataTests(unittest.TestCase):
+    def test_initial_objects_fetch_xhr_and_signed_media_are_preserved(self):
+        start=YOUTUBE_ADBLOCK_SCRIPT.index("    // Remove ad instructions")
+        end=YOUTUBE_ADBLOCK_SCRIPT.index("    // 4. Safe YouTube",start)
+        fixture=r"""
+const assert=require('assert');
+const window=globalThis; const document={addEventListener(){}};
+const location={href:'https://www.youtube.com/watch?v=fixture'};
+let reply='';window.fetch=()=>Promise.resolve(new Response(reply,{status:200,headers:{'content-type':'application/json'}}));
+class XMLHttpRequest {open(){} get responseText(){return reply} get response(){return reply}}
+window.XMLHttpRequest=XMLHttpRequest;
+"""
+        checks=r"""
+const source={adPlacements:[{}],playerAds:[{}],adSlots:[{}],adBreakHeartbeatParams:'ad',videoDetails:{videoId:'fixture'},streamingData:{formats:[{url:'https://cdn.test/media?sig=abc&x=1'}]}};
+window.ytInitialPlayerResponse=structuredClone(source);
+assert(!('adPlacements' in window.ytInitialPlayerResponse));
+assert(!('adBreakHeartbeatParams' in window.ytInitialPlayerResponse));
+assert.strictEqual(window.ytInitialPlayerResponse.streamingData.formats[0].url,source.streamingData.formats[0].url);
+window.ytplayer={config:{args:{player_response:nativeStringify(source)}}};
+assert(!nativeParse(window.ytplayer.config.args.player_response).playerAds);
+window.ytplayer.config.args.player_response=nativeStringify(source);
+assert(!nativeParse(window.ytplayer.config.args.player_response).adSlots);
+reply=nativeStringify({playerResponse:source});
+const xhr=new XMLHttpRequest();xhr.open('GET','/youtubei/v1/player');xhr.readyState=4;
+assert(!nativeParse(xhr.responseText).playerResponse.adPlacements);
+const ordinary=new XMLHttpRequest();ordinary.open('GET','/other');ordinary.readyState=4;
+assert.strictEqual(ordinary.responseText,reply);
+assert.strictEqual(isPlayerApi('https://youtube.com.evil.test/youtubei/v1/player'),false);
+(async()=>{const response=await fetch('/youtubei/v1/next');const data=await response.json();assert(!data.playerResponse.adBreakHeartbeatParams);assert(data.playerResponse.streamingData);console.log('PASS: direct initial objects, late assignments, serialized config, fetch.json and XHR; media preserved');})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+        subprocess.run(['node','-e',fixture+YOUTUBE_ADBLOCK_SCRIPT[start:end]+checks],check=True)
+
 if __name__=='__main__':unittest.main()

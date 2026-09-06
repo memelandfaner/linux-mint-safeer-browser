@@ -53,94 +53,128 @@ YOUTUBE_ADBLOCK_SCRIPT = """
         });
     } catch(e) {}
 
-    // 1. JSON.parse Hook: Strip ad placements and delay-play tracking beacons before YouTube processes them
-    try {
-        var origParse = JSON.parse;
-        JSON.parse = function() {
-            var val = origParse.apply(this, arguments);
-            try {
-                if (val && typeof val === 'object') {
-                    var stripped = false;
-                    if (val.adPlacements) { delete val.adPlacements; stripped = true; }
-                    if (val.playerAds) { delete val.playerAds; stripped = true; }
-                    if (val.adSlots) { delete val.adSlots; stripped = true; }
-                    if (val.adPlayback) { delete val.adPlayback; stripped = true; }
-                    if (stripped && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {
-                        try { window.webkit.messageHandlers.safeer.postMessage({ action: 'increment_ads', count: 1 }); } catch(_) {}
-                    }
-                    if (val.playbackTracking) {
-                        try {
-                            delete val.playbackTracking.videostatsPlaybackUrl;
-                            delete val.playbackTracking.videostatsDelayplayUrl;
-                            delete val.playbackTracking.videostatsWatchtimeUrl;
-                            delete val.playbackTracking.ptrackingUrl;
-                            delete val.playbackTracking.qoeUrl;
-                            delete val.playbackTracking.atrUrl;
-                        } catch(_) {}
-                    }
-                }
-            } catch(e) {}
-            return val;
-        };
-    } catch(e) {}
-
-    // 2. Fetch & XHR Hook: Clean YouTube API responses
-    try {
-        var origFetch = window.fetch;
-        if (origFetch) {
-            window.fetch = function() {
-                var url = (typeof arguments[0] === 'string') ? arguments[0] : (arguments[0] && arguments[0].url ? arguments[0].url : '');
-                if (url && (url.indexOf('/youtubei/v1/player') !== -1 || url.indexOf('/youtubei/v1/next') !== -1)) {
-                    return origFetch.apply(this, arguments).then(function(resp) {
-                        return resp.clone().text().then(function(txt) {
-                            try {
-                                var data = JSON.parse(txt);
-                                if (data.adPlacements) delete data.adPlacements;
-                                if (data.playerAds) delete data.playerAds;
-                                if (data.adSlots) delete data.adSlots;
-                                if (data.playbackTracking) {
-                                    try {
-                                        delete data.playbackTracking.videostatsPlaybackUrl;
-                                        delete data.playbackTracking.videostatsDelayplayUrl;
-                                        delete data.playbackTracking.videostatsWatchtimeUrl;
-                                        delete data.playbackTracking.ptrackingUrl;
-                                        delete data.playbackTracking.qoeUrl;
-                                        delete data.playbackTracking.atrUrl;
-                                    } catch(_) {}
-                                }
-                                return new Response(JSON.stringify(data), {
-                                    status: resp.status,
-                                    statusText: resp.statusText,
-                                    headers: resp.headers
-                                });
-                            } catch(_) {
-                                return resp;
-                            }
-                        });
-                    });
-                }
-                return origFetch.apply(this, arguments);
-            };
-        }
-    } catch(e) {}
-
-    // 3. Strip Global Injected Player Data
-    function cleanGlobals() {
-        try {
-            if (window.ytInitialPlayerResponse) {
-                var r = window.ytInitialPlayerResponse;
-                if (r.adPlacements) delete r.adPlacements;
-                if (r.playerAds) delete r.playerAds;
-                if (r.adSlots) delete r.adSlots;
+    // Remove ad instructions before the player consumes a response. The main
+    // watch document assigns JavaScript objects directly, without JSON.parse.
+    var nativeParse = JSON.parse;
+    var nativeStringify = JSON.stringify;
+    var stats = window._safeerAdStats = {cleanedResponses:0, removedFields:0, skipClicks:0};
+    var adKeys = ['adPlacements', 'playerAds', 'adSlots', 'adPlayback', 'adBreakHeartbeatParams'];
+    function cleanPlayerData(data, depth) {
+        depth = depth || 0;
+        if (depth > 6) return data;
+        if (!data || typeof data !== 'object') return data;
+        var removed = 0;
+        adKeys.forEach(function(key) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
+                try { delete data[key]; removed++; } catch (_) {}
             }
-        } catch(e) {}
+        });
+        // Known player response envelopes; do not traverse unrelated page data.
+        ['playerResponse', 'player_response', 'response'].forEach(function(key) {
+            var value = data[key];
+            if (value && typeof value === 'object' && value !== data) cleanPlayerData(value, depth + 1);
+            else if (key === 'player_response' && typeof value === 'string') {
+                try { data[key] = nativeStringify(cleanPlayerData(nativeParse(value))); } catch (_) {}
+            }
+        });
+        if (Array.isArray(data)) data.forEach(function(item) { cleanPlayerData(item, depth + 1); });
+        if (removed) { stats.cleanedResponses++; stats.removedFields += removed; }
+        return data;
     }
-    cleanGlobals();
+    function watchProperty(object, key, transform) {
+        try {
+            var descriptor = Object.getOwnPropertyDescriptor(object, key);
+            if (descriptor && (!descriptor.configurable || descriptor.get || descriptor.set)) return;
+            var value = transform(object[key]);
+            Object.defineProperty(object, key, {
+                configurable:true, enumerable:descriptor ? descriptor.enumerable : true,
+                get:function(){ return value; },
+                set:function(next){ value = transform(next); }
+            });
+        } catch (_) {}
+    }
+    function watchArgs(args) {
+        if (args && typeof args === 'object') {
+            watchProperty(args, 'player_response', function(value) {
+                if (typeof value === 'string') {
+                    try { return nativeStringify(cleanPlayerData(nativeParse(value))); } catch (_) {}
+                }
+                return cleanPlayerData(value);
+            });
+        }
+        return args;
+    }
+    watchProperty(window, 'ytInitialPlayerResponse', cleanPlayerData);
+    watchProperty(window, 'ytplayer', function(player) {
+        if (player && typeof player === 'object') watchProperty(player, 'config', function(config) {
+            if (config && typeof config === 'object') watchProperty(config, 'args', watchArgs);
+            return config;
+        });
+        return player;
+    });
+    JSON.parse = function() { return cleanPlayerData(nativeParse.apply(this, arguments)); };
+    function isPlayerApi(value) {
+        try {
+            var url = new URL(value, location.href);
+            return (url.hostname === 'youtube.com' || url.hostname.endsWith('.youtube.com') || url.hostname === 'youtubei.googleapis.com') &&
+                /^\/youtubei\/v[0-9]+\/(player|next)(?:\/|$)/.test(url.pathname);
+        } catch (_) { return false; }
+    }
+    if (window.fetch) {
+        var originalFetch = window.fetch;
+        window.fetch = function() {
+            var value = arguments[0];
+            var url = typeof value === 'string' ? value : value && (value.url || value.href);
+            var response = originalFetch.apply(this, arguments);
+            if (!isPlayerApi(url)) return response;
+            return response.then(function(resp) {
+                if (!resp.ok) return resp;
+                return resp.clone().text().then(function(text) {
+                    try {
+                        var headers = new Headers(resp.headers);
+                        headers.delete('content-length'); headers.delete('content-encoding');
+                        var result = new Response(nativeStringify(cleanPlayerData(nativeParse(text))),
+                            {status:resp.status, statusText:resp.statusText, headers:headers});
+                        ['url','redirected','type'].forEach(function(key){ Object.defineProperty(result,key,{value:resp[key]}); });
+                        return result;
+                    } catch (_) { return resp; }
+                }, function(){ return resp; });
+            });
+        };
+    }
+    if (window.XMLHttpRequest) {
+        var xhrOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url) {
+            this._safeerPlayerApi = isPlayerApi(url);
+            this._safeerCleanCache = null;
+            return xhrOpen.apply(this, arguments);
+        };
+        ['responseText', 'response'].forEach(function(key) {
+            var descriptor = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, key);
+            if (!descriptor || !descriptor.get || !descriptor.configurable) return;
+            Object.defineProperty(XMLHttpRequest.prototype, key, {
+                configurable:true, enumerable:descriptor.enumerable,
+                get:function() {
+                    var original = descriptor.get.call(this);
+                    if (!this._safeerPlayerApi || this.readyState !== 4) return original;
+                    if (typeof original === 'object') return cleanPlayerData(original);
+                    if (typeof original !== 'string' || !original) return original;
+                    if (this._safeerCleanCache && this._safeerCleanCache.original === original) return this._safeerCleanCache.clean;
+                    try {
+                        var clean = nativeStringify(cleanPlayerData(nativeParse(original)));
+                        this._safeerCleanCache = {original:original, clean:clean}; return clean;
+                    } catch (_) { return original; }
+                }
+            });
+        });
+    }
+    function cleanGlobals() { cleanPlayerData(window.ytInitialPlayerResponse); }
     document.addEventListener('DOMContentLoaded', cleanGlobals);
 
     // 4. Safe YouTube Ad Fast-Forward & Skip Engine
     function clickSkip() {
         var selectors = [
+            '.ytp-skip-ad-button',
             '.ytp-ad-skip-button',
             '.ytp-ad-skip-button-modern',
             '.ytp-skip-ad-button',
@@ -152,6 +186,7 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             var btn = document.querySelector(selectors[i]);
             if (btn && btn.offsetParent !== null) {
                 btn.click();
+                stats.skipClicks++;
                 return true;
             }
         }

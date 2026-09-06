@@ -1,3 +1,10 @@
+safeer-browser (1.0.12-0ubuntu1~noble1) noble; urgency=medium
+
+  * Clean initial and asynchronous YouTube ad payloads before playback.
+  * Add bounded search recovery and readable connection/certificate error pages.
+
+ -- Safeer Browser Team <safeer@users.noreply.github.com>  Sun, 06 Sep 2026 22:00:00 +0200
+
 safeer-browser (1.0.11-0ubuntu1~noble1) noble; urgency=medium
 
   * Use native GIO registration for default browser instead of timed shell commands.

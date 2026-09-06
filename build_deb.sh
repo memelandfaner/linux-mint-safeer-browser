@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Safeer Browser — Debian / Ubuntu / Linux Mint .deb Package Builder
-# Produces production-ready safeer-browser_1.0.5_all.deb
+# Produces production-ready safeer-browser_<version>_all.deb
 # ==============================================================================
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_NAME="safeer-browser"
-VERSION="1.0.11"
+VERSION="1.0.12"
 ARCH="all"
 DEB_PACKAGE="${PKG_NAME}_${VERSION}_${ARCH}.deb"
 TAR_PACKAGE="safeer-browser-linux.tar.gz"

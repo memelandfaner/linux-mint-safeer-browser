@@ -53,6 +53,7 @@ from core.adblock import (
     AUTH_SCRIPT_EXCLUSIONS
 )
 from core.reader import READER_MODE_JS
+from core.network_errors import NetworkErrorHandler
 from core.default_browser import is_default_browser as system_is_default_browser, set_default_browser
 
 # Native WebKitGTK user agent matching Safari/WebKit engine to prevent Google CAPTCHA bot triggers
@@ -3423,6 +3424,7 @@ class SafeerMintBrowser(Gtk.Window):
         wv = (WebKit2.WebView.new_with_related_view(related_view) if related_view is not None
               else WebKit2.WebView.new_with_context(self.web_context))
         self.setup_webview_settings(wv)
+        wv._safeer_network_errors = NetworkErrorHandler(wv)
 
         wv.connect("load-changed", lambda w, ev: self.on_tab_load_changed(tab_id, w, ev))
         wv.connect("notify::title", lambda w, p: self.on_tab_title_changed(tab_id, w, p))
@@ -3793,7 +3795,9 @@ class SafeerMintBrowser(Gtk.Window):
                     self.security_icon.set_text("🎚️")
                 else:
                     self.url_entry.set_text(self.format_clean_url(uri))
-                    if uri.startswith("https://"):
+                    if getattr(webview, "_safeer_load_failed", False):
+                        self.security_icon.set_text("⚠️")
+                    elif uri.startswith("https://"):
                         self.security_icon.set_text("🔒")
                     else:
                         self.security_icon.set_text("🎚️")
@@ -3801,7 +3805,7 @@ class SafeerMintBrowser(Gtk.Window):
 
             self.add_history_entry(uri, title)
 
-            if self.config.get("force_dark_mode", True) and "ui/home.html" not in uri:
+            if self.config.get("force_dark_mode", True) and "ui/home.html" not in uri and not getattr(webview, "_safeer_load_failed", False):
                 self.inject_dark_mode_js(webview, True)
 
     def on_tab_title_changed(self, tab_id, webview, prop):
