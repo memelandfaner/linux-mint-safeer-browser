@@ -126,6 +126,9 @@ class SafeerMintBrowser(Gtk.Window):
         self.history_file = os.path.join(self.config.config_dir, "history.json")
         self._is_fullscreen = False
 
+        # 🛡️ Shields counter — koliko groženj/sledilcev je blokirano v tej seji
+        self._shields_blocked = 0  # seje counter (se resetira ob zagonu)
+
         # Configure Persistent Cookie, LocalStorage & IndexedDB Storage
         self.setup_persistent_storage()
         self.setup_network_security_and_proxy()
@@ -145,13 +148,17 @@ class SafeerMintBrowser(Gtk.Window):
         self.setup_ui(initial_url=initial_url)
         self.apply_css()
 
+        # Ponudi obnovo prejšnje seje zavihkov (samo če ni bil podan direkten URL)
+        if not initial_url:
+            GLib.idle_add(self.restore_session)
+
         # Connect F4 keyboard shortcut to toggle sidebar
         self.connect("key-press-event", self.on_global_key_press)
         # Connect delete-event to remember window size on exit
         self.connect("delete-event", self.on_delete_event)
 
     def on_delete_event(self, widget, event):
-        """Zapomni si velikost okna in počisti IPC socket ob zaprtju."""
+        """Zapomni si velikost okna, shrani sejo zavihkov in počisti IPC socket ob zaprtju."""
         if hasattr(self, "_paned_debounce_timer") and self._paned_debounce_timer:
             try:
                 GLib.source_remove(self._paned_debounce_timer)
@@ -166,6 +173,8 @@ class SafeerMintBrowser(Gtk.Window):
                 self.config.set("window_height", h)
         except Exception:
             pass
+        # Shrani sejo zavihkov za obnovo ob naslednjem zagonu
+        self.save_session()
         try:
             if hasattr(self, "lock_fd") and self.lock_fd:
                 import fcntl
@@ -182,6 +191,82 @@ class SafeerMintBrowser(Gtk.Window):
         except Exception:
             pass
         return False
+
+    def save_session(self):
+        """Shrani URL-je vseh odprtih zavihkov v session.json za obnovo ob naslednjem zagonu."""
+        try:
+            session_urls = []
+            active_id = self.active_tab_id
+            for tab in self.tabs:
+                wv = tab.get("webview")
+                uri = (wv.get_uri() if wv else None) or tab.get("uri", "")
+                # Ne shranjuj lokalnih home strani ali praznih
+                if uri and not uri.startswith("file://") and uri not in ("safeer://home", "about:blank", ""):
+                    session_urls.append({
+                        "url": uri,
+                        "title": tab.get("title", ""),
+                        "active": (tab["id"] == active_id)
+                    })
+            session_path = os.path.join(self.config.config_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as f:
+                json.dump({"version": 1, "tabs": session_urls}, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[Session] Opozorilo pri shranjevanju seje: {e}")
+
+    def restore_session(self):
+        """Ob zagonu ponudi obnovo prejšnje seje zavihkov."""
+        try:
+            session_path = os.path.join(self.config.config_dir, "session.json")
+            if not os.path.exists(session_path):
+                return
+            with open(session_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            tabs = data.get("tabs", [])
+            if not tabs:
+                return
+            # Izbrišemo session po branju, da ne ponujamo dvakrat
+            try:
+                os.remove(session_path)
+            except Exception:
+                pass
+            count = len(tabs)
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.NONE,
+                text=f"🔄 Obnovi prejšnjo sejo?"
+            )
+            dialog.format_secondary_text(
+                f"Safeer je shranil {count} zavihek{'ov' if count != 1 else ''} iz prejšnje seje.\n"
+                "Ali jih želite obnoviti?"
+            )
+            dialog.add_button("Začni znova", Gtk.ResponseType.CANCEL)
+            btn_restore = dialog.add_button(f"Obnovi {count} zavihk{'ov' if count != 1 else 'ek'}", Gtk.ResponseType.OK)
+            btn_restore.get_style_context().add_class("suggested-action")
+            response = dialog.run()
+            dialog.destroy()
+            if response == Gtk.ResponseType.OK:
+                active_url = None
+                for tab_data in tabs:
+                    url = tab_data.get("url", "")
+                    if url and is_safe_web_url(url):
+                        is_active = tab_data.get("active", False)
+                        if is_active:
+                            active_url = url
+                        self.new_tab(url=url, switch=False)
+                # Preklopi na aktivni zavihek
+                if active_url:
+                    for tab in self.tabs:
+                        wv = tab.get("webview")
+                        uri = (wv.get_uri() if wv else None) or tab.get("uri", "")
+                        if uri == active_url:
+                            self.switch_to_tab(tab["id"])
+                            break
+                elif self.tabs:
+                    self.switch_to_tab(self.tabs[-1]["id"])
+        except Exception as e:
+            print(f"[Session] Opozorilo pri obnovi seje: {e}")
 
     def setup_ipc_socket(self):
         """Lokalni Unix socket za vodenje ene same instance z atomskim fcntl zaklepom."""
@@ -373,6 +458,10 @@ class SafeerMintBrowser(Gtk.Window):
         # 3. Bottom Optional Virtual Keyboard (Hidden by default!)
         self.create_keyboard_panel()
         self.main_vbox.pack_end(self.keyboard_box, False, False, 0)
+
+        # 4. Find-in-Page Bar (Ctrl+F) — skrita po privzetku
+        self.create_find_bar()
+        self.main_vbox.pack_end(self.find_bar, False, False, 0)
 
         # Set initial divider position (dock width only)
         self.content_paned.set_position(DOCK_WIDTH)
@@ -779,6 +868,46 @@ class SafeerMintBrowser(Gtk.Window):
             background: rgba(255, 255, 255, 0.16);
             color: #ffffff;
         }}
+        /* ===== Find Bar ===== */
+        .find-bar {{
+            background: rgba(15, 20, 30, 0.97);
+            border-top: 1px solid rgba(135, 207, 62, 0.3);
+            padding: 4px 8px;
+        }}
+        .find-bar-label {{
+            color: #87cf3e;
+            font-weight: 600;
+            font-size: 13px;
+        }}
+        .find-bar-entry {{
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(135,207,62,0.4);
+            border-radius: 6px;
+            color: #f1f5f9;
+            padding: 4px 8px;
+            font-size: 13px;
+            min-width: 240px;
+        }}
+        .find-bar-entry:focus {{
+            border-color: #87cf3e;
+            background: rgba(135,207,62,0.08);
+        }}
+        .find-bar-result {{
+            color: #94a3b8;
+            font-size: 12px;
+        }}
+        .find-nav-btn, .find-close-btn {{
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 5px;
+            color: #f1f5f9;
+            padding: 2px 8px;
+            font-size: 12px;
+        }}
+        .find-nav-btn:hover, .find-close-btn:hover {{
+            background: rgba(135,207,62,0.18);
+            border-color: rgba(135,207,62,0.5);
+        }}
         """
 
         custom_css = self.config.get("custom_css", "")
@@ -903,6 +1032,17 @@ class SafeerMintBrowser(Gtk.Window):
             if wv:
                 wv.go_forward()
             return True
+
+        # Ctrl + F: Find in Page — prikaži find bar
+        elif ctrl and event.keyval in (Gdk.KEY_f, Gdk.KEY_F):
+            self.show_find_bar()
+            return True
+
+        # Ctrl + P: Natisni / Shrani kot PDF
+        elif ctrl and event.keyval in (Gdk.KEY_p, Gdk.KEY_P):
+            self.print_current_page()
+            return True
+
         return False
 
     def zoom_in(self):
@@ -921,6 +1061,37 @@ class SafeerMintBrowser(Gtk.Window):
         wv = self.get_active_webview()
         if wv:
             wv.set_zoom_level(1.0)
+
+    def print_current_page(self):
+        """Natisni trenutno stran ali shrani kot PDF prek GTK Print dialoga."""
+        wv = self.get_active_webview()
+        if not wv:
+            return
+        try:
+            print_op = WebKit2.PrintOperation.new(wv)
+            # Nastavi privzete nastavitve tiskanja
+            settings = Gtk.PrintSettings.new()
+            settings.set(Gtk.PRINT_SETTINGS_OUTPUT_FILE_FORMAT, "pdf")
+            # Privzeti izhod v Downloads mapo
+            downloads_dir = self.get_default_downloads_dir()
+            title = wv.get_title() or "safeer-stran"
+            # Sanitizacija naslova za ime datoteke
+            safe_title = "".join(c for c in title if c.isalnum() or c in (" ", "-", "_")).strip()[:60]
+            safe_title = safe_title or "safeer-stran"
+            output_path = os.path.join(downloads_dir, f"{safe_title}.pdf")
+            settings.set(Gtk.PRINT_SETTINGS_OUTPUT_URI, f"file://{output_path}")
+            print_op.set_print_settings(settings)
+            # Odpri GTK Print Dialog (tiskanje ali PDF export)
+            result = print_op.run_dialog(self)
+            if result == WebKit2.PrintOperationResponse.PRINT:
+                print(f"[Print] Tiskanje strani: {wv.get_uri()}")
+        except Exception as e:
+            # Fallback: GTK print dialog brez privzetih nastavitev
+            try:
+                print_op = WebKit2.PrintOperation.new(wv)
+                print_op.run_dialog(self)
+            except Exception as e2:
+                print(f"[Print] Napaka pri tiskanju: {e2}")
 
     def toggle_fullscreen(self):
         if getattr(self, "_is_fullscreen", False):
@@ -2141,7 +2312,138 @@ class SafeerMintBrowser(Gtk.Window):
                 pass
             return True
 
+
+    def create_find_bar(self):
+        """Ustvari Find-in-Page vrstico na dnu okna (Ctrl+F)."""
+        self.find_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.find_bar.set_no_show_all(True)
+        self.find_bar.get_style_context().add_class("find-bar")
+        self.find_bar.set_margin_start(8)
+        self.find_bar.set_margin_end(8)
+        self.find_bar.set_margin_top(4)
+        self.find_bar.set_margin_bottom(4)
+
+        lbl = Gtk.Label(label="🔍 Najdi:")
+        lbl.get_style_context().add_class("find-bar-label")
+        self.find_bar.pack_start(lbl, False, False, 0)
+
+        self.find_entry = Gtk.Entry()
+        self.find_entry.set_width_chars(28)
+        self.find_entry.set_placeholder_text("Išči na strani…")
+        self.find_entry.get_style_context().add_class("find-bar-entry")
+        self.find_entry.connect("changed", self._on_find_text_changed)
+        self.find_entry.connect("activate", lambda e: self._find_next())
+        self.find_entry.connect("key-press-event", self._on_find_key_press)
+        self.find_bar.pack_start(self.find_entry, False, False, 0)
+
+        self.find_result_label = Gtk.Label(label="")
+        self.find_result_label.get_style_context().add_class("find-bar-result")
+        self.find_bar.pack_start(self.find_result_label, False, False, 4)
+
+        btn_prev = Gtk.Button(label="◀")
+        btn_prev.set_tooltip_text("Prejšnje (Shift+Enter)")
+        btn_prev.get_style_context().add_class("find-nav-btn")
+        btn_prev.connect("clicked", lambda b: self._find_prev())
+        self.find_bar.pack_start(btn_prev, False, False, 0)
+
+        btn_next = Gtk.Button(label="▶")
+        btn_next.set_tooltip_text("Naslednje (Enter)")
+        btn_next.get_style_context().add_class("find-nav-btn")
+        btn_next.connect("clicked", lambda b: self._find_next())
+        self.find_bar.pack_start(btn_next, False, False, 0)
+
+        btn_close = Gtk.Button(label="✕")
+        btn_close.set_tooltip_text("Zapri iskanje (Escape)")
+        btn_close.get_style_context().add_class("find-close-btn")
+        btn_close.connect("clicked", lambda b: self.hide_find_bar())
+        self.find_bar.pack_end(btn_close, False, False, 0)
+
+        self.find_bar.show_all()
+        self.find_bar.hide()
+
+    def show_find_bar(self):
+        """Prikaži find bar in fokusiraj vnosno polje."""
+        self.find_bar.show()
+        self.find_entry.grab_focus()
+        self.find_entry.select_region(0, -1)
+
+    def hide_find_bar(self):
+        """Skrij find bar in počisti iskanje."""
+        self.find_bar.hide()
+        wv = self.get_active_webview()
+        if wv:
+            try:
+                fc = wv.get_find_controller()
+                fc.search_finish()
+            except Exception:
+                pass
+        self.find_result_label.set_text("")
+
+    def _on_find_key_press(self, entry, event):
+        if event.keyval == Gdk.KEY_Escape:
+            self.hide_find_bar()
+            return True
+        if event.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            shift = (event.state & Gdk.ModifierType.SHIFT_MASK) != 0
+            if shift:
+                self._find_prev()
+            else:
+                self._find_next()
+            return True
+        return False
+
+    def _on_find_text_changed(self, entry):
+        text = entry.get_text()
+        wv = self.get_active_webview()
+        if not wv:
+            return
+        try:
+            fc = wv.get_find_controller()
+            if text:
+                fc.search(text,
+                          WebKit2.FindOptions.CASE_INSENSITIVE | WebKit2.FindOptions.WRAP_AROUND,
+                          200)
+                fc.connect("found-text", self._on_find_found)
+                fc.connect("failed-to-find-text", self._on_find_failed)
+            else:
+                fc.search_finish()
+                self.find_result_label.set_text("")
+        except Exception as e:
+            print(f"[Find] Napaka: {e}")
+
+    def _on_find_found(self, fc, match_count):
+        try:
+            if match_count > 0:
+                self.find_result_label.set_markup(f"<span foreground='#87cf3e'>{match_count} zadetkov</span>")
+            else:
+                self.find_result_label.set_markup("<span foreground='#87cf3e'>1 zadetek</span>")
+        except Exception:
+            pass
+
+    def _on_find_failed(self, fc):
+        try:
+            self.find_result_label.set_markup("<span foreground='#ff6b6b'>Ni zadetkov</span>")
+        except Exception:
+            pass
+
+    def _find_next(self):
+        wv = self.get_active_webview()
+        if wv:
+            try:
+                wv.get_find_controller().search_next()
+            except Exception:
+                pass
+
+    def _find_prev(self):
+        wv = self.get_active_webview()
+        if wv:
+            try:
+                wv.get_find_controller().search_previous()
+            except Exception:
+                pass
+
     def create_keyboard_panel(self):
+
         self.keyboard_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.keyboard_box.set_size_request(-1, 240)
         self.keyboard_box.set_no_show_all(True)
@@ -2303,6 +2605,7 @@ class SafeerMintBrowser(Gtk.Window):
             wv.load_uri(target)
 
     def show_threat_warning(self, domain):
+        self.increment_shields_blocked()
         dialog = Gtk.MessageDialog(
             transient_for=self,
             flags=0,
@@ -2316,6 +2619,25 @@ class SafeerMintBrowser(Gtk.Window):
         )
         dialog.run()
         dialog.destroy()
+
+    def increment_shields_blocked(self):
+        """Inkrementira shields counter in posodobi gumb v real-timu."""
+        self._shields_blocked += 1
+        try:
+            self.config.increment_threats_blocked(1)
+        except Exception:
+            pass
+        try:
+            count = self._shields_blocked
+            if count >= 1000:
+                label = f"🛡️ {count // 1000}k+"
+            elif count > 0:
+                label = f"🛡️ {count}"
+            else:
+                label = "🛡️"
+            self.btn_shield.set_label(label)
+        except Exception:
+            pass
 
     def format_clean_url(self, uri):
         """Pretvori tehnični URL v čist, velik in jasno viden naslov kot v Mozilli Firefox."""
