@@ -152,6 +152,9 @@ class SafeerMintBrowser(Gtk.Window):
         if not initial_url:
             GLib.idle_add(self.restore_session)
 
+        # Preveri ali je Safeer privzeti brskalnik (če uporabnik ni izbral 'ne sprašuj več')
+        GLib.idle_add(self.check_default_browser_banner)
+
         # Connect F4 keyboard shortcut to toggle sidebar
         self.connect("key-press-event", self.on_global_key_press)
         # Connect delete-event to remember window size on exit
@@ -908,6 +911,16 @@ class SafeerMintBrowser(Gtk.Window):
             background: rgba(135,207,62,0.18);
             border-color: rgba(135,207,62,0.5);
         }}
+        .default-browser-infobar {{
+            background-color: rgba(15, 23, 42, 0.95);
+            border-bottom: 1px solid rgba(135, 207, 62, 0.4);
+            padding: 4px 12px;
+        }}
+        .default-browser-infobar button {{
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }}
         """
 
         custom_css = self.config.get("custom_css", "")
@@ -1031,6 +1044,11 @@ class SafeerMintBrowser(Gtk.Window):
             wv = self.get_active_webview()
             if wv:
                 wv.go_forward()
+            return True
+
+        # Alt + Home: Domača stran
+        elif alt and event.keyval in (Gdk.KEY_Home, Gdk.KEY_KP_Home):
+            self.load_homepage()
             return True
 
         # Ctrl + F: Find in Page — prikaži find bar
@@ -1240,6 +1258,13 @@ class SafeerMintBrowser(Gtk.Window):
         self.btn_reload.set_tooltip_text(f"{t('reload')} (F5 / Ctrl + R)")
         self.btn_reload.connect("clicked", lambda b: self.get_active_webview() and self.get_active_webview().reload())
         self.nav_bar.pack_start(self.btn_reload, False, False, 0)
+
+        # Home (🏠)
+        self.btn_home = Gtk.Button(label="🏠")
+        self.btn_home.get_style_context().add_class("ff-nav-btn")
+        self.btn_home.set_tooltip_text(f"{t('home')} (Alt + Home)")
+        self.btn_home.connect("clicked", lambda b: self.load_homepage())
+        self.nav_bar.pack_start(self.btn_home, False, False, 0)
 
         # 3. Firefox Awesomebar / URL Box
         self.url_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -1830,6 +1855,45 @@ class SafeerMintBrowser(Gtk.Window):
         tab1_box.set_margin_start(8)
         tab1_box.set_margin_end(8)
         tab1_scroll.add(tab1_box)
+
+        # Kartica 1.0: Privzeti spletni brskalnik
+        card_default = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        card_default.get_style_context().add_class("theme-card-box")
+
+        lbl_c_def = Gtk.Label(label="<b><span size='11500'>🖥️ Privzeti spletni brskalnik</span></b>")
+        lbl_c_def.set_use_markup(True)
+        lbl_c_def.set_xalign(0.0)
+        card_default.pack_start(lbl_c_def, False, False, 0)
+
+        row_def = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        is_def = self.is_default_browser()
+
+        lbl_def_status = Gtk.Label()
+        lbl_def_status.set_xalign(0.0)
+        if is_def:
+            lbl_def_status.set_markup("<span color='#87cf3e'>✓ Safeer je vaš privzeti spletni brskalnik v sistemu Linux.</span>")
+        else:
+            lbl_def_status.set_markup("<span color='#94a3b8'>Safeer trenutno ni nastavljen kot privzeti brskalnik.</span>")
+        row_def.pack_start(lbl_def_status, True, True, 0)
+
+        btn_make_def = Gtk.Button(label="Nastavi kot privzetega")
+        btn_make_def.get_style_context().add_class("customizer-save-btn")
+        if is_def:
+            btn_make_def.set_sensitive(False)
+            btn_make_def.set_label("✓ Že privzeto")
+
+        def on_make_default_clicked(b):
+            ok = self.set_as_default_browser(show_dialog=True)
+            if ok:
+                lbl_def_status.set_markup("<span color='#87cf3e'>✓ Safeer je vaš privzeti spletni brskalnik v sistemu Linux.</span>")
+                btn_make_def.set_sensitive(False)
+                btn_make_def.set_label("✓ Že privzeto")
+
+        btn_make_def.connect("clicked", on_make_default_clicked)
+        row_def.pack_end(btn_make_def, False, False, 0)
+        card_default.pack_start(row_def, False, False, 2)
+
+        tab1_box.pack_start(card_default, False, False, 0)
 
         # Kartica 1.1: Jezik & Iskalnik
         card_lang = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -2508,6 +2572,105 @@ class SafeerMintBrowser(Gtk.Window):
                     wv.run_javascript(js_inject, None, None, None)
         except Exception as e:
             print(f"[Keyboard] Napaka: {e}")
+
+
+    def is_default_browser(self):
+        """Preveri ali je Safeer trenutno privzeti spletni brskalnik v sistemu Linux."""
+        try:
+            res = subprocess.run(
+                ["xdg-settings", "get", "default-web-browser"],
+                capture_output=True, text=True, timeout=2
+            )
+            if "safeer" in res.stdout.lower():
+                return True
+            res_mime = subprocess.run(
+                ["xdg-mime", "query", "default", "x-scheme-handler/https"],
+                capture_output=True, text=True, timeout=2
+            )
+            if "safeer" in res_mime.stdout.lower():
+                return True
+        except Exception:
+            pass
+        return False
+
+    def set_as_default_browser(self, show_dialog=True):
+        """Nastavi Safeer kot privzeti spletni brskalnik v sistemu Linux (XDG / Cinnamon / MATE)."""
+        desktop_file = "safeer-browser.desktop"
+        success = False
+        try:
+            subprocess.run(["xdg-settings", "set", "default-web-browser", desktop_file], check=False, timeout=3)
+            mimes = [
+                "x-scheme-handler/http",
+                "x-scheme-handler/https",
+                "text/html",
+                "text/xml",
+                "application/xhtml+xml"
+            ]
+            for m in mimes:
+                subprocess.run(["xdg-mime", "default", desktop_file, m], check=False, timeout=2)
+            try:
+                subprocess.run(["gio", "mime", "x-scheme-handler/https", desktop_file], check=False, timeout=2)
+                subprocess.run(["gio", "mime", "x-scheme-handler/http", desktop_file], check=False, timeout=2)
+            except Exception:
+                pass
+            success = self.is_default_browser()
+        except Exception as e:
+            print(f"[DefaultBrowser] Napaka pri nastavljanju: {e}")
+
+        if show_dialog:
+            msg_type = Gtk.MessageType.INFO if success else Gtk.MessageType.WARNING
+            title = "🌐 Privzeti spletni brskalnik"
+            if success:
+                msg = "Safeer Browser je bil uspešno nastavljen kot vaš privzeti spletni brskalnik v sistemu Linux!"
+            else:
+                msg = "Safeerja ni bilo mogoče samodejno nastaviti kot privzetega. Preverite sistemske nastavitve (Priljubljene aplikacije)."
+            dlg = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=msg_type,
+                buttons=Gtk.ButtonsType.OK,
+                text=title
+            )
+            dlg.format_secondary_text(msg)
+            dlg.run()
+            dlg.destroy()
+        return success
+
+    def check_default_browser_banner(self):
+        """Prikaže lično informativno vrstico, če Safeer še ni privzeti brskalnik."""
+        if not self.config.get("check_default_browser", True):
+            return
+        if self.is_default_browser():
+            return
+
+        self.default_infobar = Gtk.InfoBar()
+        self.default_infobar.set_message_type(Gtk.MessageType.QUESTION)
+        self.default_infobar.get_style_context().add_class("default-browser-infobar")
+
+        content_area = self.default_infobar.get_content_area()
+        msg_lbl = Gtk.Label(label="🌐 <b>Safeer Browser ni vaš privzeti brskalnik.</b> Želite, da odpira spletne povezave?")
+        msg_lbl.set_use_markup(True)
+        msg_lbl.set_xalign(0.0)
+        content_area.pack_start(msg_lbl, True, True, 6)
+
+        btn_set = self.default_infobar.add_button("Nastavi kot privzetega", Gtk.ResponseType.YES)
+        btn_later = self.default_infobar.add_button("Ne zdaj", Gtk.ResponseType.NO)
+        btn_never = self.default_infobar.add_button("Ne sprašuj več", Gtk.ResponseType.CLOSE)
+
+        def on_infobar_response(ib, response_id):
+            if response_id == Gtk.ResponseType.YES:
+                self.set_as_default_browser(show_dialog=True)
+                ib.hide()
+            elif response_id == Gtk.ResponseType.CLOSE:
+                self.config.set("check_default_browser", False)
+                ib.hide()
+            else:
+                ib.hide()
+
+        self.default_infobar.connect("response", on_infobar_response)
+        self.main_vbox.pack_start(self.default_infobar, False, False, 0)
+        self.main_vbox.reorder_child(self.default_infobar, 1)
+        self.default_infobar.show_all()
 
     def load_homepage(self):
         home_path = os.path.join(BASE_DIR, "ui", "home.html")
@@ -4652,6 +4815,8 @@ class SafeerMintBrowser(Gtk.Window):
             elif action == "increment_threats":
                 count = int(data.get("count", 1))
                 self.config.increment_threats_blocked(count)
+            elif action == "set_default_browser":
+                self.set_as_default_browser(show_dialog=True)
             elif action == "open_sidebar":
                 service = data.get("service")
                 if service == "settings":
@@ -4683,6 +4848,8 @@ class SafeerMintBrowser(Gtk.Window):
             self.btn_forward.set_tooltip_text(f"{t('forward')} (Alt + →)")
         if hasattr(self, 'btn_reload'):
             self.btn_reload.set_tooltip_text(f"{t('reload')} (F5 / Ctrl + R)")
+        if hasattr(self, 'btn_home'):
+            self.btn_home.set_tooltip_text(f"{t('home')} (Alt + Home)")
         if hasattr(self, 'btn_shield'):
             self.btn_shield.set_tooltip_text(f"{t('app_title')} Cyber Shield: {t('adblock_active')}")
         if hasattr(self, 'url_entry'):
@@ -4736,6 +4903,14 @@ class SafeerMintBrowser(Gtk.Window):
 
 
 def main():
+    if "--set-default" in sys.argv:
+        desktop_file = "safeer-browser.desktop"
+        subprocess.run(["xdg-settings", "set", "default-web-browser", desktop_file], check=False)
+        for m in ["x-scheme-handler/http", "x-scheme-handler/https", "text/html", "text/xml", "application/xhtml+xml"]:
+            subprocess.run(["xdg-mime", "default", desktop_file, m], check=False)
+        print("✅ Safeer Browser je bil uspešno nastavljen kot privzeti spletni brskalnik!")
+        sys.exit(0)
+
     target_url = None
     if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
         target_url = sys.argv[1]

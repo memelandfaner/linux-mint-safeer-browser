@@ -7,7 +7,7 @@ set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_NAME="safeer-browser"
-VERSION="1.0.5"
+VERSION="1.0.6"
 ARCH="all"
 DEB_PACKAGE="${PKG_NAME}_${VERSION}_${ARCH}.deb"
 DEB_PACKAGE_AMD64="${PKG_NAME}_${VERSION}_amd64.deb"

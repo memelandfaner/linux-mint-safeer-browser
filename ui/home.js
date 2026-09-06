@@ -448,3 +448,9 @@ document.addEventListener('DOMContentLoaded', () => {
   changeHomeLanguage(savedLang, false);
   setInterval(updateClock, 1000);
 });
+
+function setDefaultBrowser() {
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.safeer) {
+    window.webkit.messageHandlers.safeer.postMessage({ action: 'set_default_browser' });
+  }
+}
