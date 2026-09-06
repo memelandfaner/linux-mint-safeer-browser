@@ -17,3 +17,5 @@ Longer full-app repeat: at 70.22 seconds after navigation the media clock was 46
 Live ChatGPT login check exposed an additional block of the browser-generated `about:srcdoc` verification frame, leaving the page at “Just a moment…”. This internal document is now allowed while javascript:, data: and arbitrary local file navigations remain rejected.
 
 After the srcdoc fix, a fresh-profile live check with Quad9 enabled passed the ChatGPT challenge and displayed “Get started | ChatGPT”, including “Continue with Google”, at the 22-second observation. This is not a sign-in completion or a page-load benchmark.
+
+Final public sign-in check: after waiting for the ChatGPT page to finish initializing, “Continue with Google” reached accounts.google.com with the title “Sign in - Google Accounts” and the prompt “Sign in to continue to OpenAI / Email or phone”. This used a new isolated profile with Quad9. No email, password or verification code was entered; authenticated account access remains for the user to confirm.
