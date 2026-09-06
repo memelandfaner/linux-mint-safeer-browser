@@ -19,17 +19,10 @@
 - **1-Klik uvoz zaznamkov**: Hitra migracija priljubljenih strani neposredno iz obstoječih profilov Firefoxa ali Chroma.
 - **Vrstica in meni priljubljenih (v1.0.7)**: Hiter dostop, dodajanje, urejanje in brisanje priljubljenih spletnih mest z orodnimi bližnjicami (`Ctrl + B`, `Ctrl + Shift + B`).
 
-## 📦 Namestitev (Priporočeno)
+## 📦 Namestitev
 
-### 1. Preko Launchpad PPA (Priporočeno za samodejne posodobitve `apt upgrade`):
-```bash
-sudo add-apt-repository ppa:memelandfaner/safeer
-sudo apt update
-sudo apt install safeer-browser
-```
-
-### 2. Nativni samostojni Debian paket (`.deb`):
-Najnovejšo različico prenesite s strani [GitHub Releases](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.7) ali namestite:
+### Nativni Debian paket (`.deb`):
+Najnovejšo različico prenesite s strani [GitHub Releases v1.0.7](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.7) ali namestite:
 
 ```bash
 # Namestitev z apt:
