@@ -1,3 +1,10 @@
+safeer-browser (1.0.10-0ubuntu1~noble1) noble; urgency=medium
+
+  * Preserve login popups, opener callbacks, POST forms and signed links.
+  * Protect identity and verification UI from cosmetic removal.
+
+ -- Safeer Sovereign Security Team <support@safeer.org>  Sun, 06 Sep 2026 21:50:00 +0200
+
 safeer-browser (1.0.9-0ubuntu1~noble1) noble; urgency=high
 
   * Restore sidebar button creation for profiles with enabled integrations.

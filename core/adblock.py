@@ -312,9 +312,7 @@ ADGUARD_PROTECTION_SCRIPT = """
                 '#adblock-notice',
                 '#adblocker-detected',
                 'div[id*="adblock-dialog"]',
-                'div[class*="adblock-dialog"]',
-                '.tp-backdrop',
-                '.tp-modal'
+                'div[class*="adblock-dialog"]'
             ];
             var walls = document.querySelectorAll(wallSelectors.join(', '));
             for (var i = 0; i < walls.length; i++) {
@@ -322,13 +320,13 @@ ADGUARD_PROTECTION_SCRIPT = """
             }
 
             // Restore scrolling if site locked it
-            if (document.body) {
+            if (removed > 0 && document.body) {
                 var bStyle = window.getComputedStyle(document.body);
                 if (bStyle.overflow === 'hidden' && !document.querySelector('.nav-open, .menu-open, .modal-open')) {
                     document.body.style.setProperty('overflow', 'auto', 'important');
                 }
             }
-            if (document.documentElement) {
+            if (removed > 0 && document.documentElement) {
                 var dStyle = window.getComputedStyle(document.documentElement);
                 if (dStyle.overflow === 'hidden') {
                     document.documentElement.style.setProperty('overflow', 'auto', 'important');
@@ -459,6 +457,9 @@ ANTI_CLICKJACKING_SCRIPT = """
             for (var k = 0; k < allDivs.length; k++) {
                 var node = allDivs[k];
                 if (node.tagName === 'VIDEO' || node.closest('#player, .html5-video-player, #movie_player, .video-stream, [class*="player"]')) continue;
+                // Authentication challenges often contain an iframe with no innerText.
+                if (node.matches('[role="dialog"], [aria-modal="true"]') ||
+                    node.querySelector('iframe, form, input, button, select, textarea, [role="dialog"], [role="button"], [role="checkbox"], [contenteditable]')) continue;
                 var style = window.getComputedStyle(node);
                 if (style.position === 'fixed' || style.position === 'absolute') {
                     var z = parseInt(style.zIndex, 10);
@@ -579,23 +580,24 @@ def strip_tracking_parameters(url: str) -> str:
         if not parsed.query:
             return url
 
-        pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
-        retained = []
-        any_stripped = False
-
-        for k, v in pairs:
-            k_lower = k.lower().strip()
-            if k_lower in ESSENTIAL_WHITELIST:
-                retained.append((k, v))
-            elif k_lower.startswith("utm_") or k_lower in TRACKING_PARAMS:
-                any_stripped = True
-            else:
-                retained.append((k, v))
-
-        if not any_stripped:
+        # Signed, login and recovery links must be passed through byte-for-byte.
+        pairs = parsed.query.split("&")
+        keys = [urllib.parse.unquote_plus(pair.split("=", 1)[0]).lower() for pair in pairs]
+        protected = {"state", "nonce", "code", "token", "secret", "signature", "sig",
+                     "client_id", "redirect_uri", "redirect_url", "returnto", "return_to",
+                     "code_challenge", "samlrequest", "samlresponse", "relaystate",
+                     "access_token", "id_token", "session", "session_token", "ticket"}
+        segments = {segment.lower() for segment in parsed.path.split("/")}
+        if (any(key in protected or key.startswith(("x-amz-", "x-goog-", "oauth_")) for key in keys)
+                or segments & {"auth", "oauth", "oauth2", "authorize", "callback", "login",
+                               "signin", "sign-in", "verify", "verification", "reset-password"}):
             return url
-
-        new_query = urllib.parse.urlencode(retained)
+        retained = [pair for pair, key in zip(pairs, keys)
+                    if not (key.startswith("utm_") or key in TRACKING_PARAMS)]
+        if len(retained) == len(pairs):
+            return url
+        # Preserve the encoding, ordering and duplicate keys of all remaining values.
+        new_query = "&".join(retained)
         cleaned = urllib.parse.urlunparse((
             parsed.scheme,
             parsed.netloc,
@@ -781,3 +783,15 @@ img, video, canvas, svg, picture, iframe, [style*="background-image"], [role="im
 """
 
 
+
+# Cosmetic/anti-overlay scripts must not alter identity or bot-verification pages.
+# This does not exempt these URLs from malware checks or certificate validation.
+AUTH_SCRIPT_EXCLUSIONS = [
+    "*://accounts.google.com/*", "*://auth.openai.com/*", "*://auth0.openai.com/*",
+    "*://chatgpt.com/*", "*://chat.openai.com/*", "*://login.microsoftonline.com/*",
+    "*://login.live.com/*", "*://appleid.apple.com/*", "*://*.auth0.com/*",
+    "*://challenges.cloudflare.com/*", "*://*.hcaptcha.com/*", "*://hcaptcha.com/*",
+    "*://www.google.com/recaptcha/*", "*://www.recaptcha.net/*",
+    "*://*/login*", "*://*/signin*", "*://*/sign-in*", "*://*/oauth/*",
+    "*://*/oauth2/*", "*://*/auth/*", "*://*/authorize*",
+]

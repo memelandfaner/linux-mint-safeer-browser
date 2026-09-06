@@ -49,7 +49,8 @@ from core.adblock import (
     strip_tracking_parameters,
     is_threat_domain,
     is_ad_domain,
-    FORCE_DARK_MODE_CSS
+    FORCE_DARK_MODE_CSS,
+    AUTH_SCRIPT_EXCLUSIONS
 )
 from core.reader import READER_MODE_JS
 
@@ -63,7 +64,7 @@ def is_safe_web_url(url: str) -> bool:
     if not url:
         return False
     u = url.strip()
-    if u == "safeer://home" or u == "about:blank":
+    if u in ("safeer://home", "about:blank", "about:srcdoc"):
         return True
     if u.startswith("file://") and "/ui/" in u:
         return True
@@ -2093,10 +2094,10 @@ class SafeerMintBrowser(Gtk.Window):
                 if self.is_download_url(uri):
                     self.start_direct_download(uri)
                     return None
-                if webview == self.sidebar_webview:
-                    self.sidebar_webview.load_uri(uri)
-                else:
-                    self.new_tab(url=uri, switch=True)
+            # WebKit must own the new navigation (including POST body and opener).
+            # A separately loaded tab breaks window.open, postMessage and OAuth callbacks.
+            tab_id = self.new_tab(switch=False, related_view=webview)
+            return next(tab["webview"] for tab in self.tabs if tab["id"] == tab_id)
         except Exception as e:
             print(f"[Create WebView] Napaka: {e}")
         return None
@@ -2126,13 +2127,7 @@ class SafeerMintBrowser(Gtk.Window):
                         self.start_direct_download(uri)
                         decision.ignore()
                         return True
-                    if self.config.get("tracking_protection_enabled", True):
-                        uri = strip_tracking_parameters(uri)
-                    if webview == self.sidebar_webview:
-                        self.sidebar_webview.load_uri(uri)
-                    else:
-                        self.new_tab(url=uri, switch=True)
-                decision.ignore()
+                decision.use()
                 return True
             except Exception as e:
                 print(f"[Policy] Napaka pri novem oknu: {e}")
@@ -2161,8 +2156,12 @@ class SafeerMintBrowser(Gtk.Window):
                         decision.ignore()
                         return True
 
-                    # Napredno odstranjevanje sledilnih parametrov (UTM, fbclid, gclid, si, itd.)
-                    if self.config.get("tracking_protection_enabled", True):
+                    # Only clean explicit GET link clicks. Replaying forms or redirects
+                    # with load_uri would discard POST bodies and break sign-in state.
+                    if (self.config.get("tracking_protection_enabled", True)
+                            and nav_action.get_navigation_type() == WebKit2.NavigationType.LINK_CLICKED
+                            and not nav_action.is_redirect()
+                            and req.get_http_method() == "GET"):
                         clean_uri = strip_tracking_parameters(uri)
                         if clean_uri != uri:
                             decision.ignore()
@@ -2740,6 +2739,7 @@ class SafeerMintBrowser(Gtk.Window):
         settings.set_enable_html5_local_storage(True)
         settings.set_enable_html5_database(True)
         settings.set_enable_javascript(True)
+        settings.set_javascript_can_open_windows_automatically(False)
         settings.set_enable_javascript_markup(True)
         settings.set_allow_modal_dialogs(True)
         settings.set_enable_encrypted_media(True)
@@ -3449,11 +3449,12 @@ class SafeerMintBrowser(Gtk.Window):
         tab = self.get_active_tab()
         return tab["webview"] if tab else None
 
-    def new_tab(self, url=None, switch=True):
+    def new_tab(self, url=None, switch=True, related_view=None):
         self.tab_counter += 1
         tab_id = f"tab_{self.tab_counter}"
 
-        wv = WebKit2.WebView.new_with_context(self.web_context)
+        wv = (WebKit2.WebView.new_with_related_view(related_view) if related_view is not None
+              else WebKit2.WebView.new_with_context(self.web_context))
         self.setup_webview_settings(wv)
 
         wv.connect("load-changed", lambda w, ev: self.on_tab_load_changed(tab_id, w, ev))
@@ -3495,7 +3496,7 @@ class SafeerMintBrowser(Gtk.Window):
                 WebKit2.UserContentInjectedFrames.ALL_FRAMES,
                 WebKit2.UserScriptInjectionTime.START,
                 None,
-                ["*://*.google.com/*", "*://*.google.si/*", "*://*.banka.si/*"]
+                AUTH_SCRIPT_EXCLUSIONS + ["*://*.google.com/*", "*://*.google.si/*", "*://*.banka.si/*"]
             )
             content_mgr.add_script(adg_script)
 
@@ -3505,7 +3506,7 @@ class SafeerMintBrowser(Gtk.Window):
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
             WebKit2.UserScriptInjectionTime.END,
             None,
-            ["*://*.google.com/*", "*://*.google.si/*", "*://*.facebook.com/*", "*://*.messenger.com/*", "*://accounts.google.com/*", "*://*.banka.si/*"]
+            AUTH_SCRIPT_EXCLUSIONS + ["*://*.google.com/*", "*://*.google.si/*", "*://*.facebook.com/*", "*://*.messenger.com/*", "*://*.banka.si/*"]
         )
         content_mgr.add_script(gen_script)
 
@@ -3515,7 +3516,7 @@ class SafeerMintBrowser(Gtk.Window):
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
             WebKit2.UserScriptInjectionTime.END,
             None,
-            ["file://*"]
+            AUTH_SCRIPT_EXCLUSIONS + ["file://*"]
         )
         content_mgr.add_script(clickjack_script)
 
@@ -3525,7 +3526,7 @@ class SafeerMintBrowser(Gtk.Window):
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
             WebKit2.UserScriptInjectionTime.START,
             None,
-            None
+            AUTH_SCRIPT_EXCLUSIONS
         )
         content_mgr.add_script(throttler_script)
 
@@ -3626,7 +3627,16 @@ class SafeerMintBrowser(Gtk.Window):
         tab_event_box.connect("button-press-event", on_tab_press)
 
         self.tabs_box.pack_start(tab_event_box, False, False, 0)
-        tab_event_box.show_all()
+        if related_view is None:
+            tab_event_box.show_all()
+        else:
+            tab_event_box.set_no_show_all(True)
+            def show_popup(view):
+                tab_event_box.set_no_show_all(False)
+                tab_event_box.show_all()
+                self.switch_to_tab(tab_id)
+            wv.connect("ready-to-show", show_popup)
+            wv.connect("close", lambda view: self.close_tab(tab_id))
 
         wv.show_all()
         self.webview_stack.add_named(wv, tab_id)
@@ -3645,7 +3655,9 @@ class SafeerMintBrowser(Gtk.Window):
         self.tabs.append(tab_data)
 
         target = url or "safeer://home"
-        if target == "safeer://home":
+        if related_view is not None:
+            pass  # The create signal's caller loads the exact original request.
+        elif target == "safeer://home":
             home_path = os.path.join(BASE_DIR, "ui", "home.html")
             wv.load_uri(f"file://{home_path}")
             tab_title.set_text("Safeer Domača Stran")
@@ -3898,7 +3910,7 @@ class SafeerMintBrowser(Gtk.Window):
                     WebKit2.UserContentInjectedFrames.ALL_FRAMES,
                     WebKit2.UserStyleLevel.USER,
                     None,
-                    ["file://*"]
+                    AUTH_SCRIPT_EXCLUSIONS + ["file://*"]
                 )
                 content_mgr.add_style_sheet(sheet)
             except Exception as e:
