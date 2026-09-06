@@ -12,6 +12,11 @@ mkdir -p "$CONFIG_DIR"
 SOCK_FILE="$CONFIG_DIR/safeer.sock"
 LOCK_FILE="$CONFIG_DIR/safeer.lock"
 
+# Obdelaj CLI zastavice neposredno brez povezovanja na socket
+if [ "$1" = "--set-default" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "--version" ]; then
+    exec python3 "$DIR/safeer_mint.py" "$@"
+fi
+
 # Če Safeer že teče, nemudoma posreduj povezavo prek Unix socketa v nov zavihek
 if [ -S "$SOCK_FILE" ]; then
     TARGET_URL="$1"
