@@ -1,0 +1,27 @@
+Source: safeer-browser
+Section: web
+Priority: optional
+Maintainer: Safeer Sovereign Security Team <support@safeer.org>
+Build-Depends: debhelper-compat (= 13), python3, python3-pil
+Standards-Version: 4.6.2
+Homepage: https://github.com/memelandfaner/linux-mint-safeer-browser
+Vcs-Git: https://github.com/memelandfaner/linux-mint-safeer-browser.git
+Vcs-Browser: https://github.com/memelandfaner/linux-mint-safeer-browser
+
+Package: safeer-browser
+Architecture: all
+Depends: ${misc:Depends},
+         ${python3:Depends},
+         python3,
+         python3-gi,
+         python3-gi-cairo,
+         gir1.2-gtk-3.0,
+         gir1.2-webkit2-4.1,
+         gir1.2-glib-2.0
+Recommends: gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav
+Description: Sovereign, ultra-fast, and private web browser for Linux Mint & Ubuntu
+ Safeer Browser is an open-source, ultra-fast web browser engineered
+ specifically for Linux Mint and Ubuntu. Built natively with GTK3 and
+ WebKit2GTK, it provides instant loading, 0-ad blocking, threat shield
+ protection, 1-click bookmarks import from Firefox and Chrome, customizable
+ portals, user CSS styling, and Tampermonkey-compatible UserScripts.

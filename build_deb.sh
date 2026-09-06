@@ -108,6 +108,15 @@ if os.path.exists(src):
         print(f"Napaka pri generiranju ikon: {e}")
 PYEOF
 
+# 5b. Install and validate AppStream metainfo for Software Manager (mintinstall)
+echo "📋 Namestitev AppStream metainfo..."
+mkdir -p "$BUILD_ROOT/usr/share/metainfo"
+cp "$DIR/io.github.memelandfaner.SafeerBrowser.metainfo.xml" "$BUILD_ROOT/usr/share/metainfo/"
+chmod 644 "$BUILD_ROOT/usr/share/metainfo/io.github.memelandfaner.SafeerBrowser.metainfo.xml"
+if command -v appstreamcli >/dev/null 2>&1; then
+    appstreamcli validate --no-net "$BUILD_ROOT/usr/share/metainfo/io.github.memelandfaner.SafeerBrowser.metainfo.xml" || true
+fi
+
 # 6. Create DEBIAN/control
 echo "📝 Generiranje DEBIAN/control..."
 cat << EOF > "$BUILD_ROOT/DEBIAN/control"

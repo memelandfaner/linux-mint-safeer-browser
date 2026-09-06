@@ -19,28 +19,34 @@
 - **1-Klik uvoz zaznamkov**: Hitra migracija priljubljenih strani neposredno iz obstoječih profilov Firefoxa ali Chroma.
 - **Vrstica in meni priljubljenih (v1.0.7)**: Hiter dostop, dodajanje, urejanje in brisanje priljubljenih spletnih mest z orodnimi bližnjicami (`Ctrl + B`, `Ctrl + Shift + B`).
 
----
-
 ## 📦 Namestitev (Priporočeno)
 
-### Nativni Debian / Ubuntu / Linux Mint paket (`.deb`):
-Najnovejšo različico prenesite s strani [GitHub Releases](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.7) ali namestite z enim ukazom:
+### 1. Preko Launchpad PPA (Priporočeno za samodejne posodobitve `apt upgrade`):
+```bash
+sudo add-apt-repository ppa:memelandfaner/safeer
+sudo apt update
+sudo apt install safeer-browser
+```
+
+### 2. Nativni samostojni Debian paket (`.deb`):
+Najnovejšo različico prenesite s strani [GitHub Releases](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.7) ali namestite:
 
 ```bash
-# Namestitev z uradnim upraviteljem apt:
+# Namestitev z apt:
 sudo apt install ./safeer-browser_1.0.7_all.deb
 ```
 *Ali pa datoteko `.deb` preprosto dvokliknite v upravitelju datotek (Gdebi / Upravitelj programov).*
 
 Paket avtomatsko:
+- Vsebuje **AppStream metainfo** (`/usr/share/metainfo/`) za prepoznavo v **Upravitelju programov (mintinstall)**.
 - Namesti zaganjalnik `/usr/bin/safeer` in sistemsko bližnjico v meni programov (Internet -> Safeer Browser).
 - Se registrira kot varna alternativa med spletnimi brskalniki (brez agresivnega prevzemanja privzetega brskalnika).
 - Omogoča enostaven preklop na privzeti brskalnik preko `safeer --set-default` ali v nastavitvah.
 
 ### Kontrolna vsota (SHA-256):
 ```text
-f15c92aa8c4540fb3893b8ddcd7cd25dfbba19a8b9f57763bdc03ca63339c8ae  safeer-browser_1.0.7_all.deb
-c5e91e5c0d009a08e72d7c5f70d6d128913d59dde1e61228c0edda841b786958  safeer-browser-linux.tar.gz
+b9b85a3cf6542adbb18fe9d76ef2da57d824a2119a934c2d312a5bc894a3983b  safeer-browser_1.0.7_all.deb
+5735cbf639348fa956ff7c6c4318c071e8cd7254b5b5e57a22e24931a2686994  safeer-browser-linux.tar.gz
 ```
 
 ---

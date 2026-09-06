@@ -1,0 +1,53 @@
+app-id: io.github.memelandfaner.SafeerBrowser
+runtime: org.gnome.Platform
+runtime-version: '46'
+sdk: org.gnome.Sdk
+command: safeer
+
+finish-args:
+  # Display & Graphics Acceleration
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+
+  # Network & Audio
+  - --share=network
+  - --socket=pulseaudio
+
+  # Desktop Integration & Notifications
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.portal.FileChooser
+  - --talk-name=org.freedesktop.portal.OpenURI
+
+  # Scoped Downloads Access
+  - --filesystem=xdg-download
+
+modules:
+  - name: safeer-browser
+    buildsystem: simple
+    build-commands:
+      # Directories
+      - install -d /app/lib/safeer-browser
+      - install -d /app/bin
+      - install -d /app/share/applications
+      - install -d /app/share/metainfo
+      - install -d /app/share/icons/hicolor/scalable/apps
+      - install -d /app/share/pixmaps
+
+      # Core files & assets
+      - cp -r safeer_mint.py core ui assets /app/lib/safeer-browser/
+      - cp debian/safeer.sh /app/bin/safeer
+      - chmod +x /app/bin/safeer
+
+      # Desktop, AppStream Metainfo, and Icon
+      - install -m 644 safeer-browser.desktop /app/share/applications/io.github.memelandfaner.SafeerBrowser.desktop
+      - install -m 644 io.github.memelandfaner.SafeerBrowser.metainfo.xml /app/share/metainfo/io.github.memelandfaner.SafeerBrowser.metainfo.xml
+      - install -m 644 assets/icon.png /app/share/pixmaps/safeer-browser.png
+      - install -m 644 assets/icon.png /app/share/icons/hicolor/scalable/apps/io.github.memelandfaner.SafeerBrowser.png
+
+    sources:
+      - type: git
+        url: https://github.com/memelandfaner/linux-mint-safeer-browser.git
+        tag: v1.0.7
+        commit: 7bca60548ca7ae1be7ec64b0f9f1fc666a2f32f3

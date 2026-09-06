@@ -1,0 +1,51 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+
+%:
+	dh $@ --with python3
+
+clean:
+	if command -v dh >/dev/null 2>&1; then \
+		dh clean --with python3; \
+	else \
+		rm -rf debian/safeer-browser debian/files debian/*.substvars; \
+	fi
+	rm -rf __pycache__ */__pycache__ *.pyc */*.pyc
+
+override_dh_auto_build:
+	# Pure python application, no compilation needed
+
+override_dh_auto_test:
+	# Skip tests in packaging pipeline
+
+override_dh_auto_clean:
+	rm -rf __pycache__ */__pycache__ *.pyc */*.pyc
+
+override_dh_auto_install:
+	# Create directories
+	install -d debian/safeer-browser/usr/lib/safeer-browser
+	install -d debian/safeer-browser/usr/bin
+	install -d debian/safeer-browser/usr/share/applications
+	install -d debian/safeer-browser/usr/share/pixmaps
+	install -d debian/safeer-browser/usr/share/metainfo
+
+	# Copy core python files and assets
+	cp safeer_mint.py debian/safeer-browser/usr/lib/safeer-browser/
+	cp -r core ui assets debian/safeer-browser/usr/lib/safeer-browser/
+	find debian/safeer-browser/usr/lib/safeer-browser -name "*.pyc" -delete
+	find debian/safeer-browser/usr/lib/safeer-browser -type d -name "__pycache__" -delete
+
+	# Install launcher scripts
+	install -m 755 debian/safeer.sh debian/safeer-browser/usr/bin/safeer
+	ln -sf safeer debian/safeer-browser/usr/bin/safeer-browser
+
+	# Install desktop entry, AppStream metainfo, and pixmap icon
+	install -m 644 safeer-browser.desktop debian/safeer-browser/usr/share/applications/
+	install -m 644 io.github.memelandfaner.SafeerBrowser.metainfo.xml debian/safeer-browser/usr/share/metainfo/
+	install -m 644 assets/icon.png debian/safeer-browser/usr/share/pixmaps/safeer-browser.png
+
+	# Generate and install hicolor icons
+	python3 -c '\
+import os; from PIL import Image; \
+src = "assets/icon.png"; base = "debian/safeer-browser/usr/share/icons/hicolor"; \
+[os.makedirs(f"{base}/{s}x{s}/apps", exist_ok=True) or Image.open(src).resize((s,s), Image.Resampling.LANCZOS).save(f"{base}/{s}x{s}/apps/safeer-browser.png") for s in [16,24,32,48,64,128,256,512]]'

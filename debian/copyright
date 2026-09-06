@@ -1,0 +1,18 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: safeer-browser
+Upstream-Contact: Safeer Sovereign Security Team <support@safeer.org>
+Source: https://github.com/memelandfaner/linux-mint-safeer-browser
+
+Files: *
+Copyright: 2026 Safeer Open Source Project
+License: Apache-2.0
+
+License: Apache-2.0
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+ .
+ http://www.apache.org/licenses/LICENSE-2.0
+ .
+ On Debian systems, the complete text of the Apache version 2.0 license
+ can be found in `/usr/share/common-licenses/Apache-2.0'.

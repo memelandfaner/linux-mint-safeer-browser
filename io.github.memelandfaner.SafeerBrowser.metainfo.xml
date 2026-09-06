@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.memelandfaner.SafeerBrowser</id>
+  <name>Safeer Browser</name>
+  <summary>Sovereign, fast and private WebKit web browser</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <developer id="io.github.memelandfaner">
+    <name>Safeer Open Source Project</name>
+  </developer>
+  <description>
+    <p>
+      Safeer Browser is an open-source, sovereign, and lightweight web browser
+      natively engineered with GTK3 and WebKit2GTK for Linux Mint (Cinnamon, MATE, XFCE)
+      and Ubuntu. It starts in under half a second and consumes significantly less memory
+      than Chromium-based alternatives.
+    </p>
+    <p>Key Highlights:</p>
+    <ul>
+      <li>Native zero-ad YouTube playback with seamless background audio.</li>
+      <li>Local reverse domain trie threat shield blocking botnets, ransomware, and phishing (abuse.ch).</li>
+      <li>Instant 1-click bookmarks import directly from Firefox and Chrome profiles.</li>
+      <li>Onboarding wizard with DuckDuckGo default search and optional default browser setting.</li>
+      <li>Bookmarks toolbar and muscle-memory keyboard shortcuts (Ctrl+Shift+T, Ctrl+Tab, Ctrl+K).</li>
+      <li>Encrypted DNS-over-HTTPS (DoH) local loopback tunnel and strict 3rd-party cookie blocking.</li>
+      <li>Native Debian package (.deb) with safe alternatives priority (40) that never aggressively hijacks defaults.</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">safeer-browser.desktop</launchable>
+  <url type="homepage">https://memelandfaner.github.io/-safeer-browser/linux/</url>
+  <url type="bugtracker">https://github.com/memelandfaner/linux-mint-safeer-browser/issues</url>
+  <url type="vcs-browser">https://github.com/memelandfaner/linux-mint-safeer-browser</url>
+  <categories>
+    <category>Network</category>
+    <category>WebBrowser</category>
+  </categories>
+  <provides>
+    <binary>safeer</binary>
+    <binary>safeer-browser</binary>
+  </provides>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Safeer Browser with Bookmarks Toolbar and DuckDuckGo on Linux Mint</caption>
+      <image type="source">https://memelandfaner.github.io/-safeer-browser/assets/desktop/desktop_mint_showcase.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Onboarding Setup Wizard and Privacy Settings</caption>
+      <image type="source">https://memelandfaner.github.io/-safeer-browser/assets/desktop/desktop_mint_wizard.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Cross-device Privacy Architecture and Synchronized Portals</caption>
+      <image type="source">https://memelandfaner.github.io/-safeer-browser/assets/mobile/tablet_mobile_safeer.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="1.0.7" date="2026-09-06">
+      <description>
+        <p>Release v1.0.7: Added onboarding setup wizard, bookmarks toolbar, DuckDuckGo default search engine, keyboard shortcuts (Ctrl+Shift+T, Ctrl+Tab, Ctrl+1..9, Ctrl+K), and safe alternatives priority (40).</p>
+      </description>
+    </release>
+    <release version="1.0.6" date="2026-09-05">
+      <description>
+        <p>Release v1.0.6: 1-click bookmarks import from Firefox and Chrome, session restore, Ctrl+F in-page search, Ctrl+P print to PDF, and DoH proxy.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

@@ -1,0 +1,11 @@
+safeer-browser (1.0.7-0ubuntu1~noble1) noble; urgency=medium
+
+  * Initial PPA release for Linux Mint 22 / Ubuntu 24.04 (Noble Numbat).
+  * Added onboarding setup wizard with DuckDuckGo default search engine.
+  * Added bookmarks toolbar, folder management, and 1-click import.
+  * Added keyboard shortcuts: Ctrl+Shift+T, Ctrl+Tab, Ctrl+1..9, Ctrl+K.
+  * Integrated AppStream metainfo for Linux Mint Software Manager (mintinstall).
+  * Registered in Debian alternatives system (priority 40).
+  * Implemented DoH DNS proxy and strict 3rd-party cookie blocking.
+
+ -- Safeer Sovereign Security Team <support@safeer.org>  Sun, 06 Sep 2026 16:50:00 +0200
