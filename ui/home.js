@@ -5,10 +5,11 @@ let currentHomeLang = 'sl';
 
 const homeI18n = {
   sl: {
+    hint_address: "Spletni naslov", hint_tab: "Nov zavihek", hint_find: "Najdi na strani",
     locale: "sl-SI",
     app_title: "Safeer Browser",
     home_title: "Safeer Domača Stran",
-    shield_subtitle: "Linux Mint Suverena Izdaja",
+    shield_subtitle: "Brskalnik za Linux Mint",
     shield_status: "🛡️ ZAŠČITA AKTIVNA",
     lbl_ads: "Blokirani oglasi",
     lbl_threats: "Preprečene grožnje",
@@ -22,8 +23,8 @@ const homeI18n = {
     search_submit: "Išči",
     quick_lbl: "Hitre možnosti:",
     quick_customizer: "🧩 Teme & Skripte",
-    quick_toolbar: "⚙️ Uredi orodno vrstico",
-    section_portals: "Priljubljene strani in multimedija",
+    quick_toolbar: "⚙️ Nastavitve",
+    section_portals: "Tvoje priljubljene strani",
     portals_note: "Brez oglasov • Zasebno • Hitro",
     btn_import: "📥 Uvozi",
     btn_edit: "⚙️ Uredi",
@@ -35,10 +36,11 @@ const homeI18n = {
     add_site_title: "Dodaj novo priljubljeno stran ali multimedijo"
   },
   en: {
+    hint_address: "Address bar", hint_tab: "New tab", hint_find: "Find on page",
     locale: "en-US",
     app_title: "Safeer Browser",
     home_title: "Safeer Home",
-    shield_subtitle: "Linux Mint Sovereign Edition",
+    shield_subtitle: "Made for Linux Mint",
     shield_status: "🛡️ SHIELD ACTIVE",
     lbl_ads: "Ads Blocked",
     lbl_threats: "Threats Blocked",
@@ -53,7 +55,7 @@ const homeI18n = {
     quick_lbl: "Quick Options:",
     quick_customizer: "🧩 Themes & Scripts",
     quick_toolbar: "⚙️ Settings",
-    section_portals: "Favorite Sites & Multimedia",
+    section_portals: "Your favorite sites",
     portals_note: "No Ads • Private • Ultra Fast",
     btn_import: "📥 Import",
     btn_edit: "⚙️ Edit",
@@ -65,6 +67,7 @@ const homeI18n = {
     add_site_title: "Add new favorite site or multimedia"
   },
   de: {
+    hint_address: "Adressleiste", hint_tab: "Neuer Tab", hint_find: "Auf Seite suchen",
     locale: "de-DE",
     app_title: "Safeer Browser",
     home_title: "Safeer Startseite",
@@ -95,6 +98,7 @@ const homeI18n = {
     add_site_title: "Neuen Favoriten oder Multimedia hinzufügen"
   },
   es: {
+    hint_address: "Dirección", hint_tab: "Nueva pestaña", hint_find: "Buscar en la página",
     locale: "es-ES",
     app_title: "Safeer Browser",
     home_title: "Página Principal Safeer",
@@ -125,6 +129,7 @@ const homeI18n = {
     add_site_title: "Añadir nuevo sitio favorito o multimedia"
   },
   fr: {
+    hint_address: "Adresse", hint_tab: "Nouvel onglet", hint_find: "Rechercher",
     locale: "fr-FR",
     app_title: "Safeer Browser",
     home_title: "Page d'accueil Safeer",
@@ -155,6 +160,7 @@ const homeI18n = {
     add_site_title: "Ajouter un nouveau site favori ou multimédia"
   },
   it: {
+    hint_address: "Indirizzo", hint_tab: "Nuova scheda", hint_find: "Trova nella pagina",
     locale: "it-IT",
     app_title: "Safeer Browser",
     home_title: "Pagina iniziale Safeer",
@@ -214,7 +220,8 @@ function changeHomeLanguage(lang, notifyBackend = true) {
 
   const searchInput = document.getElementById('searchInput');
   if (searchInput && dict.search_placeholder) {
-    searchInput.placeholder = dict.search_placeholder;
+    searchInput.placeholder = dict.search_placeholder.replace("DuckDuckGo", {duckduckgo:"DuckDuckGo", google:"Google", brave:"Brave", youtube:"YouTube", bing:"Bing", ecosia:"Ecosia"}[currentEngine] || currentEngine);
+    searchInput.setAttribute("aria-label", searchInput.placeholder);
   }
 
   document.querySelectorAll('.lang-pill').forEach(btn => {
@@ -247,29 +254,10 @@ let currentThreatsCount = 0;
 
 function renderShieldMetrics() {
   const dict = homeI18n[currentHomeLang] || homeI18n.sl;
-  const elAds = document.getElementById('adsCount');
-  const elAdsLbl = document.getElementById('adsLbl');
-  if (elAds) {
-    if (currentAdsCount > 0) {
-      elAds.textContent = currentAdsCount.toLocaleString();
-      if (elAdsLbl) elAdsLbl.textContent = dict.lbl_ads || 'Blokirani oglasi';
-    } else {
-      elAds.textContent = '350k+';
-      if (elAdsLbl) elAdsLbl.textContent = dict.lbl_rules_active || 'Aktivnih pravil ščita';
-    }
-  }
-
-  const elThreats = document.getElementById('threatsCount');
-  const elThreatsLbl = document.getElementById('threatsLbl');
-  if (elThreats) {
-    if (currentThreatsCount > 0) {
-      elThreats.textContent = currentThreatsCount.toLocaleString();
-      if (elThreatsLbl) elThreatsLbl.textContent = dict.lbl_threats || 'Preprečene grožnje';
-    } else {
-      elThreats.textContent = '100%';
-      if (elThreatsLbl) elThreatsLbl.textContent = dict.lbl_threat_protection || 'Zaščita pred grožnjami';
-    }
-  }
+  document.getElementById('adsCount').textContent = currentAdsCount.toLocaleString(dict.locale);
+  document.getElementById('adsLbl').textContent = dict.lbl_ads;
+  document.getElementById('threatsCount').textContent = currentThreatsCount.toLocaleString(dict.locale);
+  document.getElementById('threatsLbl').textContent = dict.lbl_threats;
 }
 
 window.setShieldMetrics = function(ads, threats) {
@@ -319,7 +307,16 @@ function setEngine(engine, btn) {
   }
   
   const input = document.getElementById('searchInput');
-  if (input) input.focus();
+  document.querySelectorAll('.engine-pills .pill').forEach(p => {
+    p.setAttribute('aria-pressed', String(p.dataset.engine === currentEngine));
+  });
+  if (input) {
+    const dict = homeI18n[currentHomeLang] || homeI18n.sl;
+    const name = {duckduckgo:'DuckDuckGo', google:'Google', brave:'Brave', youtube:'YouTube', bing:'Bing', ecosia:'Ecosia'}[currentEngine] || currentEngine;
+    input.placeholder = dict.search_placeholder.replace('DuckDuckGo', name);
+    input.setAttribute('aria-label', input.placeholder);
+    input.focus();
+  }
 }
 
 window.setSearchEngine = function(engine) {
@@ -408,7 +405,7 @@ function renderPortals() {
     const card = document.createElement('a');
     card.className = 'portal-card';
     card.href = portal.url;
-    card.style.background = portal.bg || `linear-gradient(145deg, #0f172a, ${portal.color || '#00d2ff'})`;
+    // Neutral surfaces keep custom shortcuts readable alongside the Mint theme.
 
     const markSpan = document.createElement('span');
     markSpan.className = 'portal-mark';
@@ -462,11 +459,9 @@ function renderPortals() {
   });
 
   // Dodaj kartico "➕ Dodaj stran" na konec mreže
-  const addCard = document.createElement('div');
+  const addCard = document.createElement('button');
+  addCard.type = 'button';
   addCard.className = 'portal-card portal-add-card';
-  addCard.style.border = '2px dashed rgba(255, 255, 255, 0.2)';
-  addCard.style.background = 'rgba(255, 255, 255, 0.02)';
-  addCard.style.cursor = 'pointer';
   const dict = homeI18n[currentHomeLang] || homeI18n.sl;
   addCard.title = dict.add_site_title || 'Dodaj novo priljubljeno stran ali multimedijo';
   addCard.innerHTML = `

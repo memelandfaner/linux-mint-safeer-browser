@@ -542,7 +542,7 @@ class SafeerMintBrowser(Gtk.Window):
             min-height: 40px;
         }}
         .firefox-tab {{
-            border-radius: 8px 8px 0 0;
+            border-radius: 10px 10px 0 0;
             padding: 5px 12px;
             min-width: 170px;
             transition: all 120ms ease;
@@ -618,7 +618,7 @@ class SafeerMintBrowser(Gtk.Window):
             background-color: {bg_base};
             background: {bg_base};
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 4px 10px 6px 10px;
+            padding: 7px 12px 9px 12px;
         }}
         .ff-nav-btn {{
             background: transparent;
@@ -646,11 +646,11 @@ class SafeerMintBrowser(Gtk.Window):
             border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 8px;
             padding: 2px 12px;
-            min-height: 42px;
+            min-height: 46px;
         }}
-        .ff-url-container:focus-within {{
+        .ff-url-entry:focus {{
             border-color: {accent};
-            box-shadow: 0 0 0 2px rgba(0, 96, 223, 0.4);
+            box-shadow: inset 0 -2px {accent};
         }}
         .ff-shield-btn {{
             background: transparent;
@@ -669,7 +669,7 @@ class SafeerMintBrowser(Gtk.Window):
             border: none;
             box-shadow: none;
             color: #ffffff;
-            font-size: 16.5px;
+            font-size: 16px;
             font-weight: 600;
             padding: 6px 8px;
         }}
@@ -881,7 +881,7 @@ class SafeerMintBrowser(Gtk.Window):
         .customizer-notebook tab {{
             background-color: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 8px 8px 0 0;
+            border-radius: 10px 10px 0 0;
             padding: 8px 16px;
             color: #94a3b8;
             font-size: 13.5px;
