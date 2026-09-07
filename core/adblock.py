@@ -647,7 +647,11 @@ def strip_tracking_parameters(url: str) -> str:
                      "service", "continue", "uilel", "passive"}
         segments = {segment.lower() for segment in parsed.path.split("/")}
         netloc = (parsed.netloc or "").lower()
-        if (netloc.startswith(("accounts.google.", "accounts.youtube.", "myaccount.google."))
+        path_lower = parsed.path.lower()
+        if (is_passthrough_host(url)
+                or path_lower.startswith("/cdn-cgi/")
+                or "challenge-platform" in path_lower
+                or netloc.startswith(("accounts.google.", "accounts.youtube.", "myaccount.google."))
                 or any(key in protected or key.startswith(("x-amz-", "x-goog-", "oauth_")) for key in keys)
                 or segments & {"auth", "oauth", "oauth2", "authorize", "callback", "login",
                                "signin", "sign-in", "servicelogin", "verify", "verification", "reset-password"}):
@@ -822,11 +826,40 @@ for _domain in AD_TRACKER_DOMAINS:
     _ad_trie.insert(_domain)
 
 
+CLOUDFLARE_PASSTHROUGH = (
+    "accounts.x.ai",
+    "auth.x.ai",
+    "grok.com",
+    "www.grok.com",
+    "x.ai",
+    "challenges.cloudflare.com",
+    "cloudflare.com",
+    "cloudflareinsights.com",
+    "turnstile.com",
+)
+
+
+def is_passthrough_host(url: str) -> bool:
+    if not url:
+        return False
+    h = _url_host(url).rstrip(".")
+    if not h:
+        return False
+    for allowed in CLOUDFLARE_PASSTHROUGH:
+        if h == allowed or h.endswith("." + allowed):
+            return True
+    return False
+
+
 def is_threat_domain(url: str) -> bool:
+    if is_passthrough_host(url):
+        return False
     return _threat_trie.is_blocked(_url_host(url))
 
 
 def is_ad_domain(url: str) -> bool:
+    if is_passthrough_host(url):
+        return False
     return _ad_trie.is_blocked(_url_host(url))
 
 

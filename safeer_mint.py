@@ -50,7 +50,8 @@ from core.adblock import (
     is_threat_domain,
     is_ad_domain,
     FORCE_DARK_MODE_CSS,
-    AUTH_SCRIPT_EXCLUSIONS
+    AUTH_SCRIPT_EXCLUSIONS,
+    is_passthrough_host
 )
 from core.reader import READER_MODE_JS
 from core.network_errors import NetworkErrorHandler
@@ -2087,6 +2088,9 @@ class SafeerMintBrowser(Gtk.Window):
             req = navigation_action.get_request()
             uri = req.get_uri() if req else ""
             if uri:
+                if is_passthrough_host(uri):
+                    tab_id = self.new_tab(switch=False, related_view=webview)
+                    return next(tab["webview"] for tab in self.tabs if tab["id"] == tab_id)
                 if not is_safe_web_url(uri):
                     print(f"[Create WebView Security] Zavrnjen nevaren protokol: {uri}")
                     return None
@@ -2142,36 +2146,40 @@ class SafeerMintBrowser(Gtk.Window):
                 req = nav_action.get_request()
                 uri = req.get_uri() if req else ""
                 if uri:
-                    if not is_safe_web_url(uri):
-                        print(f"[Policy Security] Blokiran nedovoljen protokol navigacije: {uri}")
-                        decision.ignore()
-                        return True
-                    if self.config.get("adblock_enabled", True) and is_ad_domain(uri) and not is_threat_domain(uri):
-                        self.config.increment_ads_blocked(1)
-                        decision.ignore()
-                        return True
-                    if is_threat_domain(uri):
-                        self.config.increment_threats_blocked(1)
-                        self.show_threat_warning(uri)
-                        decision.ignore()
-                        return True
-
-                    if self.is_download_url(uri):
-                        self.start_direct_download(uri)
-                        decision.ignore()
-                        return True
-
-                    # Only clean explicit GET link clicks. Replaying forms or redirects
-                    # with load_uri would discard POST bodies and break sign-in state.
-                    if (self.config.get("tracking_protection_enabled", True)
-                            and nav_action.get_navigation_type() == WebKit2.NavigationType.LINK_CLICKED
-                            and not nav_action.is_redirect()
-                            and req.get_http_method() == "GET"):
-                        clean_uri = strip_tracking_parameters(uri)
-                        if clean_uri != uri:
+                    if is_passthrough_host(uri):
+                        # Popoln passthrough za Cloudflare Turnstile in xAI/Grok prijavo (brez motenj)
+                        pass
+                    else:
+                        if not is_safe_web_url(uri):
+                            print(f"[Policy Security] Blokiran nedovoljen protokol navigacije: {uri}")
                             decision.ignore()
-                            webview.load_uri(clean_uri)
                             return True
+                        if self.config.get("adblock_enabled", True) and is_ad_domain(uri) and not is_threat_domain(uri):
+                            self.config.increment_ads_blocked(1)
+                            decision.ignore()
+                            return True
+                        if is_threat_domain(uri):
+                            self.config.increment_threats_blocked(1)
+                            self.show_threat_warning(uri)
+                            decision.ignore()
+                            return True
+
+                        if self.is_download_url(uri):
+                            self.start_direct_download(uri)
+                            decision.ignore()
+                            return True
+
+                        # Only clean explicit GET link clicks. Replaying forms or redirects
+                        # with load_uri would discard POST bodies and break sign-in state.
+                        if (self.config.get("tracking_protection_enabled", True)
+                                and nav_action.get_navigation_type() == WebKit2.NavigationType.LINK_CLICKED
+                                and not nav_action.is_redirect()
+                                and req.get_http_method() == "GET"):
+                            clean_uri = strip_tracking_parameters(uri)
+                            if clean_uri != uri:
+                                decision.ignore()
+                                webview.load_uri(clean_uri)
+                                return True
 
                     nav_type = nav_action.get_navigation_type()
                     mouse_btn = nav_action.get_mouse_button()

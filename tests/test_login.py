@@ -65,3 +65,17 @@ class LoginNavigationTests(unittest.TestCase):
         ]
         for pattern in required:
             self.assertIn(pattern, AUTH_SCRIPT_EXCLUSIONS)
+
+    def test_cloudflare_and_xai_passthrough(self):
+        from core.adblock import is_passthrough_host, is_ad_domain, is_threat_domain, strip_tracking_parameters
+        hosts = [
+            "https://accounts.x.ai/check-login?redirect=grok-com&state=123",
+            "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/jsd",
+            "https://grok.com/",
+            "https://static.cloudflareinsights.com/beacon.min.js",
+        ]
+        for url in hosts:
+            self.assertTrue(is_passthrough_host(url))
+            self.assertFalse(is_ad_domain(url))
+            self.assertFalse(is_threat_domain(url))
+            self.assertEqual(strip_tracking_parameters(url), url)
