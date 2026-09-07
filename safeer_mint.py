@@ -404,6 +404,9 @@ class SafeerMintBrowser(Gtk.Window):
                 return
 
             proxy_mode = self.config.get("secure_proxy_mode", "disabled")
+            if proxy_mode not in ("disabled", "custom"):
+                proxy_mode = "disabled"
+                self.config.set("secure_proxy_mode", "disabled")
             doh_enabled = self.config.get("doh_enabled", True)
             doh_provider = self.config.get("doh_provider", "cloudflare")
             custom_doh_url = self.config.get("custom_doh_url", "https://1.1.1.1/dns-query")
