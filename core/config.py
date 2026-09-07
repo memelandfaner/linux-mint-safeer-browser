@@ -105,8 +105,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "doh_enabled": True,                 # Šifriran DNS (DNS-over-HTTPS) za zaščito pred ISP cenzuro in prisluškovanjem
     "doh_provider": "cloudflare",        # "cloudflare" (Privzeto 1.1.1.1), "quad9" (9.9.9.9), "google" (8.8.8.8), "custom", "disabled"
     "custom_doh_url": "https://1.1.1.1/dns-query",  # URL za poljuben zasebni DoH strežnik
-    "secure_proxy_mode": "disabled",     # "disabled", "tor", "custom" (Šifriran tunel)
-    "secure_proxy_url": "socks5://127.0.0.1:9050",  # URL za Tor ali lasten varen SOCKS5/HTTPS proxy
+    "secure_proxy_mode": "disabled",     # "disabled", "custom" (Lasten šifriran proxy)
+    "secure_proxy_url": "http://127.0.0.1:8080",    # URL za lasten varen SOCKS5/HTTPS proxy
     "total_ads_blocked": 0,              # Kumulativno število blokiranih oglasov
     "total_threats_blocked": 0,          # Kumulativno število preprečenih groženj (C2, malware, phishing)
     "hardware_acceleration": "on_demand",  # "on_demand", "always", "never"
