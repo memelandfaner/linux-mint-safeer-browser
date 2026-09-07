@@ -31,36 +31,54 @@ class PlayerDataTests(unittest.TestCase):
 const assert=require('assert');
 const window=globalThis; const document={addEventListener(){}};
 const location={href:'https://www.youtube.com/watch?v=fixture'};
+const originalParse=JSON.parse;
+const source={
+  adPlacements:[{adPlacementRenderer:{}}],adSlots:[{adSlotRenderer:{}}],
+  playerAds:[{playerLegacyDesktopWatchAdsRenderer:{playerAdParams:{autoplay:'1',showContentThumbnail:true,enabledEngageTypes:'fixture'}}}],
+  adPlayback:{context:'fixture-playback'},adBreakHeartbeatParams:'fixture-heartbeat',
+  videoDetails:{videoId:'fixture'},
+  streamingData:{formats:[{url:'https://cdn.test/media?sig=abc&n=def&pot=fixture&x=1'}],serverAbrStreamingUrl:'https://cdn.test/videoplayback?sig=sabr&n=fixture'},
+  serviceIntegrityDimensions:{poToken:'fixture-integrity-token'}
+};
+window.ytInitialPlayerResponse=structuredClone(source);
+window.ytplayer={config:{args:{player_response:JSON.stringify(source)}}};
 let reply='';window.fetch=()=>Promise.resolve(new Response(reply,{status:200,headers:{'content-type':'application/json'}}));
-class XMLHttpRequest {open(){} get responseText(){return reply} get response(){return reply}}
+class XMLHttpRequest {open(){} get responseText(){return reply} get response(){return this.responseType==='json'?originalParse(reply):reply}}
 window.XMLHttpRequest=XMLHttpRequest;
 """
         checks=r"""
-const source={adPlacements:[{}],playerAds:[{}],adSlots:[{}],adBreakHeartbeatParams:'ad',videoDetails:{videoId:'fixture'},streamingData:{formats:[{url:'https://cdn.test/media?sig=abc&x=1'}]}};
+const expected=structuredClone(source);delete expected.adPlacements;delete expected.adSlots;
+function assertClean(data,label){assert.deepStrictEqual(data,expected,label)}
+assertClean(window.ytInitialPlayerResponse,'existing initial object');
+assertClean(nativeParse(window.ytplayer.config.args.player_response),'existing serialized config');
 window.ytInitialPlayerResponse=structuredClone(source);
-assert(!('adPlacements' in window.ytInitialPlayerResponse));
-assert(!('adBreakHeartbeatParams' in window.ytInitialPlayerResponse));
-assert.strictEqual(window.ytInitialPlayerResponse.streamingData.formats[0].url,source.streamingData.formats[0].url);
+assertClean(window.ytInitialPlayerResponse,'new initial object');
 window.ytplayer={config:{args:{player_response:nativeStringify(source)}}};
-assert(!nativeParse(window.ytplayer.config.args.player_response).playerAds);
+assertClean(nativeParse(window.ytplayer.config.args.player_response),'new serialized config');
 window.ytplayer.config.args.player_response=nativeStringify(source);
-assert(!nativeParse(window.ytplayer.config.args.player_response).adSlots);
+assertClean(nativeParse(window.ytplayer.config.args.player_response),'updated serialized args');
+assertClean(JSON.parse(nativeStringify(source)),'JSON.parse');
 reply=nativeStringify({playerResponse:source});
 const xhr=new XMLHttpRequest();xhr.open('GET','/youtubei/v1/player');xhr.readyState=4;
-assert(!nativeParse(xhr.responseText).playerResponse.adPlacements);
+assertClean(nativeParse(xhr.responseText).playerResponse,'XHR responseText');
+assertClean(nativeParse(xhr.response).playerResponse,'XHR text response');
+const jsonXhr=new XMLHttpRequest();jsonXhr.open('GET','/youtubei/v1/player');jsonXhr.readyState=4;jsonXhr.responseType='json';
+assertClean(jsonXhr.response.playerResponse,'XHR JSON response');
 const ordinary=new XMLHttpRequest();ordinary.open('GET','/other');ordinary.readyState=4;
 assert.strictEqual(ordinary.responseText,reply);
 assert.strictEqual(isPlayerApi('https://youtube.com.evil.test/youtubei/v1/player'),false);
 const unchanged = ' { "response": {"comments":[1,2,3]}, "value": 12345678901234567890 } ';
 assert.strictEqual(cleanPlayerText(unchanged), unchanged);
 assert.strictEqual(cleanPlayerText('{"description":"adPlacements"}'), '{"description":"adPlacements"}');
+const configOnly=' { "playerAds": [], "adPlayback": {}, "adBreakHeartbeatParams": "fixture" } ';
+assert.strictEqual(cleanPlayerText(configOnly),configOnly);
 const nested=nativeStringify({player_response:nativeStringify(source)});
-assert(!nativeParse(nativeParse(cleanPlayerText(nested)).player_response).adSlots);
-assert(!nativeParse(JSON.parse(nested).player_response).playerAds);
+assertClean(nativeParse(nativeParse(cleanPlayerText(nested)).player_response),'nested serialized response');
+assertClean(nativeParse(JSON.parse(nested).player_response),'JSON serialized response');
 let revived=JSON.parse('{"x":1}',(key,value)=>key==='x'?2:value);
 assert.strictEqual(revived.x,2);
 
-(async()=>{const response=await fetch('/youtubei/v1/next');const data=await response.json();assert(!data.playerResponse.adBreakHeartbeatParams);assert(data.playerResponse.streamingData);console.log('PASS: direct initial objects, late assignments, serialized config, fetch.json and XHR; media preserved');})().catch(e=>{console.error(e);process.exitCode=1});
+(async()=>{const response=await fetch('/youtubei/v1/next');const data=await response.json();assertClean(data.playerResponse,'fetch JSON response');console.log('PASS: ad placements removed; playback, heartbeat, integrity and signed media preserved across initial objects, args, JSON, XHR and fetch');})().catch(e=>{console.error(e);process.exitCode=1});
 """
         subprocess.run(['node','-e',fixture+YOUTUBE_ADBLOCK_SCRIPT[start:end]+checks],check=True)
 

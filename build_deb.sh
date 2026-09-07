@@ -7,7 +7,7 @@ set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_NAME="safeer-browser"
-VERSION="1.0.13"
+VERSION="1.0.14"
 ARCH="all"
 DEB_PACKAGE="${PKG_NAME}_${VERSION}_${ARCH}.deb"
 TAR_PACKAGE="safeer-browser-linux.tar.gz"
@@ -131,9 +131,9 @@ Homepage: https://github.com/memelandfaner/linux-mint-safeer-browser
 Description: Sovereign, ultra-fast, and private web browser for Linux Mint & Ubuntu
  Safeer Browser is an open-source, ultra-fast web browser engineered
  specifically for Linux Mint and Ubuntu. Built natively with GTK3 and
- WebKit2GTK, it provides instant loading, 0-ad blocking, threat shield
- protection, 1-click bookmarks import from Firefox and Chrome, customizable
- portals, user CSS styling, and Tampermonkey-compatible UserScripts.
+ WebKit2GTK, it includes ad filtering, a local threat blocklist,
+ bookmarks import from Firefox and Chrome, customizable portals,
+ user CSS styling, and configurable JavaScript userscripts.
 EOF
 chmod 644 "$BUILD_ROOT/DEBIAN/control"
 

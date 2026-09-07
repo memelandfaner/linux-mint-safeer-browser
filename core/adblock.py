@@ -49,8 +49,10 @@ YOUTUBE_ADBLOCK_SCRIPT = """
     var nativeParse = JSON.parse;
     var nativeStringify = JSON.stringify;
     var stats = window._safeerAdStats = {cleanedResponses:0, removedFields:0, skipClicks:0};
-    var adKeys = ['adPlacements', 'playerAds', 'adSlots', 'adPlayback', 'adBreakHeartbeatParams'];
-    var adKeyPattern = /adPlacements|playerAds|adSlots|adPlayback|adBreakHeartbeatParams/;
+    // playerAds includes autoplay configuration; heartbeat and integrity fields
+    // belong to the media protocol. Preserve them and remove only ad slots.
+    var adKeys = ['adPlacements', 'adSlots'];
+    var adKeyPattern = /adPlacements|adSlots/;
     function cleanPlayerText(text) {
         if (typeof text !== 'string' || !adKeyPattern.test(text)) return text;
         var removedBefore = stats.removedFields;
@@ -828,6 +830,7 @@ img, video, canvas, svg, picture, iframe, [style*="background-image"], [role="im
 # Cosmetic/anti-overlay scripts must not alter identity or bot-verification pages.
 # This does not exempt these URLs from malware checks or certificate validation.
 AUTH_SCRIPT_EXCLUSIONS = [
+    "*://grok.com/*", "*://*.grok.com/*", "*://accounts.x.ai/*", "*://auth.x.ai/*",
     "*://accounts.google.com/*", "*://auth.openai.com/*", "*://auth0.openai.com/*",
     "*://chatgpt.com/*", "*://chat.openai.com/*", "*://login.microsoftonline.com/*",
     "*://login.live.com/*", "*://appleid.apple.com/*", "*://*.auth0.com/*",

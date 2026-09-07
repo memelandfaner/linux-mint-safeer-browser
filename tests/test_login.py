@@ -12,7 +12,7 @@ class LoginNavigationTests(unittest.TestCase):
             self.assertFalse(is_safe_web_url(url))
 
     def test_auth_and_signed_links_remain_exact(self):
-        for suffix in ['state=a%20b&code=c%2Fd', 'secret=dummy&si=needed',
+        for suffix in ['return_to=%2F%3Fq%3DreasoningMode%3Dnone%26voice%3Dfalse', 'state=a%20b&code=c%2Fd', 'secret=dummy&si=needed',
                        'SAMLResponse=x%2By&RelayState=z', 'X-Amz-Signature=dummy',
                        'token=dummy', 'redirect_uri=https%3A%2F%2Fexample.org']:
             url='https://example.org/cb?utm_source=mail&'+suffix

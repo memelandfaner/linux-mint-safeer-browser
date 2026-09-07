@@ -1,0 +1,61 @@
+{
+  "version": "1.0.14",
+  "scope": "Anonymous warmed profile, five songs, startup plus 32 seconds each; not full songs or signed-in testing",
+  "results": [
+    {
+      "id": "5NV6Rdv1a3I",
+      "title": "Daft Punk - Get Lucky (Official Audio) ft. Pharrell Williams, Nile Rodgers - YouTube",
+      "first_play_seconds": 14.73,
+      "observed_seconds": 46.77,
+      "reason": "complete",
+      "post_start_stall_samples": [],
+      "ad_samples": 0,
+      "error_samples": 0,
+      "passed": true
+    },
+    {
+      "id": "4NRXx6U8ABQ",
+      "title": "The Weeknd - Blinding Lights (Official Video) - YouTube",
+      "first_play_seconds": 13.36,
+      "observed_seconds": 45.38,
+      "reason": "complete",
+      "post_start_stall_samples": [],
+      "ad_samples": 0,
+      "error_samples": 0,
+      "passed": true
+    },
+    {
+      "id": "JGwWNGJdvx8",
+      "title": "Ed Sheeran - Shape of You (Official Music Video) - YouTube",
+      "first_play_seconds": 8.76,
+      "observed_seconds": 40.78,
+      "reason": "complete",
+      "post_start_stall_samples": [],
+      "ad_samples": 0,
+      "error_samples": 0,
+      "passed": true
+    },
+    {
+      "id": "YQHsXMglC9A",
+      "title": "Adele - Hello (Official Music Video) - YouTube",
+      "first_play_seconds": 14.76,
+      "observed_seconds": 46.79,
+      "reason": "complete",
+      "post_start_stall_samples": [],
+      "ad_samples": 0,
+      "error_samples": 0,
+      "passed": true
+    },
+    {
+      "id": "VPRjCeoBqrI",
+      "title": "Coldplay - A Sky Full Of Stars (Official Video) - YouTube",
+      "first_play_seconds": 13.76,
+      "observed_seconds": 45.78,
+      "reason": "complete",
+      "post_start_stall_samples": [],
+      "ad_samples": 0,
+      "error_samples": 0,
+      "passed": true
+    }
+  ]
+}

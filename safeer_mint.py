@@ -56,8 +56,9 @@ from core.reader import READER_MODE_JS
 from core.network_errors import NetworkErrorHandler
 from core.default_browser import is_default_browser as system_is_default_browser, set_default_browser
 
-# Native WebKitGTK user agent matching Safari/WebKit engine to prevent Google CAPTCHA bot triggers
-USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+# Use WebKitGTK's maintained browser identity consistently across redirects.
+USER_AGENT = None
+APP_VERSION = "1.0.14"
 DOCK_WIDTH = 54
 
 
@@ -5544,6 +5545,10 @@ class SafeerMintBrowser(Gtk.Window):
 
 
 def main():
+    if "--version" in sys.argv:
+        print(f"Safeer Browser {APP_VERSION}")
+        return
+
     if "--set-default" in sys.argv:
         success, errors = set_default_browser(BASE_DIR)
         if success:
