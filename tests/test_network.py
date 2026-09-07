@@ -17,7 +17,7 @@ class NetworkTests(unittest.TestCase):
                 self.assertEqual(list(pool.map(resolver.resolve,['missing.invalid']*12)),[None]*12)
             self.assertIsNone(resolver.resolve('missing.invalid'))
         self.assertEqual(len(calls),1)
-        resolver.set_provider('cloudflare')
+        resolver.set_provider('quad9')
         self.assertFalse(resolver._cache)
 
     def test_invalid_custom_endpoint(self):

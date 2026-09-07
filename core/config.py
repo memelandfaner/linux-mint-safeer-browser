@@ -103,8 +103,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "tracking_protection_enabled": True,  # Odstranjevanje sledilnih parametrov (UTM, fbclid, gclid, si, itd.)
     "gpc_dnt_enabled": True,             # W3C Global Privacy Control & Do Not Track signal
     "doh_enabled": True,                 # Šifriran DNS (DNS-over-HTTPS) za zaščito pred ISP cenzuro in prisluškovanjem
-    "doh_provider": "quad9",             # "quad9" (Privzeto 9.9.9.9), "cloudflare" (1.1.1.1), "google" (8.8.8.8), "custom", "disabled"
-    "custom_doh_url": "https://dns.quad9.net/dns-query",  # URL za poljuben zasebni DoH strežnik
+    "doh_provider": "cloudflare",        # "cloudflare" (Privzeto 1.1.1.1), "quad9" (9.9.9.9), "google" (8.8.8.8), "custom", "disabled"
+    "custom_doh_url": "https://1.1.1.1/dns-query",  # URL za poljuben zasebni DoH strežnik
     "secure_proxy_mode": "disabled",     # "disabled", "tor", "custom" (Šifriran tunel)
     "secure_proxy_url": "socks5://127.0.0.1:9050",  # URL za Tor ali lasten varen SOCKS5/HTTPS proxy
     "total_ads_blocked": 0,              # Kumulativno število blokiranih oglasov

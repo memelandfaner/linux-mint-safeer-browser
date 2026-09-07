@@ -48,8 +48,8 @@ class DoHResolver:
     Poizvedbe pošilja prek šifriranega TLS protokola neposredno na DoH strežnike.
     """
 
-    def __init__(self, provider: str = "quad9", custom_url: str = ""):
-        self.provider = provider if (provider in DOH_PROVIDERS or provider == "custom") else "quad9"
+    def __init__(self, provider: str = "cloudflare", custom_url: str = ""):
+        self.provider = provider if (provider in DOH_PROVIDERS or provider == "custom") else "cloudflare"
         self.custom_url = custom_url.strip()
         # Predpomnilnik: hostname -> (ip_address, expire_timestamp)
         self._cache: Dict[str, Tuple[str, float]] = {}
@@ -188,7 +188,7 @@ class DoHResolver:
         if self.provider == "custom":
             base_url = self.custom_url
         else:
-            provider_info = DOH_PROVIDERS.get(self.provider, DOH_PROVIDERS["quad9"])
+            provider_info = DOH_PROVIDERS.get(self.provider, DOH_PROVIDERS["cloudflare"])
             base_url = provider_info["url"]
 
         # libsoup 3 negotiates HTTP/2 (required by Quad9). It is already used by
@@ -437,7 +437,7 @@ _global_proxy: Optional[LocalDoHProxy] = None
 _proxy_lock = threading.Lock()
 
 
-def get_doh_proxy(provider: str = "quad9", custom_url: str = "", enabled: bool = True) -> Optional[LocalDoHProxy]:
+def get_doh_proxy(provider: str = "cloudflare", custom_url: str = "", enabled: bool = True) -> Optional[LocalDoHProxy]:
     """Pridobi ali inicializira globalni primerek DoH posrednika."""
     global _global_resolver, _global_proxy
     with _proxy_lock:

@@ -405,8 +405,8 @@ class SafeerMintBrowser(Gtk.Window):
 
             proxy_mode = self.config.get("secure_proxy_mode", "disabled")
             doh_enabled = self.config.get("doh_enabled", True)
-            doh_provider = self.config.get("doh_provider", "quad9")
-            custom_doh_url = self.config.get("custom_doh_url", "https://dns.quad9.net/dns-query")
+            doh_provider = self.config.get("doh_provider", "cloudflare")
+            custom_doh_url = self.config.get("custom_doh_url", "https://1.1.1.1/dns-query")
 
             # Izjeme za lokalna omrežja (bypassi)
             ignore_hosts = ["localhost", "127.0.0.1", "10.*", "192.168.*", "172.16.*", "172.17.*", "172.18.*", "172.19.*", "172.2*"]
@@ -2509,14 +2509,14 @@ class SafeerMintBrowser(Gtk.Window):
         combo_doh.append("custom", t('doh_custom'))
         combo_doh.append("disabled", t('doh_disabled'))
 
-        cur_doh = self.config.get("doh_provider", "quad9")
+        cur_doh = self.config.get("doh_provider", "cloudflare")
         if not self.config.get("doh_enabled", True):
             cur_doh = "disabled"
         combo_doh.set_active_id(cur_doh)
 
         entry_custom_doh = Gtk.Entry()
-        entry_custom_doh.set_placeholder_text("https://dns.adguard-dns.com/dns-query")
-        entry_custom_doh.set_text(self.config.get("custom_doh_url", "https://dns.quad9.net/dns-query"))
+        entry_custom_doh.set_placeholder_text("https://1.1.1.1/dns-query")
+        entry_custom_doh.set_text(self.config.get("custom_doh_url", "https://1.1.1.1/dns-query"))
         entry_custom_doh.set_visible(cur_doh == "custom")
         entry_custom_doh.get_style_context().add_class("item-card-row")
 
@@ -2528,7 +2528,7 @@ class SafeerMintBrowser(Gtk.Window):
         entry_custom_doh.connect("changed", on_custom_doh_changed)
 
         def on_doh_changed(cb):
-            sel = cb.get_active_id() or "quad9"
+            sel = cb.get_active_id() or "cloudflare"
             if sel == "disabled":
                 self.config.set("doh_enabled", False)
                 self.config.set("doh_provider", "disabled")
