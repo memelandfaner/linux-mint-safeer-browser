@@ -397,6 +397,15 @@ class SafeerMintBrowser(Gtk.Window):
             except Exception:
                 pass
 
+    @staticmethod
+    def _is_proxy_reachable(host: str = "127.0.0.1", port: int = 9050, timeout: float = 0.4) -> bool:
+        """Hitro preveri, ali posredniška vrata sprejemajo TCP povezave."""
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except (OSError, ConnectionRefusedError):
+            return False
+
     def setup_network_security_and_proxy(self):
         """Konfigurira šifriran DNS (DoH) ali šifriran tunel (Tor / varen proxy) na WebKit2 ravni."""
         try:
@@ -412,40 +421,46 @@ class SafeerMintBrowser(Gtk.Window):
             ignore_hosts = ["localhost", "127.0.0.1", "10.*", "192.168.*", "172.16.*", "172.17.*", "172.18.*", "172.19.*", "172.2*"]
 
             if proxy_mode == "tor":
-                # Šifriran Tor tunel z oddaljenim DNS razreševanjem
                 tor_url = "socks5://127.0.0.1:9050"
-                proxy_settings = WebKit2.NetworkProxySettings.new(tor_url, ignore_hosts)
-                self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.CUSTOM, proxy_settings)
-                print(f"[Network Security] 🧅 Tor šifriran tunel aktiviran: {tor_url}")
-                # Če je tekel DoH posrednik, ga ustavimo
-                get_doh_proxy(enabled=False)
+                if not self._is_proxy_reachable("127.0.0.1", 9050):
+                    print("[Network Security] ⚠️ Tor storitev (127.0.0.1:9050) ni zagnana. Preprečujem izgubo interneta in varno uporabljam DoH.")
+                    proxy_mode = "disabled"
+                else:
+                    proxy_settings = WebKit2.NetworkProxySettings.new(tor_url, ignore_hosts)
+                    self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.CUSTOM, proxy_settings)
+                    print(f"[Network Security] 🧅 Tor šifriran tunel aktiviran: {tor_url}")
+                    get_doh_proxy(enabled=False)
+                    return
 
-            elif proxy_mode == "custom":
+            if proxy_mode == "custom":
                 custom_url = self.config.get("secure_proxy_url", "").strip()
                 if custom_url:
                     proxy_settings = WebKit2.NetworkProxySettings.new(custom_url, ignore_hosts)
                     self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.CUSTOM, proxy_settings)
                     print(f"[Network Security] 🔒 Šifriran proxy aktiviran: {custom_url}")
                     get_doh_proxy(enabled=False)
+                    return
                 else:
                     self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.DEFAULT, None)
+                    proxy_mode = "disabled"
 
-            elif doh_enabled and doh_provider != "disabled":
-                # Vgrajen lokalni DoH posrednik
-                doh_proxy = get_doh_proxy(provider=doh_provider, custom_url=custom_doh_url, enabled=True)
-                if doh_proxy and doh_proxy.actual_port > 0:
-                    local_proxy_url = f"http://127.0.0.1:{doh_proxy.actual_port}"
-                    proxy_settings = WebKit2.NetworkProxySettings.new(local_proxy_url, ignore_hosts)
-                    self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.CUSTOM, proxy_settings)
-                    prov_label = custom_doh_url if doh_provider == "custom" else doh_provider
-                    print(f"[Network Security] 🛡️ Šifriran DNS (DoH: {prov_label}) aktiviran prek {local_proxy_url}")
+            if proxy_mode == "disabled":
+                if doh_enabled and doh_provider != "disabled":
+                    # Vgrajen lokalni DoH posrednik
+                    doh_proxy = get_doh_proxy(provider=doh_provider, custom_url=custom_doh_url, enabled=True)
+                    if doh_proxy and doh_proxy.actual_port > 0:
+                        local_proxy_url = f"http://127.0.0.1:{doh_proxy.actual_port}"
+                        proxy_settings = WebKit2.NetworkProxySettings.new(local_proxy_url, ignore_hosts)
+                        self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.CUSTOM, proxy_settings)
+                        prov_label = custom_doh_url if doh_provider == "custom" else doh_provider
+                        print(f"[Network Security] 🛡️ Šifriran DNS (DoH: {prov_label}) aktiviran prek {local_proxy_url}")
+                    else:
+                        self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.DEFAULT, None)
                 else:
+                    # Privzeta neposredna povezava
                     self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.DEFAULT, None)
-            else:
-                # Privzeta neposredna povezava
-                self.web_context.set_network_proxy_settings(WebKit2.NetworkProxyMode.DEFAULT, None)
-                get_doh_proxy(enabled=False)
-                print("[Network Security] Uporabljam privzeto neposredno omrežno povezavo.")
+                    get_doh_proxy(enabled=False)
+                    print("[Network Security] Uporabljam privzeto neposredno omrežno povezavo.")
         except Exception as e:
             print(f"[Network Security] Napaka pri nastavljanju proxy/DoH: {e}")
 
@@ -2566,6 +2581,23 @@ class SafeerMintBrowser(Gtk.Window):
         cur_tun = self.config.get("secure_proxy_mode", "disabled")
         combo_tun.set_active_id(cur_tun)
 
+        lbl_proxy_warn = Gtk.Label()
+        lbl_proxy_warn.set_use_markup(True)
+        lbl_proxy_warn.set_xalign(0.0)
+
+        def update_proxy_warning(sel):
+            if sel == "tor":
+                if not SafeerMintBrowser._is_proxy_reachable("127.0.0.1", 9050):
+                    lbl_proxy_warn.set_markup("<span color='#f59e0b' size='small'>⚠️ Tor omrežje ni zagnano na 127.0.0.1:9050. Zaženite: sudo apt install tor</span>")
+                    lbl_proxy_warn.set_visible(True)
+                else:
+                    lbl_proxy_warn.set_markup("<span color='#87cf3e' size='small'>✓ Tor zaznan in aktiven na 127.0.0.1:9050</span>")
+                    lbl_proxy_warn.set_visible(True)
+            else:
+                lbl_proxy_warn.set_visible(False)
+
+        update_proxy_warning(cur_tun)
+
         entry_proxy_url = Gtk.Entry()
         entry_proxy_url.set_placeholder_text("socks5://127.0.0.1:1080 ali http://proxy:8080")
         entry_proxy_url.set_text(self.config.get("secure_proxy_url", "socks5://127.0.0.1:9050"))
@@ -2583,10 +2615,12 @@ class SafeerMintBrowser(Gtk.Window):
             sel = cb.get_active_id() or "disabled"
             self.config.set("secure_proxy_mode", sel)
             entry_proxy_url.set_visible(sel == "custom")
+            update_proxy_warning(sel)
             self.setup_network_security_and_proxy()
 
         combo_tun.connect("changed", on_tun_changed)
         card_proxy.pack_start(combo_tun, False, False, 0)
+        card_proxy.pack_start(lbl_proxy_warn, False, False, 2)
         card_proxy.pack_start(entry_proxy_url, False, False, 2)
 
         tab2_box.pack_start(card_proxy, False, False, 0)
