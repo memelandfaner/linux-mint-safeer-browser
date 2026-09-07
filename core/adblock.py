@@ -847,13 +847,16 @@ img, video, canvas, svg, picture, iframe, [style*="background-image"], [role="im
 # Cosmetic/anti-overlay scripts must not alter identity or bot-verification pages.
 # This does not exempt these URLs from malware checks or certificate validation.
 AUTH_SCRIPT_EXCLUSIONS = [
+    "*://x.ai/*", "*://*.x.ai/*",
     "*://grok.com/*", "*://*.grok.com/*", "*://accounts.x.ai/*", "*://auth.x.ai/*",
+    "*://challenges.cloudflare.com/*", "*://*.cloudflare.com/*",
+    "*://static.cloudflareinsights.com/*", "*://*.turnstile.com/*",
     "*://accounts.google.com/*", "*://myaccount.google.com/*",
     "*://accounts.youtube.com/*", "*://*.youtube.com/signin*", "*://*.youtube.com/accounts/*", "*://*.youtube.com/redirect*",
     "*://auth.openai.com/*", "*://auth0.openai.com/*",
     "*://chatgpt.com/*", "*://chat.openai.com/*", "*://login.microsoftonline.com/*",
     "*://login.live.com/*", "*://appleid.apple.com/*", "*://*.auth0.com/*",
-    "*://challenges.cloudflare.com/*", "*://*.hcaptcha.com/*", "*://hcaptcha.com/*",
+    "*://*.hcaptcha.com/*", "*://hcaptcha.com/*",
     "*://www.google.com/recaptcha/*", "*://www.recaptcha.net/*",
     "*://*/login*", "*://*/signin*", "*://*/sign-in*", "*://*/oauth/*",
     "*://*/oauth2/*", "*://*/auth/*", "*://*/authorize*",

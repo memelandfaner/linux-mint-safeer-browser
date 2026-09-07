@@ -386,7 +386,8 @@ class SafeerMintBrowser(Gtk.Window):
             cookie_mgr = self.website_data_manager.get_cookie_manager()
             cookie_path = os.path.join(self.config.config_dir, "cookies.sqlite")
             cookie_mgr.set_persistent_storage(cookie_path, WebKit2.CookiePersistentStorage.SQLITE)
-            cookie_mgr.set_accept_policy(WebKit2.CookieAcceptPolicy.NO_THIRD_PARTY)
+            cookie_mgr.set_accept_policy(WebKit2.CookieAcceptPolicy.ALWAYS)
+            self.cookie_mgr = cookie_mgr
         except Exception as e:
             print(f"[Storage] Opozorilo pri nastavitvi shrambe: {e}")
             self.web_context = WebKit2.WebContext.get_default()
@@ -2141,23 +2142,6 @@ class SafeerMintBrowser(Gtk.Window):
                 req = nav_action.get_request()
                 uri = req.get_uri() if req else ""
                 if uri:
-                    # Google / YouTube authentication compatibility: provide standard Chrome identity
-                    # to prevent "This browser or app may not be secure" block during sign-in
-                    try:
-                        parsed_u = urllib.parse.urlparse(uri)
-                        host_u = (parsed_u.netloc or "").lower()
-                        if host_u.startswith(("accounts.google.", "accounts.youtube.", "myaccount.google.")):
-                            auth_ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
-                            st = webview.get_settings() if hasattr(webview, "get_settings") else None
-                            if st and hasattr(st, "set_user_agent"):
-                                st.set_user_agent(auth_ua)
-                        elif USER_AGENT is None:
-                            st = webview.get_settings() if hasattr(webview, "get_settings") else None
-                            if st and hasattr(st, "set_user_agent") and st.get_user_agent() != USER_AGENT:
-                                st.set_user_agent(USER_AGENT)
-                    except Exception:
-                        pass
-
                     if not is_safe_web_url(uri):
                         print(f"[Policy Security] Blokiran nedovoljen protokol navigacije: {uri}")
                         decision.ignore()
@@ -2767,11 +2751,12 @@ class SafeerMintBrowser(Gtk.Window):
         settings.set_enable_html5_local_storage(True)
         settings.set_enable_html5_database(True)
         settings.set_enable_javascript(True)
-        settings.set_javascript_can_open_windows_automatically(False)
+        settings.set_javascript_can_open_windows_automatically(True)
         settings.set_enable_javascript_markup(True)
         settings.set_allow_modal_dialogs(True)
         settings.set_enable_encrypted_media(True)
-        settings.set_user_agent(USER_AGENT)
+        if USER_AGENT is not None:
+            settings.set_user_agent(USER_AGENT)
 
         # Strojno pospeševanje & stabilno renderiranje (WebKitGTK ON_DEMAND)
         try:
@@ -3470,7 +3455,7 @@ class SafeerMintBrowser(Gtk.Window):
                 WebKit2.UserContentInjectedFrames.ALL_FRAMES,
                 WebKit2.UserScriptInjectionTime.START,
                 None,
-                None
+                AUTH_SCRIPT_EXCLUSIONS
             )
             content_mgr.add_script(gpc_script)
 

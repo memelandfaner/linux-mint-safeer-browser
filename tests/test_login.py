@@ -52,3 +52,16 @@ class LoginNavigationTests(unittest.TestCase):
             app=SimpleNamespace(config=config,is_download_url=lambda u:False,show_threat_warning=lambda u:None)
             SafeerMintBrowser.on_decide_policy(app,None,decision,WebKit2.PolicyDecisionType.NEW_WINDOW_ACTION)
             self.assertEqual(calls,[expected])
+
+    def test_auth_exclusions_include_cloudflare_and_xai(self):
+        from core.adblock import AUTH_SCRIPT_EXCLUSIONS
+        required = [
+            "*://x.ai/*",
+            "*://*.x.ai/*",
+            "*://challenges.cloudflare.com/*",
+            "*://*.cloudflare.com/*",
+            "*://static.cloudflareinsights.com/*",
+            "*://*.turnstile.com/*",
+        ]
+        for pattern in required:
+            self.assertIn(pattern, AUTH_SCRIPT_EXCLUSIONS)
