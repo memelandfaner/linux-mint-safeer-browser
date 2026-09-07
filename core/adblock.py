@@ -23,7 +23,7 @@ YOUTUBE_ADBLOCK_SCRIPT = """
         if (!parent) return;
         var style = document.createElement('style');
         style.id = 'safeer-yt-ad-slots';
-        style.textContent = 'ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-promoted-sparkles-web-renderer, ytd-promoted-video-renderer, ytd-display-ad-renderer, ytd-companion-slot-renderer, #player-ads { display:none!important; margin:0!important; padding:0!important; min-height:0!important; }';
+        style.textContent = 'ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-promoted-sparkles-web-renderer, ytd-promoted-video-renderer, ytd-display-ad-renderer, ytd-companion-slot-renderer, #player-ads, ytd-rich-shelf-renderer[is-playables], ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-playables]), ytd-game-card-renderer, [section-identifier="playables-shelf"], [is-mini-game-card-shelf], ytm-game-card-renderer { display:none!important; margin:0!important; padding:0!important; min-height:0!important; }';
         parent.appendChild(style);
     }
     installAdCss();
@@ -249,6 +249,15 @@ YOUTUBE_ADBLOCK_SCRIPT = """
         }
     }
 
+    // Instant playback booster
+    function boostPlayback() {
+        var v = document.querySelector('video.video-stream, video');
+        if (v && v.paused && !v._safeer_user_paused) {
+            var p = v.play();
+            if (p && typeof p.catch === 'function') p.catch(function(){});
+        }
+    }
+
     // Adaptive supervision: 250ms when ad is active, 1500ms during smooth media playback
     var _ytSupervisorTimer = null;
     function scheduleSupervision(intervalMs) {
@@ -268,12 +277,13 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             v._safeer_user_paused = false;
             v.preload = 'auto';
         }
+        boostPlayback();
         scheduleSupervision(200);
     });
-    window.addEventListener('yt-navigate-finish', function() { scheduleSupervision(200); });
-    window.addEventListener('yt-page-data-updated', function() { scheduleSupervision(250); });
-    window.addEventListener('popstate', function() { scheduleSupervision(200); });
-    document.addEventListener('DOMContentLoaded', function() { scheduleSupervision(200); });
+    window.addEventListener('yt-navigate-finish', function() { boostPlayback(); scheduleSupervision(200); });
+    window.addEventListener('yt-page-data-updated', function() { boostPlayback(); scheduleSupervision(250); });
+    window.addEventListener('popstate', function() { boostPlayback(); scheduleSupervision(200); });
+    document.addEventListener('DOMContentLoaded', function() { boostPlayback(); scheduleSupervision(200); });
 
     // 5. Background Audio Playback (Prevent pause on tab switch / window minimize)
     try {
@@ -293,6 +303,8 @@ YOUTUBE_ADBLOCK_SCRIPT = """
 ADGUARD_PROTECTION_SCRIPT = """
 /* 🛡️ Safeer Linux Mint - AdGuard Advanced Protection & Anti-Adblock Defuser Engine */
 (function() {
+    var host = location.hostname.toLowerCase();
+    if (host === 'youtube.com' || host.endsWith('.youtube.com')) return;
     if (window._adguard_safeer_active) return;
     window._adguard_safeer_active = true;
 
@@ -424,6 +436,8 @@ ADGUARD_PROTECTION_SCRIPT = """
 GENERIC_COSMETIC_SCRIPT = """
 /* 🛡️ Safeer Linux Mint - Universal Ad & Tracker Shield */
 (function() {
+    var host = location.hostname.toLowerCase();
+    if (host === 'youtube.com' || host.endsWith('.youtube.com')) return;
     function cleanGenericAds() {
         var adSelectors = [
             '[data-component="ad-slot"]', '[data-testid="ad-unit"]',
@@ -466,13 +480,13 @@ GPC_AND_DNT_SCRIPT = """
     var gpcProp = {
         value: true,
         writable: false,
-        configurable: false,
+        configurable: true,
         enumerable: true
     };
     var dntProp = {
         value: '1',
         writable: false,
-        configurable: false,
+        configurable: true,
         enumerable: true
     };
 
@@ -629,11 +643,14 @@ def strip_tracking_parameters(url: str) -> str:
         protected = {"state", "nonce", "code", "token", "secret", "signature", "sig",
                      "client_id", "redirect_uri", "redirect_url", "returnto", "return_to",
                      "code_challenge", "samlrequest", "samlresponse", "relaystate",
-                     "access_token", "id_token", "session", "session_token", "ticket"}
+                     "access_token", "id_token", "session", "session_token", "ticket",
+                     "service", "continue", "uilel", "passive"}
         segments = {segment.lower() for segment in parsed.path.split("/")}
-        if (any(key in protected or key.startswith(("x-amz-", "x-goog-", "oauth_")) for key in keys)
+        netloc = (parsed.netloc or "").lower()
+        if (netloc.startswith(("accounts.google.", "accounts.youtube.", "myaccount.google."))
+                or any(key in protected or key.startswith(("x-amz-", "x-goog-", "oauth_")) for key in keys)
                 or segments & {"auth", "oauth", "oauth2", "authorize", "callback", "login",
-                               "signin", "sign-in", "verify", "verification", "reset-password"}):
+                               "signin", "sign-in", "servicelogin", "verify", "verification", "reset-password"}):
             return url
         retained = [pair for pair, key in zip(pairs, keys)
                     if not (key.startswith("utm_") or key in TRACKING_PARAMS)]
@@ -831,7 +848,9 @@ img, video, canvas, svg, picture, iframe, [style*="background-image"], [role="im
 # This does not exempt these URLs from malware checks or certificate validation.
 AUTH_SCRIPT_EXCLUSIONS = [
     "*://grok.com/*", "*://*.grok.com/*", "*://accounts.x.ai/*", "*://auth.x.ai/*",
-    "*://accounts.google.com/*", "*://auth.openai.com/*", "*://auth0.openai.com/*",
+    "*://accounts.google.com/*", "*://myaccount.google.com/*",
+    "*://accounts.youtube.com/*", "*://*.youtube.com/signin*", "*://*.youtube.com/accounts/*", "*://*.youtube.com/redirect*",
+    "*://auth.openai.com/*", "*://auth0.openai.com/*",
     "*://chatgpt.com/*", "*://chat.openai.com/*", "*://login.microsoftonline.com/*",
     "*://login.live.com/*", "*://appleid.apple.com/*", "*://*.auth0.com/*",
     "*://challenges.cloudflare.com/*", "*://*.hcaptcha.com/*", "*://hcaptcha.com/*",

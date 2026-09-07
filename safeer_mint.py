@@ -58,7 +58,7 @@ from core.default_browser import is_default_browser as system_is_default_browser
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
 USER_AGENT = None
-APP_VERSION = "1.0.14"
+APP_VERSION = "1.0.15"
 DOCK_WIDTH = 54
 
 
@@ -2141,6 +2141,23 @@ class SafeerMintBrowser(Gtk.Window):
                 req = nav_action.get_request()
                 uri = req.get_uri() if req else ""
                 if uri:
+                    # Google / YouTube authentication compatibility: provide standard Chrome identity
+                    # to prevent "This browser or app may not be secure" block during sign-in
+                    try:
+                        parsed_u = urllib.parse.urlparse(uri)
+                        host_u = (parsed_u.netloc or "").lower()
+                        if host_u.startswith(("accounts.google.", "accounts.youtube.", "myaccount.google.")):
+                            auth_ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+                            st = webview.get_settings() if hasattr(webview, "get_settings") else None
+                            if st and hasattr(st, "set_user_agent"):
+                                st.set_user_agent(auth_ua)
+                        elif USER_AGENT is None:
+                            st = webview.get_settings() if hasattr(webview, "get_settings") else None
+                            if st and hasattr(st, "set_user_agent") and st.get_user_agent() != USER_AGENT:
+                                st.set_user_agent(USER_AGENT)
+                    except Exception:
+                        pass
+
                     if not is_safe_web_url(uri):
                         print(f"[Policy Security] Blokiran nedovoljen protokol navigacije: {uri}")
                         decision.ignore()
@@ -2182,6 +2199,13 @@ class SafeerMintBrowser(Gtk.Window):
                         return True
             except Exception as e:
                 print(f"[Policy Navigation] Napaka: {e}")
+            try:
+                if hasattr(decision, "use_with_policies") and hasattr(WebKit2, "WebsitePolicies"):
+                    policies = WebKit2.WebsitePolicies(autoplay=WebKit2.AutoplayPolicy.ALLOW)
+                    decision.use_with_policies(policies)
+                    return True
+            except Exception:
+                pass
             decision.use()
             return True
         elif decision_type == WebKit2.PolicyDecisionType.RESPONSE:
@@ -3456,7 +3480,7 @@ class SafeerMintBrowser(Gtk.Window):
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
             WebKit2.UserScriptInjectionTime.START,
             ["*://*.youtube.com/*", "*://youtube.com/*", "*://*.googlevideo.com/*"],
-            None
+            AUTH_SCRIPT_EXCLUSIONS + ["*://accounts.youtube.com/*", "*://accounts.google.com/*", "*://myaccount.google.com/*"]
         )
         content_mgr.add_script(yt_script)
 
