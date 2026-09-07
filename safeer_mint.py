@@ -3514,7 +3514,12 @@ class SafeerMintBrowser(Gtk.Window):
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
             WebKit2.UserScriptInjectionTime.START,
             None,
-            AUTH_SCRIPT_EXCLUSIONS
+            AUTH_SCRIPT_EXCLUSIONS + [
+                "*://youtube.com/*",
+                "*://*.youtube.com/*",
+                "*://youtu.be/*",
+                "*://*.youtube-nocookie.com/*",
+            ],
         )
         content_mgr.add_script(throttler_script)
 

@@ -23,7 +23,26 @@ YOUTUBE_ADBLOCK_SCRIPT = """
         if (!parent) return;
         var style = document.createElement('style');
         style.id = 'safeer-yt-ad-slots';
-        style.textContent = 'ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-promoted-sparkles-web-renderer, ytd-promoted-video-renderer, ytd-display-ad-renderer, ytd-companion-slot-renderer, #player-ads, ytd-rich-shelf-renderer[is-playables], ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-playables]), ytd-game-card-renderer, [section-identifier="playables-shelf"], [is-mini-game-card-shelf], ytm-game-card-renderer { display:none!important; margin:0!important; padding:0!important; min-height:0!important; }';
+        style.textContent = [
+            'ytd-ad-slot-renderer',
+            'ytd-in-feed-ad-layout-renderer',
+            'ytd-promoted-sparkles-web-renderer',
+            'ytd-promoted-sparkles-text-search-renderer',
+            'ytd-promoted-video-renderer',
+            'ytd-display-ad-renderer',
+            'ytd-companion-slot-renderer',
+            'ytd-action-companion-ad-renderer',
+            'ytd-video-masthead-ad-v3-renderer',
+            'ytd-banner-promo-renderer',
+            'ytd-player-legacy-desktop-watch-ads-renderer',
+            '#player-ads',
+            'ytd-rich-shelf-renderer[is-playables]',
+            'ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-playables])',
+            'ytd-game-card-renderer',
+            '[section-identifier="playables-shelf"]',
+            '[is-mini-game-card-shelf]',
+            'ytm-game-card-renderer'
+        ].join(',') + '{display:none!important;margin:0!important;padding:0!important;min-height:0!important;}';
         parent.appendChild(style);
     }
     installAdCss();
@@ -120,8 +139,9 @@ YOUTUBE_ADBLOCK_SCRIPT = """
     function isPlayerApi(value) {
         try {
             var url = new URL(value, location.href);
-            return (url.hostname === 'youtube.com' || url.hostname.endsWith('.youtube.com') || url.hostname === 'youtubei.googleapis.com') &&
-                /^\/youtubei\/v[0-9]+\/(player|next)(?:\/|$)/.test(url.pathname);
+            var host = url.hostname;
+            if (!(host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtubei.googleapis.com')) return false;
+            return /^\/youtubei\/v[0-9]+\/(player|next|reel\/player)(?:\/|$)/.test(url.pathname);
         } catch (_) { return false; }
     }
     if (window.fetch) {
@@ -183,14 +203,14 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             '.ytp-skip-ad-button',
             '.ytp-ad-skip-button',
             '.ytp-ad-skip-button-modern',
-            '.ytp-skip-ad-button',
-            '.ytp-ad-skip-button-text',
+            '.ytp-skip-ad-button-container button',
             'button.ytp-ad-skip-button-modern',
-            '.ytp-ad-overlay-close-button'
+            '.ytp-ad-overlay-close-button',
+            '.ytp-ad-skip-button-slot button'
         ];
         for (var i = 0; i < selectors.length; i++) {
             var btn = document.querySelector(selectors[i]);
-            if (btn && btn.offsetParent !== null) {
+            if (btn && btn.offsetParent !== null && !btn.disabled) {
                 btn.click();
                 stats.skipClicks++;
                 return true;
@@ -202,21 +222,15 @@ YOUTUBE_ADBLOCK_SCRIPT = """
     function isAdActive() {
         var p = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
         if (p && (p.classList.contains('ad-showing') || p.classList.contains('ad-interrupting'))) return true;
-        // YouTube keeps .ytp-ad-module mounted during normal songs too.
-        // Only the player's active-ad state identifies an advertisement.
         return false;
     }
 
     function superviseYouTube() {
-        // Seeking/accelerating the ad media while WebKit changes its pipeline
-        // can crash GStreamer. Let the player own timing; use its skip control.
         if (isAdActive()) clickSkip();
 
-        // Clean cosmetic overlay banners
         var adOverlays = document.querySelectorAll(
             '.ytp-ad-overlay-container, #player-ads, ytd-promoted-sparkles-web-renderer, ' +
-            'ytd-in-feed-ad-layout-renderer, ytd-banner-promo-renderer-background, ' +
-            '.contribYtLightShapeStaticWashLight, .cinematic-renderer, #cinematic-container'
+            'ytd-in-feed-ad-layout-renderer, ytd-banner-promo-renderer, ytd-video-masthead-ad-v3-renderer'
         );
         var removedOverlays = 0;
         for (var o = 0; o < adOverlays.length; o++) {
@@ -226,64 +240,66 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             try { window.webkit.messageHandlers.safeer.postMessage({ action: 'increment_ads', count: removedOverlays }); } catch(_) {}
         }
 
-        // Auto-dismiss YouTube adblock nag dialogs & confirm buttons
         var dismissBtns = document.querySelectorAll(
             'tp-yt-paper-dialog #dismiss-button, ytd-enforcement-message-view-model #dismiss-button, ' +
             'ytd-enforcement-message-view-model button[aria-label="Dismiss"]'
         );
         for (var d = 0; d < dismissBtns.length; d++) {
-            try {
-                if (dismissBtns[d].offsetParent !== null) {
-                    dismissBtns[d].click();
-                }
-            } catch(e) {}
-        }
-        // Ensure watch player remains crisp and visible
-        if (location.pathname.indexOf('/watch') !== -1) {
-            var player = document.getElementById('player') || document.getElementById('movie_player');
-            if (player) {
-                player.style.setProperty('display', 'block', 'important');
-                player.style.setProperty('visibility', 'visible', 'important');
-                player.style.setProperty('opacity', '1', 'important');
-            }
+            try { if (dismissBtns[d].offsetParent !== null) dismissBtns[d].click(); } catch(e) {}
         }
     }
 
-    // Instant playback booster
+    function markUserPause(e) {
+        var v = e.target;
+        if (!v || v.tagName !== 'VIDEO') return;
+        v._safeer_user_paused = true;
+    }
+    function markUserPlay(e) {
+        var v = e.target;
+        if (!v || v.tagName !== 'VIDEO') return;
+        v._safeer_user_paused = false;
+    }
+    document.addEventListener('pause', markUserPause, true);
+    document.addEventListener('playing', markUserPlay, true);
+
     function boostPlayback() {
         var v = document.querySelector('video.video-stream, video');
-        if (v && v.paused && !v._safeer_user_paused) {
+        if (v && v.paused && !v._safeer_user_paused && !isAdActive()) {
             var p = v.play();
             if (p && typeof p.catch === 'function') p.catch(function(){});
         }
     }
 
-    // Adaptive supervision: 250ms when ad is active, 1500ms during smooth media playback
+    function watchPlayerClass() {
+        var p = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+        if (!p || p._safeerAdMo) return;
+        p._safeerAdMo = new MutationObserver(function() {
+            if (isAdActive()) clickSkip();
+        });
+        p._safeerAdMo.observe(p, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    // Adaptive supervision: observer for skip, slow poll only as fallback
     var _ytSupervisorTimer = null;
     function scheduleSupervision(intervalMs) {
         if (_ytSupervisorTimer) clearTimeout(_ytSupervisorTimer);
         _ytSupervisorTimer = setTimeout(function() {
+            watchPlayerClass();
             superviseYouTube();
-            var nextInterval = isAdActive() ? 250 : 1500;
-            scheduleSupervision(nextInterval);
+            scheduleSupervision(isAdActive() ? 400 : 4000);
         }, intervalMs);
     }
     scheduleSupervision(300);
 
-    // Instant playback triggers on navigation
     window.addEventListener('yt-navigate-start', function() {
         var v = document.querySelector('video.video-stream, video');
-        if (v) {
-            v._safeer_user_paused = false;
-            v.preload = 'auto';
-        }
-        boostPlayback();
+        if (v) { v._safeer_user_paused = false; v.preload = 'auto'; }
         scheduleSupervision(200);
     });
-    window.addEventListener('yt-navigate-finish', function() { boostPlayback(); scheduleSupervision(200); });
-    window.addEventListener('yt-page-data-updated', function() { boostPlayback(); scheduleSupervision(250); });
-    window.addEventListener('popstate', function() { boostPlayback(); scheduleSupervision(200); });
-    document.addEventListener('DOMContentLoaded', function() { boostPlayback(); scheduleSupervision(200); });
+    window.addEventListener('yt-navigate-finish', function() { watchPlayerClass(); boostPlayback(); scheduleSupervision(200); });
+    window.addEventListener('yt-page-data-updated', function() { watchPlayerClass(); boostPlayback(); scheduleSupervision(250); });
+    window.addEventListener('popstate', function() { watchPlayerClass(); scheduleSupervision(200); });
+    document.addEventListener('DOMContentLoaded', function() { watchPlayerClass(); scheduleSupervision(200); });
 
     // 5. Background Audio Playback (Prevent pause on tab switch / window minimize)
     try {
