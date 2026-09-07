@@ -23,3 +23,5 @@ Final public sign-in check: after waiting for the ChatGPT page to finish initial
 1.0.11 default browser regression: the installed xdg-settings fix_local_desktop_file sleeps four seconds and appends MimeType after the last Desktop Action. The old UI timeout was three seconds. Added isolated native GIO registration tests checking all four web associations, malformed desktop group repair, action/localized-label preservation, idempotent repeat registration, unrelated PDF defaults and exact-ID/partial-state detection. Eighteen tests passed. The actual UI handler returned True in 0.033 seconds and xdg-settings check returned yes on the user's Cinnamon desktop.
 
 1.0.12: run `tests/network_runtime.py` for home-page DuckDuckGo recovery after an injected TLS EOF, or add `--permanent` to verify exactly one Safeer retry and a readable warning page. Run `tests/youtube_live.py` for the ten-video playback/ad run; observations are committed under tests/results/. See RELEASE_NOTES_1.0.12.md for scope and limits.
+
+1.0.13: `tests/youtube_startup.py /tmp/startup-results.json` measures five songs without repeated play calls. See RELEASE_NOTES_1.0.13.md for timings and limits.

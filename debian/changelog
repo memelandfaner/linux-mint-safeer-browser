@@ -1,3 +1,10 @@
+safeer-browser (1.0.13-0ubuntu1~noble1) noble; urgency=medium
+
+  * Reuse browser resources and reduce redundant YouTube script work.
+  * Add five-song startup and uninterrupted-playback regression runner.
+
+ -- Safeer Team <support@safeer.org>  Mon, 07 Sep 2026 05:25:00 +0200
+
 safeer-browser (1.0.12-0ubuntu1~noble1) noble; urgency=medium
 
   * Clean initial and asynchronous YouTube ad payloads before playback.

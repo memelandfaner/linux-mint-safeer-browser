@@ -1,9 +1,9 @@
 # Safeer Browser — Linux Mint & Ubuntu Edition 🛡️
 
-[![Release](https://img.shields.io/badge/Release-v1.0.12-emerald?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.12)
+[![Release](https://img.shields.io/badge/Release-v1.0.13-emerald?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.13)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux_Mint_%7C_Ubuntu_%7C_Debian-87cf3e?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser)
-[![Package](https://img.shields.io/badge/Package-.deb_(all)-cyan?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.12)
+[![Package](https://img.shields.io/badge/Package-.deb_(all)-cyan?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.13)
 [![Web](https://img.shields.io/badge/Spletna_stran-Linux_Izdaja-87cf3e?style=flat-square)](https://memelandfaner.github.io/-safeer-browser/linux/)
 
 > **Hiter, suveren in energetsko varčen Linux brskalnik, ki se odpre v trenutku, spoštuje zasebnost, blokira sledilce ter ponuja vgrajen YouTube predvajalnik brez oglasov in lokalni ščit pred zlonamernimi domenami.**
@@ -22,11 +22,11 @@
 ## 📦 Namestitev
 
 ### Nativni Debian paket (`.deb`):
-Najnovejšo različico prenesite s strani [GitHub Releases v1.0.12](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.12) ali namestite:
+Najnovejšo različico prenesite s strani [GitHub Releases v1.0.13](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.13) ali namestite:
 
 ```bash
 # Namestitev z apt:
-sudo apt install ./safeer-browser_1.0.12_all.deb
+sudo apt install ./safeer-browser_1.0.13_all.deb
 ```
 *Ali pa datoteko `.deb` preprosto dvokliknite v upravitelju datotek (Gdebi / Upravitelj programov).*
 
@@ -38,6 +38,14 @@ Paket avtomatsko:
 
 ### Kontrolne vsote (SHA-256)
 Prenesite `SHA256SUMS` iz iste izdaje kot paket in zaženite `sha256sum -c --ignore-missing SHA256SUMS`.
+
+## Popravki v1.0.13
+
+- Predpomnilnik za spletni brskalnik ponovno uporabi več že prenesenih datotek.
+- YouTube oglasni filter preskoči nepotrebno obdelavo podatkov brez oglasov.
+- Odstranjen je ponavljajoči splošni pregled celotne YouTube strani; namenski YouTube filter in omrežna zaščita ostajata vključena.
+- Pet skladb je prestalo preverjanje zagona in naslednjih 32 sekund predvajanja brez zaznanih oglasov, napak ali zastojev. Zagon še ni pri vseh skladbah hiter; ni dokazano, da je opozorilo o prekinitvah dokončno odpravljeno.
+- [Obseg meritev in omejitve](RELEASE_NOTES_1.0.13.md).
 
 ## Popravki v1.0.12
 
@@ -116,4 +124,4 @@ Pozabite na nerodno ročno pretvarjanje datotek. Safeer ob kliku na **📥 Uvozi
 - **Varnostni sloj**: **Safeer is a security layer, not a guarantee against all online threats.** Noben filter ne more zagotoviti 100 % zaščite pred neznanimi grožnjami (Zero-Day). Safeer deluje kot lokalni varnostni sloj, ki bistveno zmanjšuje tveganje in blokira znana škodljiva vozlišča ter sledilce.
 - **Priporočilo za vsakdanjo rabo**: Safeer je optimiziran za hitro, lahko in varno vsakodnevno spletno brskanje brez oglasov. Za bančne storitve s specifičnimi certifikati ali ponudnike z restriktivnim DRM predvajanjem po potrebi uporabite Firefox.
 - **Uradni repozitorij**: [https://github.com/memelandfaner/linux-mint-safeer-browser](https://github.com/memelandfaner/linux-mint-safeer-browser)
-- **Prenosi in izdaje**: [GitHub Releases v1.0.12](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.12)
+- **Prenosi in izdaje**: [GitHub Releases v1.0.13](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.13)

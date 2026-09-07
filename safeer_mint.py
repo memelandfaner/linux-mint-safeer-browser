@@ -375,9 +375,10 @@ class SafeerMintBrowser(Gtk.Window):
 
             self.web_context = WebKit2.WebContext.new_with_website_data_manager(self.website_data_manager)
 
-            # Optimiziran model predpomnilnika za namizje (manjša poraba RAM-a kot privzeti WEB_BROWSER)
+            # Reuse scripts, images and styles between real websites and song changes.
+            # DOCUMENT_BROWSER is intended for a series of local documents.
             try:
-                self.web_context.set_cache_model(WebKit2.CacheModel.DOCUMENT_BROWSER)
+                self.web_context.set_cache_model(WebKit2.CacheModel.WEB_BROWSER)
             except Exception as e:
                 print(f"[Memory] Opozorilo pri nastavitvi CacheModel: {e}")
 
@@ -389,7 +390,7 @@ class SafeerMintBrowser(Gtk.Window):
             print(f"[Storage] Opozorilo pri nastavitvi shrambe: {e}")
             self.web_context = WebKit2.WebContext.get_default()
             try:
-                self.web_context.set_cache_model(WebKit2.CacheModel.DOCUMENT_BROWSER)
+                self.web_context.set_cache_model(WebKit2.CacheModel.WEB_BROWSER)
             except Exception:
                 pass
 

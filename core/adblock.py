@@ -29,29 +29,20 @@ YOUTUBE_ADBLOCK_SCRIPT = """
     installAdCss();
     document.addEventListener('DOMContentLoaded', installAdCss);
 
-    // 0. Connection Pre-warming (Preconnect & DNS-prefetch)
-    try {
-        var preconnects = [
-            'https://i.ytimg.com',
-            'https://yt3.ggpht.com',
-            'https://m.youtube.com',
-            'https://www.youtube.com',
-            'https://youtubei.googleapis.com',
-            'https://jnn-pa.googleapis.com'
-        ];
-        preconnects.forEach(function(url) {
+    // Install only useful connection hints, even at document START before <head>.
+    // No speculative media downloads and no bypass of the configured DNS proxy.
+    function warmConnections() {
+        var parent = document.head || document.documentElement;
+        if (!parent || document.getElementById('safeer-yt-preconnect')) return;
+        ['https://i.ytimg.com', 'https://www.youtube.com'].forEach(function(url, index) {
             var link = document.createElement('link');
-            link.rel = 'preconnect';
-            link.href = url;
-            link.crossOrigin = 'anonymous';
-            document.head.appendChild(link);
-
-            var dnsLink = document.createElement('link');
-            dnsLink.rel = 'dns-prefetch';
-            dnsLink.href = url;
-            document.head.appendChild(dnsLink);
+            if (index === 0) link.id = 'safeer-yt-preconnect';
+            link.rel = 'preconnect'; link.href = url;
+            parent.appendChild(link);
         });
-    } catch(e) {}
+    }
+    warmConnections();
+    document.addEventListener('DOMContentLoaded', warmConnections, {once:true});
 
     // Remove ad instructions before the player consumes a response. The main
     // watch document assigns JavaScript objects directly, without JSON.parse.
@@ -59,6 +50,13 @@ YOUTUBE_ADBLOCK_SCRIPT = """
     var nativeStringify = JSON.stringify;
     var stats = window._safeerAdStats = {cleanedResponses:0, removedFields:0, skipClicks:0};
     var adKeys = ['adPlacements', 'playerAds', 'adSlots', 'adPlayback', 'adBreakHeartbeatParams'];
+    var adKeyPattern = /adPlacements|playerAds|adSlots|adPlayback|adBreakHeartbeatParams/;
+    function cleanPlayerText(text) {
+        if (typeof text !== 'string' || !adKeyPattern.test(text)) return text;
+        var removedBefore = stats.removedFields;
+        var data = cleanPlayerData(nativeParse(text));
+        return stats.removedFields === removedBefore ? text : nativeStringify(data);
+    }
     function cleanPlayerData(data, depth) {
         depth = depth || 0;
         if (depth > 6) return data;
@@ -74,7 +72,7 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             var value = data[key];
             if (value && typeof value === 'object' && value !== data) cleanPlayerData(value, depth + 1);
             else if (key === 'player_response' && typeof value === 'string') {
-                try { data[key] = nativeStringify(cleanPlayerData(nativeParse(value))); } catch (_) {}
+                try { data[key] = cleanPlayerText(value); } catch (_) {}
             }
         });
         if (Array.isArray(data)) data.forEach(function(item) { cleanPlayerData(item, depth + 1); });
@@ -97,7 +95,7 @@ YOUTUBE_ADBLOCK_SCRIPT = """
         if (args && typeof args === 'object') {
             watchProperty(args, 'player_response', function(value) {
                 if (typeof value === 'string') {
-                    try { return nativeStringify(cleanPlayerData(nativeParse(value))); } catch (_) {}
+                    try { return cleanPlayerText(value); } catch (_) {}
                 }
                 return cleanPlayerData(value);
             });
@@ -112,7 +110,11 @@ YOUTUBE_ADBLOCK_SCRIPT = """
         });
         return player;
     });
-    JSON.parse = function() { return cleanPlayerData(nativeParse.apply(this, arguments)); };
+    JSON.parse = function() {
+        var data = nativeParse.apply(this, arguments);
+        // Most YouTube JSON contains navigation or comments, not player ads.
+        return typeof arguments[0] !== 'string' || adKeyPattern.test(arguments[0]) ? cleanPlayerData(data) : data;
+    };
     function isPlayerApi(value) {
         try {
             var url = new URL(value, location.href);
@@ -131,9 +133,11 @@ YOUTUBE_ADBLOCK_SCRIPT = """
                 if (!resp.ok) return resp;
                 return resp.clone().text().then(function(text) {
                     try {
+                        var clean = cleanPlayerText(text);
+                        if (clean === text) return resp;
                         var headers = new Headers(resp.headers);
                         headers.delete('content-length'); headers.delete('content-encoding');
-                        var result = new Response(nativeStringify(cleanPlayerData(nativeParse(text))),
+                        var result = new Response(clean,
                             {status:resp.status, statusText:resp.statusText, headers:headers});
                         ['url','redirected','type'].forEach(function(key){ Object.defineProperty(result,key,{value:resp[key]}); });
                         return result;
@@ -161,7 +165,7 @@ YOUTUBE_ADBLOCK_SCRIPT = """
                     if (typeof original !== 'string' || !original) return original;
                     if (this._safeerCleanCache && this._safeerCleanCache.original === original) return this._safeerCleanCache.clean;
                     try {
-                        var clean = nativeStringify(cleanPlayerData(nativeParse(original)));
+                        var clean = cleanPlayerText(original);
                         this._safeerCleanCache = {original:original, clean:clean}; return clean;
                     } catch (_) { return original; }
                 }
@@ -484,6 +488,8 @@ GPC_AND_DNT_SCRIPT = """
 ANTI_CLICKJACKING_SCRIPT = """
 /* 🛡️ Safeer Anti-Clickjacking & Invisible Overlay Shield */
 (function() {
+    var host = location.hostname.toLowerCase();
+    if (host === 'youtube.com' || host.endsWith('.youtube.com')) return;
     function neutralizeClickjackingOverlays() {
         try {
             var allDivs = document.querySelectorAll('div, a, span');

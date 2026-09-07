@@ -53,6 +53,7 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.0.13" date="2026-09-07"><description><p>Reduce redundant YouTube page work and use the web browser resource cache.</p></description></release>
     <release version="1.0.12" date="2026-09-06">
       <description><p>Remove YouTube ad instructions before playback and recover safely from interrupted search connections.</p></description>
     </release>

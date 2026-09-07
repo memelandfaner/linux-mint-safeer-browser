@@ -51,6 +51,15 @@ assert(!nativeParse(xhr.responseText).playerResponse.adPlacements);
 const ordinary=new XMLHttpRequest();ordinary.open('GET','/other');ordinary.readyState=4;
 assert.strictEqual(ordinary.responseText,reply);
 assert.strictEqual(isPlayerApi('https://youtube.com.evil.test/youtubei/v1/player'),false);
+const unchanged = ' { "response": {"comments":[1,2,3]}, "value": 12345678901234567890 } ';
+assert.strictEqual(cleanPlayerText(unchanged), unchanged);
+assert.strictEqual(cleanPlayerText('{"description":"adPlacements"}'), '{"description":"adPlacements"}');
+const nested=nativeStringify({player_response:nativeStringify(source)});
+assert(!nativeParse(nativeParse(cleanPlayerText(nested)).player_response).adSlots);
+assert(!nativeParse(JSON.parse(nested).player_response).playerAds);
+let revived=JSON.parse('{"x":1}',(key,value)=>key==='x'?2:value);
+assert.strictEqual(revived.x,2);
+
 (async()=>{const response=await fetch('/youtubei/v1/next');const data=await response.json();assert(!data.playerResponse.adBreakHeartbeatParams);assert(data.playerResponse.streamingData);console.log('PASS: direct initial objects, late assignments, serialized config, fetch.json and XHR; media preserved');})().catch(e=>{console.error(e);process.exitCode=1});
 """
         subprocess.run(['node','-e',fixture+YOUTUBE_ADBLOCK_SCRIPT[start:end]+checks],check=True)
