@@ -568,9 +568,19 @@ class SafeerMintBrowser(Gtk.Window):
             accent = "#0060df"
             fg_main = "#fbfbfe"
 
+        font_choice = self.config.get("font_family", "system")
+        if font_choice == "sans":
+            font_family_css = '"Ubuntu", "Ubuntu Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        elif font_choice == "serif":
+            font_family_css = '"Noto Serif", "DejaVu Serif", "Times New Roman", serif'
+        elif font_choice == "monospace":
+            font_family_css = '"Fira Code", "JetBrains Mono", "DejaVu Sans Mono", monospace'
+        else:
+            font_family_css = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+
         css_data = f"""
         * {{
-            font-family: "Ubuntu", "Ubuntu Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: {font_family_css};
         }}
         window, paned, box, .view, WebKitWebView {{
             background-color: {bg_base};
@@ -1076,6 +1086,47 @@ class SafeerMintBrowser(Gtk.Window):
             css_data += "\n/* Uporabniški lasten CSS */\n" + custom_css
 
         self.css_provider.load_from_data(css_data.encode("utf-8"))
+
+    def apply_font_family(self, font_choice=None):
+        if font_choice is None:
+            font_choice = self.config.get("font_family", "system")
+        font_name = "sans-serif"
+        if font_choice == "sans":
+            font_name = "sans-serif"
+        elif font_choice == "serif":
+            font_name = "serif"
+        elif font_choice == "monospace":
+            font_name = "monospace"
+        elif font_choice == "system":
+            font_name = "system-ui"
+
+        for tab_id, tab_info in getattr(self, "tabs", {}).items():
+            wv = tab_info.get("webview")
+            if wv:
+                settings = wv.get_settings()
+                if settings:
+                    try:
+                        settings.set_default_font_family(font_name)
+                        if font_choice == "serif":
+                            settings.set_serif_font_family(font_name)
+                        elif font_choice == "monospace":
+                            settings.set_monospace_font_family(font_name)
+                        else:
+                            settings.set_sans_serif_font_family(font_name)
+                    except Exception as e:
+                        logger.debug(f"apply_font_family error: {e}")
+        self.apply_css()
+
+    def apply_brave_mode(self, enabled=None):
+        if enabled is None:
+            enabled = self.config.get("brave_mode_enabled", True)
+        b_str = "true" if enabled else "false"
+        js = f"if (window.setBraveMode) {{ window.setBraveMode({b_str}); }}"
+        for tab_id, tab_info in getattr(self, "tabs", {}).items():
+            wv = tab_info.get("webview")
+            uri = tab_info.get("uri", "")
+            if wv and ("ui/home.html" in uri or uri == "safeer://home"):
+                wv.run_javascript(js, None, None, None)
 
     def on_global_key_press(self, widget, event):
         ctrl = (event.state & Gdk.ModifierType.CONTROL_MASK) != 0
@@ -2738,7 +2789,7 @@ class SafeerMintBrowser(Gtk.Window):
         notebook.append_page(tab3_scroll, lbl_tab3)
 
         # =============================================================
-        # ZAVIHEK 4: 🎨 Videz & Skripte (Appearance & Tools)
+        # ZAVIHEK 4: 🎨 Izgled brskalnika (Browser Appearance)
         # =============================================================
         tab4_scroll = Gtk.ScrolledWindow()
         tab4_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -2749,11 +2800,11 @@ class SafeerMintBrowser(Gtk.Window):
         tab4_box.set_margin_end(8)
         tab4_scroll.add(tab4_box)
 
-        # Kartica 4.1: Tema vmesnika & Temni način
+        # Kartica 4.1: Izbira teme brskalnika & Temni način
         card_theme = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         card_theme.get_style_context().add_class("theme-card-box")
 
-        lbl_c_theme = Gtk.Label(label=f"<b><span size='11500'>🎨 {GLib.markup_escape_text(t('choose_theme', 'Tema vmesnika & Temni način'))}</span></b>")
+        lbl_c_theme = Gtk.Label(label=f"<b><span size='11500'>🎨 {GLib.markup_escape_text(t('choose_theme', 'Izbira teme brskalnika & Temni način'))}</span></b>")
         lbl_c_theme.set_use_markup(True)
         lbl_c_theme.set_xalign(0.0)
         card_theme.pack_start(lbl_c_theme, False, False, 0)
@@ -2792,15 +2843,39 @@ class SafeerMintBrowser(Gtk.Window):
 
         tab4_box.pack_start(card_theme, False, False, 0)
 
-        # Kartica 4.2: Povečava strani in pisave
-        card_zoom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        card_zoom.get_style_context().add_class("theme-card-box")
+        # Kartica 4.2: Izbor pisave & Povečava strani
+        card_font_zoom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        card_font_zoom.get_style_context().add_class("theme-card-box")
 
-        lbl_c_zoom = Gtk.Label(label="<b><span size='11500'>🔍 Velikost besedila & Povečava strani</span></b>")
-        lbl_c_zoom.set_use_markup(True)
-        lbl_c_zoom.set_xalign(0.0)
-        card_zoom.pack_start(lbl_c_zoom, False, False, 0)
+        lbl_c_font_zoom = Gtk.Label(label=f"<b><span size='11500'>🔤 {GLib.markup_escape_text('Pisava & Povečava strani')}</span></b>")
+        lbl_c_font_zoom.set_use_markup(True)
+        lbl_c_font_zoom.set_xalign(0.0)
+        card_font_zoom.pack_start(lbl_c_font_zoom, False, False, 0)
 
+        # Vrstica: Izbor pisave
+        font_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        lbl_ft_choice = Gtk.Label(label=t('font_family_lbl', 'Slog pisave:'))
+        lbl_ft_choice.set_xalign(0.0)
+        font_row.pack_start(lbl_ft_choice, False, False, 0)
+
+        combo_font = Gtk.ComboBoxText()
+        combo_font.append("system", f"🖥️ {t('font_system', 'Sistemska pisava (Privzeto)')}")
+        combo_font.append("sans", f"🔤 {t('font_sans', 'Brezserifna (Sans-serif: Inter, Roboto)')}")
+        combo_font.append("serif", f"📖 {t('font_serif', 'Serifna (Serif: Noto Serif)')}")
+        combo_font.append("monospace", f"💻 {t('font_monospace', 'Enakomerna (Monospace / Koda)')}")
+        cur_font = self.config.get("font_family", "system")
+        combo_font.set_active_id(cur_font)
+
+        def on_font_changed(cb):
+            new_f = cb.get_active_id() or "system"
+            self.config.set("font_family", new_f)
+            self.apply_font_family(new_f)
+
+        combo_font.connect("changed", on_font_changed)
+        font_row.pack_start(combo_font, True, True, 0)
+        card_font_zoom.pack_start(font_row, False, False, 2)
+
+        # Vrstica: Povečava strani
         zoom_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         lbl_zm_choice = Gtk.Label(label="Privzeta povečava:")
         lbl_zm_choice.set_xalign(0.0)
@@ -2830,11 +2905,37 @@ class SafeerMintBrowser(Gtk.Window):
 
         combo_zoom.connect("changed", on_zoom_changed)
         zoom_row.pack_start(combo_zoom, True, True, 0)
-        card_zoom.pack_start(zoom_row, False, False, 2)
+        card_font_zoom.pack_start(zoom_row, False, False, 2)
 
-        tab4_box.pack_start(card_zoom, False, False, 0)
+        tab4_box.pack_start(card_font_zoom, False, False, 0)
 
-        # Kartica 4.3: Napredno prilagajanje (Uporabniški CSS in Tampermonkey)
+        # Kartica 4.3: Brave način (Brave Shield stil začetne strani)
+        card_brave = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card_brave.get_style_context().add_class("theme-card-box")
+
+        lbl_c_brave = Gtk.Label(label=f"<b><span size='11500'>🦁 {GLib.markup_escape_text(t('brave_mode_title', 'Brave način'))}</span></b>")
+        lbl_c_brave.set_use_markup(True)
+        lbl_c_brave.set_xalign(0.0)
+        card_brave.pack_start(lbl_c_brave, False, False, 0)
+
+        brave_check = Gtk.CheckButton(label=t('brave_mode_chk', '🦁 Brave način (Brave Shield začetna stran, statistika in ura)'))
+        brave_check.set_active(self.config.get("brave_mode_enabled", True))
+        def on_brave_toggled(btn):
+            val = btn.get_active()
+            self.config.set("brave_mode_enabled", val)
+            self.apply_brave_mode(val)
+        brave_check.connect("toggled", on_brave_toggled)
+        card_brave.pack_start(brave_check, False, False, 4)
+
+        lbl_brave_sub = Gtk.Label(label=f"<span color='#94a3b8' size='9500'>    {GLib.markup_escape_text(t('brave_mode_desc', 'Ob izklopu začetna stran deluje v čistem minimalističnem načinu zgolj z iskalnikom in priljubljenimi zaznamki.'))}</span>")
+        lbl_brave_sub.set_use_markup(True)
+        lbl_brave_sub.set_xalign(0.0)
+        lbl_brave_sub.set_line_wrap(True)
+        card_brave.pack_start(lbl_brave_sub, False, False, 0)
+
+        tab4_box.pack_start(card_brave, False, False, 0)
+
+        # Kartica 4.4: Napredno prilagajanje (Uporabniški CSS in Tampermonkey)
         card_custom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         card_custom.get_style_context().add_class("theme-card-box")
 
@@ -2856,7 +2957,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         tab4_box.pack_start(card_custom, False, False, 0)
 
-        lbl_tab4 = Gtk.Label(label=f"🎨 {t('tab_appearance_tools', 'Videz & Teme')}")
+        lbl_tab4 = Gtk.Label(label=f"🎨 {t('tab_appearance_tools', 'Izgled brskalnika')}")
         notebook.append_page(tab4_scroll, lbl_tab4)
 
         dialog.show_all()
@@ -2883,6 +2984,22 @@ class SafeerMintBrowser(Gtk.Window):
             pass
 
         settings = webview.get_settings()
+        try:
+            font_choice = self.config.get("font_family", "system")
+            if font_choice == "sans":
+                settings.set_default_font_family("sans-serif")
+                settings.set_sans_serif_font_family("sans-serif")
+            elif font_choice == "serif":
+                settings.set_default_font_family("serif")
+                settings.set_serif_font_family("serif")
+            elif font_choice == "monospace":
+                settings.set_default_font_family("monospace")
+                settings.set_monospace_font_family("monospace")
+            elif font_choice == "system":
+                settings.set_default_font_family("system-ui")
+        except Exception:
+            pass
+
         settings.set_enable_developer_extras(True)
         settings.set_enable_webaudio(True)
         settings.set_enable_webgl(True)
@@ -3937,10 +4054,12 @@ class SafeerMintBrowser(Gtk.Window):
                         lang = get_current_language()
                         ads_blocked = self.config.get("total_ads_blocked", 0)
                         threats_blocked = self.config.get("total_threats_blocked", 0)
+                        brave_on = "true" if self.config.get("brave_mode_enabled", True) else "false"
                         js = (
                             f"if (window.setCustomPortals) {{ window.setCustomPortals({portals_json}); }} "
                             f"if (window.setAppLanguage) {{ window.setAppLanguage('{lang}'); }} "
-                            f"if (window.setShieldMetrics) {{ window.setShieldMetrics({ads_blocked}, {threats_blocked}); }}"
+                            f"if (window.setShieldMetrics) {{ window.setShieldMetrics({ads_blocked}, {threats_blocked}); }} "
+                            f"if (window.setBraveMode) {{ window.setBraveMode({brave_on}); }}"
                         )
                         webview.run_javascript(js, None, None, None)
                     break

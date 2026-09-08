@@ -22,7 +22,7 @@ const homeI18n = {
     search_placeholder: "Iščite z DuckDuckGo ali vnesite spletni naslov...",
     search_submit: "Išči",
     quick_lbl: "Hitre možnosti:",
-    quick_customizer: "🧩 Teme & Skripte",
+    quick_customizer: "🎨 Izgled brskalnika",
     quick_toolbar: "⚙️ Nastavitve",
     section_portals: "Tvoje priljubljene strani",
     portals_note: "Brez oglasov • Zasebno • Hitro",
@@ -53,7 +53,7 @@ const homeI18n = {
     search_placeholder: "Search with DuckDuckGo or enter web address...",
     search_submit: "Search",
     quick_lbl: "Quick Options:",
-    quick_customizer: "🧩 Themes & Scripts",
+    quick_customizer: "🎨 Browser Appearance",
     quick_toolbar: "⚙️ Settings",
     section_portals: "Your favorite sites",
     portals_note: "No Ads • Private • Ultra Fast",
@@ -264,6 +264,18 @@ window.setShieldMetrics = function(ads, threats) {
   currentAdsCount = Number(ads || 0);
   currentThreatsCount = Number(threats || 0);
   renderShieldMetrics();
+};
+
+window.setBraveMode = function(enabled) {
+  const header = document.querySelector('.shield-header');
+  if (header) {
+    header.style.display = enabled ? 'flex' : 'none';
+  }
+  if (enabled) {
+    document.body.classList.remove('minimal-mode');
+  } else {
+    document.body.classList.add('minimal-mode');
+  }
 };
 
 const searchUrls = {
