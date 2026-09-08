@@ -59,7 +59,7 @@ from core.default_browser import is_default_browser as system_is_default_browser
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
 USER_AGENT = None
-APP_VERSION = "1.0.15"
+APP_VERSION = "1.0.16"
 DOCK_WIDTH = 54
 
 
@@ -87,6 +87,13 @@ class SafeerMintBrowser(Gtk.Window):
     def __init__(self, initial_url=None):
         super().__init__()
         self.config = ConfigManager()
+
+        # Style the native window before creating or loading any web views.
+        # Keep this preference local to Safeer; never change the desktop theme.
+        gtk_settings = Gtk.Settings.get_default()
+        if gtk_settings:
+            gtk_settings.set_property("gtk-application-prefer-dark-theme", True)
+        self.apply_css()
 
         # Initialize configured interface language
         configured_lang = self.config.get("language", "auto")
@@ -142,18 +149,7 @@ class SafeerMintBrowser(Gtk.Window):
         self.setup_downloads_handling()
         self.setup_ipc_socket()
 
-        # Apply Linux Mint Dark Theme preference
-        settings = Gtk.Settings.get_default()
-        if settings:
-            settings.set_property("gtk-application-prefer-dark-theme", True)
-            try:
-                subprocess.Popen(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-dark"],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
-
         self.setup_ui(initial_url=initial_url)
-        self.apply_css()
 
         # Ponudi obnovo prejšnje seje zavihkov (samo če ni bil podan direkten URL)
         if not initial_url:
@@ -169,6 +165,54 @@ class SafeerMintBrowser(Gtk.Window):
         self.connect("key-press-event", self.on_global_key_press)
         # Connect delete-event to remember window size on exit
         self.connect("delete-event", self.on_delete_event)
+
+    def show_initial_window(self):
+        """Reveal a local home only after WebKit has produced its first frame."""
+        view = self.get_active_webview()
+        uri = view.get_uri() if view else ""
+        is_home = view is not None and (not uri or "ui/home.html" in uri)
+        if not is_home:
+            self.show_all()
+            return
+
+        self.set_opacity(0.0)
+        state = {"shown": False, "snapshot": False, "handler": None, "timeout": None}
+
+        def reveal():
+            if state["shown"]:
+                return False
+            state["shown"] = True
+            if state["handler"] is not None:
+                view.disconnect(state["handler"])
+            if state["timeout"] is not None:
+                GLib.source_remove(state["timeout"])
+                state["timeout"] = None
+            self.set_opacity(1.0)
+            return False
+
+        def frame_ready(webview, result, _data):
+            try:
+                webview.get_snapshot_finish(result)
+            except GLib.Error:
+                pass  # A failed local load must still leave a usable window.
+            reveal()
+
+        def request_frame():
+            if not state["shown"] and not state["snapshot"]:
+                state["snapshot"] = True
+                view.get_snapshot(WebKit2.SnapshotRegion.VISIBLE,
+                                  WebKit2.SnapshotOptions.NONE, None, frame_ready, None)
+            return False
+
+        def loaded(webview, event):
+            if event == WebKit2.LoadEvent.FINISHED:
+                GLib.idle_add(request_frame)
+
+        state["handler"] = view.connect("load-changed", loaded)
+        self.show_all()  # Allocate and paint while the initial window is transparent.
+        state["timeout"] = GLib.timeout_add(1800, reveal)
+        if not view.is_loading():
+            GLib.idle_add(request_frame)
 
     def on_delete_event(self, widget, event):
         """Zapomni si velikost okna, shrani sejo zavihkov in počisti IPC socket ob zaprtju."""
@@ -2746,7 +2790,7 @@ class SafeerMintBrowser(Gtk.Window):
     def setup_webview_settings(self, webview):
         # Set dark canvas background color instantly to eliminate white flashbang on load
         dark_bg = Gdk.RGBA()
-        dark_bg.parse("#080c16")
+        dark_bg.parse("#101814")
         webview.set_background_color(dark_bg)
 
         settings = webview.get_settings()
@@ -5603,8 +5647,8 @@ def main():
     app = SafeerMintBrowser(initial_url=target_url)
     app.connect("destroy", Gtk.main_quit)
 
-    # Clean atomic show
-    app.show_all()
+    # Paint the built-in home before making the first window visible.
+    app.show_initial_window()
 
     if not app.config.get("sidebar_enabled", True):
         app.sidebar_box.hide()

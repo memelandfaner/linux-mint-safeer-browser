@@ -17,7 +17,7 @@ const homeI18n = {
     lbl_threat_protection: "Zaščita pred grožnjami",
     lbl_speed: "Odzivnost",
     lbl_oss: "Odprta koda",
-    security_disclaimer: "<strong>Safeer is a security layer, not a guarantee against all online threats.</strong> Lokalni zaščitni sloj pred botneti, zlonamerno kodo in sledilci.",
+    security_disclaimer: "Filtri pomagajo zmanjšati oglase in blokirati znane grožnje. Ne zagotavljajo popolne zaščite ali delovanja vseh spletnih strani.",
     slogan_safe: "Varnejši na spletu. Brez oglasov.",
     search_placeholder: "Iščite z DuckDuckGo ali vnesite spletni naslov...",
     search_submit: "Išči",
