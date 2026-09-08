@@ -1263,7 +1263,8 @@ class SafeerMintBrowser(Gtk.Window):
     def zoom_reset(self):
         wv = self.get_active_webview()
         if wv:
-            wv.set_zoom_level(1.0)
+            def_zoom = float(self.config.get("default_zoom", 1.0))
+            wv.set_zoom_level(def_zoom)
 
     def print_current_page(self):
         """Natisni trenutno stran ali shrani kot PDF prek GTK Print dialoga."""
@@ -2502,7 +2503,7 @@ class SafeerMintBrowser(Gtk.Window):
         tab2_box.set_margin_end(8)
         tab2_scroll.add(tab2_box)
 
-        # Kartica 2.1: Zaščita vsebine & Temni način
+        # Kartica 2.1: Zaščita vsebine
         card_protect = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         card_protect.get_style_context().add_class("theme-card-box")
 
@@ -2520,11 +2521,6 @@ class SafeerMintBrowser(Gtk.Window):
         lbl_adguard_sub.set_use_markup(True)
         lbl_adguard_sub.set_xalign(0.0)
         card_protect.pack_start(lbl_adguard_sub, False, False, 0)
-
-        dark_check = Gtk.CheckButton(label=f"🌙 {t('force_dark_mode')}")
-        dark_check.set_active(self.config.get("force_dark_mode", True))
-        dark_check.connect("toggled", lambda b: self.toggle_dark_mode())
-        card_protect.pack_start(dark_check, False, False, 4)
 
         tab2_box.pack_start(card_protect, False, False, 0)
 
@@ -2753,10 +2749,96 @@ class SafeerMintBrowser(Gtk.Window):
         tab4_box.set_margin_end(8)
         tab4_scroll.add(tab4_box)
 
+        # Kartica 4.1: Tema vmesnika & Temni način
+        card_theme = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        card_theme.get_style_context().add_class("theme-card-box")
+
+        lbl_c_theme = Gtk.Label(label=f"<b><span size='11500'>🎨 {GLib.markup_escape_text(t('choose_theme', 'Tema vmesnika & Temni način'))}</span></b>")
+        lbl_c_theme.set_use_markup(True)
+        lbl_c_theme.set_xalign(0.0)
+        card_theme.pack_start(lbl_c_theme, False, False, 0)
+
+        theme_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        lbl_th_choice = Gtk.Label(label=t('theme_lbl', 'Slog teme:'))
+        lbl_th_choice.set_xalign(0.0)
+        theme_row.pack_start(lbl_th_choice, False, False, 0)
+
+        combo_theme = Gtk.ComboBoxText()
+        combo_theme.append("mint", "🍃 Linux Mint Emerald (Privzeto)")
+        combo_theme.append("midnight", "🌙 Firefox Midnight (Temna)")
+        combo_theme.append("neon", "⚡ Cyberpunk Neon (Visok kontrast)")
+        combo_theme.append("amoled", "🖤 Pure AMOLED Black (Črna)")
+        cur_th = self.config.get("theme", "mint")
+        combo_theme.set_active_id(cur_th)
+
+        def on_theme_changed(cb):
+            new_th = cb.get_active_id() or "mint"
+            self.config.set("theme", new_th)
+            self.apply_css()
+
+        combo_theme.connect("changed", on_theme_changed)
+        theme_row.pack_start(combo_theme, True, True, 0)
+        card_theme.pack_start(theme_row, False, False, 2)
+
+        dark_check = Gtk.CheckButton(label=f"🌙 {t('force_dark_mode')}")
+        dark_check.set_active(self.config.get("force_dark_mode", True))
+        dark_check.connect("toggled", lambda b: self.toggle_dark_mode())
+        card_theme.pack_start(dark_check, False, False, 4)
+
+        lbl_dark_sub = Gtk.Label(label="<span color='#94a3b8' size='9500'>    Avtomatsko prilagodi svetle spletne strani v temni način za manjše naprezanje oči.</span>")
+        lbl_dark_sub.set_use_markup(True)
+        lbl_dark_sub.set_xalign(0.0)
+        card_theme.pack_start(lbl_dark_sub, False, False, 0)
+
+        tab4_box.pack_start(card_theme, False, False, 0)
+
+        # Kartica 4.2: Povečava strani in pisave
+        card_zoom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        card_zoom.get_style_context().add_class("theme-card-box")
+
+        lbl_c_zoom = Gtk.Label(label="<b><span size='11500'>🔍 Velikost besedila & Povečava strani</span></b>")
+        lbl_c_zoom.set_use_markup(True)
+        lbl_c_zoom.set_xalign(0.0)
+        card_zoom.pack_start(lbl_c_zoom, False, False, 0)
+
+        zoom_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        lbl_zm_choice = Gtk.Label(label="Privzeta povečava:")
+        lbl_zm_choice.set_xalign(0.0)
+        zoom_row.pack_start(lbl_zm_choice, False, False, 0)
+
+        combo_zoom = Gtk.ComboBoxText()
+        combo_zoom.append("0.85", "85% (Kompaktno)")
+        combo_zoom.append("1.0", "100% (Običajno)")
+        combo_zoom.append("1.15", "115% (Udobno)")
+        combo_zoom.append("1.25", "125% (Večje)")
+        combo_zoom.append("1.5", "150% (Veliko)")
+        cur_zoom = str(self.config.get("default_zoom", 1.0))
+        if cur_zoom not in ("0.85", "1.0", "1.15", "1.25", "1.5"):
+            cur_zoom = "1.0"
+        combo_zoom.set_active_id(cur_zoom)
+
+        def on_zoom_changed(cb):
+            val_str = cb.get_active_id() or "1.0"
+            try:
+                val = float(val_str)
+                self.config.set("default_zoom", val)
+                wv = self.get_current_webview()
+                if wv:
+                    wv.set_zoom_level(val)
+            except Exception:
+                pass
+
+        combo_zoom.connect("changed", on_zoom_changed)
+        zoom_row.pack_start(combo_zoom, True, True, 0)
+        card_zoom.pack_start(zoom_row, False, False, 2)
+
+        tab4_box.pack_start(card_zoom, False, False, 0)
+
+        # Kartica 4.3: Napredno prilagajanje (Uporabniški CSS in Tampermonkey)
         card_custom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         card_custom.get_style_context().add_class("theme-card-box")
 
-        lbl_c_custom = Gtk.Label(label=f"<b><span size='11500'>🎨 {GLib.markup_escape_text(t('customizer_title'))}</span></b>")
+        lbl_c_custom = Gtk.Label(label=f"<b><span size='11500'>🧩 {GLib.markup_escape_text(t('customizer_title'))}</span></b>")
         lbl_c_custom.set_use_markup(True)
         lbl_c_custom.set_xalign(0.0)
         card_custom.pack_start(lbl_c_custom, False, False, 0)
@@ -2774,7 +2856,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         tab4_box.pack_start(card_custom, False, False, 0)
 
-        lbl_tab4 = Gtk.Label(label=f"🎨 {t('tab_appearance_tools')}")
+        lbl_tab4 = Gtk.Label(label=f"🎨 {t('tab_appearance_tools', 'Videz & Teme')}")
         notebook.append_page(tab4_scroll, lbl_tab4)
 
         dialog.show_all()
@@ -2792,6 +2874,13 @@ class SafeerMintBrowser(Gtk.Window):
         dark_bg = Gdk.RGBA()
         dark_bg.parse("#101814")
         webview.set_background_color(dark_bg)
+
+        try:
+            def_zoom = float(self.config.get("default_zoom", 1.0))
+            if def_zoom != 1.0:
+                webview.set_zoom_level(def_zoom)
+        except Exception:
+            pass
 
         settings = webview.get_settings()
         settings.set_enable_developer_extras(True)
