@@ -3,7 +3,13 @@ on:
   push:
     branches: ['**']
     tags: ['v*']
+    paths-ignore:
+      - 'windows/**'
+      - '.github/workflows/windows-package.yml'
   pull_request:
+    paths-ignore:
+      - 'windows/**'
+      - '.github/workflows/windows-package.yml'
   release:
     types: [published]
   workflow_dispatch:
