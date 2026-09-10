@@ -36,7 +36,7 @@ GLib.set_application_name("Safeer Browser")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
-from core.config import ConfigManager, SEARCH_ENGINES, normalize_web_url
+from core.config import CONFIG_DIR, ConfigManager, SEARCH_ENGINES, normalize_web_url
 from core.doh_proxy import get_doh_proxy, DOH_PROVIDERS
 from core.i18n import t, set_language, get_current_language, SUPPORTED_LANGUAGES
 from core.adblock import (
@@ -420,6 +420,7 @@ class SafeerMintBrowser(Gtk.Window):
                 print(f"[Memory] Opozorilo pri MemoryPressureSettings: {e}")
 
             self.web_context = WebKit2.WebContext.new_with_website_data_manager(self.website_data_manager)
+            self.web_context.set_sandbox_enabled(True)
 
             # Reuse scripts, images and styles between real websites and song changes.
             # DOCUMENT_BROWSER is intended for a series of local documents.
@@ -436,6 +437,7 @@ class SafeerMintBrowser(Gtk.Window):
         except Exception as e:
             print(f"[Storage] Opozorilo pri nastavitvi shrambe: {e}")
             self.web_context = WebKit2.WebContext.get_default()
+            self.web_context.set_sandbox_enabled(True)
             try:
                 self.web_context.set_cache_model(WebKit2.CacheModel.WEB_BROWSER)
             except Exception:
@@ -4256,20 +4258,19 @@ class SafeerMintBrowser(Gtk.Window):
         target_path = None
 
         if always_ask:
-            dialog = Gtk.FileChooserDialog(
+            dialog = Gtk.FileChooserNative(
                 title=f"📥 {t('save_download', 'Shrani prenos')} — Safeer Browser",
-                parent=self,
-                action=Gtk.FileChooserAction.SAVE
+                transient_for=self,
+                action=Gtk.FileChooserAction.SAVE,
+                accept_label=t("save", "Shrani"),
+                cancel_label=t("cancel", "Prekliči")
             )
-            dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
-            btn_save = dialog.add_button(t("save", "Shrani"), Gtk.ResponseType.OK)
-            btn_save.get_style_context().add_class("btn-primary-glow")
             dialog.set_current_folder(dl_dir)
             dialog.set_current_name(suggested_filename)
             dialog.set_do_overwrite_confirmation(True)
 
             resp = dialog.run()
-            if resp == Gtk.ResponseType.OK:
+            if resp == Gtk.ResponseType.ACCEPT:
                 target_path = dialog.get_filename()
             dialog.destroy()
             if not target_path:
@@ -4279,7 +4280,7 @@ class SafeerMintBrowser(Gtk.Window):
             target_path = self.get_unique_download_path(dl_dir, suggested_filename)
 
         if target_path:
-            dest_uri = f"file://{target_path}"
+            dest_uri = Gio.File.new_for_path(target_path).get_uri()
             download.set_destination(dest_uri)
 
             dl_data = {
@@ -4374,7 +4375,7 @@ class SafeerMintBrowser(Gtk.Window):
         btn_open_folder = Gtk.Button(label=t("open_downloads_folder"))
         btn_open_folder.get_style_context().add_class("btn-primary-glow")
         dl_dir = self.get_default_downloads_dir()
-        btn_open_folder.connect("clicked", lambda b: subprocess.Popen(["xdg-open", dl_dir]))
+        btn_open_folder.connect("clicked", lambda b: Gtk.show_uri_on_window(self, Gio.File.new_for_path(dl_dir).get_uri(), Gdk.CURRENT_TIME))
         header_box.pack_start(btn_open_folder, False, False, 0)
         content.pack_start(header_box, False, False, 0)
 
@@ -4416,7 +4417,7 @@ class SafeerMintBrowser(Gtk.Window):
                     btn_open = Gtk.Button(label=t("open_file"))
                     btn_open.get_style_context().add_class("nav-btn")
                     p = dl["path"]
-                    btn_open.connect("clicked", lambda b, path=p: subprocess.Popen(["xdg-open", path]))
+                    btn_open.connect("clicked", lambda b, path=p: Gtk.show_uri_on_window(self, Gio.File.new_for_path(path).get_uri(), Gdk.CURRENT_TIME))
                     row.pack_end(btn_open, False, False, 0)
 
                 dls_vbox.pack_start(row, False, False, 0)
@@ -5835,7 +5836,7 @@ def main():
         target_url = sys.argv[1]
 
     # Preveri, če Safeer že teče – v tem primeru povezavo nemudoma pošlji obstoječi instanci
-    sock_path = os.path.join(os.path.expanduser("~/.config/safeer-mint"), "safeer.sock")
+    sock_path = os.path.join(CONFIG_DIR, "safeer.sock")
     if os.path.exists(sock_path):
         try:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

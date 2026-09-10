@@ -12,12 +12,11 @@
     <p>
       Safeer Browser is an open-source, sovereign, and lightweight web browser
       natively engineered with GTK3 and WebKit2GTK for Linux Mint (Cinnamon, MATE, XFCE)
-      and Ubuntu. It starts in under half a second and consumes significantly less memory
-      than Chromium-based alternatives.
+      and Ubuntu. It provides bookmarks, configurable privacy settings and a desktop interface.
     </p>
     <p>Key Highlights:</p>
     <ul>
-      <li>Native zero-ad YouTube playback with seamless background audio.</li>
+      <li>YouTube playback and configurable ad filtering.</li>
       <li>Local reverse domain trie threat shield blocking botnets, ransomware, and phishing (abuse.ch).</li>
       <li>Instant 1-click bookmarks import directly from Firefox and Chrome profiles.</li>
       <li>Onboarding wizard with DuckDuckGo default search and optional default browser setting.</li>
@@ -27,7 +26,7 @@
     </ul>
   </description>
   <launchable type="desktop-id">safeer-browser.desktop</launchable>
-  <url type="homepage">https://memelandfaner.github.io/-safeer-browser/linux/</url>
+  <url type="homepage">https://safeer.si/browser/linux/</url>
   <url type="bugtracker">https://github.com/memelandfaner/linux-mint-safeer-browser/issues</url>
   <url type="vcs-browser">https://github.com/memelandfaner/linux-mint-safeer-browser</url>
   <categories>
@@ -53,6 +52,7 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.0.16" date="2026-09-09"><description><p>Linux packaging and desktop appearance improvements.</p></description></release>
     <release version="1.0.14" date="2026-09-07"><description><p>Preserve Grok sign-in pages, use native WebKit identity, and retain YouTube playback configuration.</p></description></release>
     <release version="1.0.13" date="2026-09-07"><description><p>Reduce redundant YouTube page work and use the web browser resource cache.</p></description></release>
     <release version="1.0.12" date="2026-09-06">

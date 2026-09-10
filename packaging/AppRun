@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+APPDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TRIPLET=x86_64-linux-gnu
+export SAFEER_PORTABLE=1
+export PATH="$APPDIR/usr/bin:$PATH"
+export LD_LIBRARY_PATH="$APPDIR/usr/lib:$APPDIR/usr/lib/$TRIPLET${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PYTHONHOME="$APPDIR/usr"
+export PYTHONNOUSERSITE=1
+export PYTHONPATH="$APPDIR/usr/lib/python3/dist-packages"
+export PYTHON="$APPDIR/usr/bin/python3"
+export GI_TYPELIB_PATH="$APPDIR/usr/lib/$TRIPLET/girepository-1.0"
+export GSETTINGS_SCHEMA_DIR="$APPDIR/usr/share/glib-2.0/schemas"
+export GIO_MODULE_DIR="$APPDIR/usr/lib/$TRIPLET/gio/modules"
+export WEBKIT_EXEC_PATH="$APPDIR/usr/lib/$TRIPLET/webkit2gtk-4.1"
+export WEBKIT_INJECTED_BUNDLE_PATH="$WEBKIT_EXEC_PATH/injected-bundle"
+export GST_PLUGIN_SYSTEM_PATH="$APPDIR/usr/lib/$TRIPLET/gstreamer-1.0"
+export GST_PLUGIN_SCANNER="$APPDIR/usr/lib/$TRIPLET/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
+export GTK_USE_PORTAL=1
+export XDG_DATA_DIRS="$APPDIR/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+# WebKit's process sandbox remains enabled. No --no-sandbox fallback.
+exec "$APPDIR/usr/bin/safeer" "$@"

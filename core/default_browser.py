@@ -82,6 +82,8 @@ def is_default_browser():
 
 
 def set_default_browser(app_dir):
+    if os.environ.get("FLATPAK_ID") or os.environ.get("APPIMAGE") or os.environ.get("SAFEER_PORTABLE"):
+        return False, ["Izberite Safeer v sistemskih nastavitvah privzetih aplikacij. / Select Safeer in your desktop default-app settings."]
     errors = []
     try:
         path = ensure_desktop_entry(app_dir)

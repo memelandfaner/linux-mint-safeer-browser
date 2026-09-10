@@ -126,3 +126,7 @@ Pozabite na nerodno ročno pretvarjanje datotek. Safeer ob kliku na **📥 Uvozi
 - **Priporočilo za vsakdanjo rabo**: Safeer je optimiziran za hitro, lahko in varno vsakodnevno spletno brskanje brez oglasov. Za bančne storitve s specifičnimi certifikati ali ponudnike z restriktivnim DRM predvajanjem po potrebi uporabite Firefox.
 - **Uradni repozitorij**: [https://github.com/memelandfaner/linux-mint-safeer-browser](https://github.com/memelandfaner/linux-mint-safeer-browser)
 - **Prenosi in izdaje**: [GitHub Releases v1.0.14](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.14)
+
+## Additional Linux packages
+
+The Linux packaging work now shares one application payload across **.deb, Flatpak and AppImage**. See [PACKAGING.md](PACKAGING.md) for build/install commands, permissions, release checks and the validation limitations. New formats must complete desktop acceptance testing before being advertised as production downloads.

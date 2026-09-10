@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Safeer Browser — shared application launcher
+# Used by all Linux distribution formats (.deb, Flatpak, AppImage).
+# Resolves the app payload relative to its own location so the exact same
+# script works from /usr/bin, /app/bin and <AppDir>/usr/bin.
+# ==============================================================================
+PRG="$0"
+
+while [ -h "$PRG" ]; do
+    link="$(readlink "$PRG")"
+    case "$link" in
+        /*) PRG="$link" ;;
+        *) PRG="$(dirname "$PRG")/$link" ;;
+    esac
+done
+
+BIN_DIR="$(cd "$(dirname "$PRG")" && pwd)"
+APP_DIR="$(cd "$BIN_DIR/../lib/safeer-browser" && pwd)" || {
+    echo "Safeer: application payload not found next to launcher." >&2
+    exit 1
+}
+
+# Gladko predvajanje zvoka brez prekinitev (PipeWire / PulseAudio 120ms buffer)
+export PULSE_LATENCY_MSEC=120
+export GST_PULSE_BUFFER_MS=120
+
+exec "${PYTHON:-python3}" "$APP_DIR/safeer_mint.py" "$@"

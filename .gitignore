@@ -13,3 +13,7 @@ build/
 dist/
 *.deb
 *.tar.gz
+
+.flatpak-builder/
+*.flatpak
+*.AppImage

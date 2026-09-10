@@ -1,0 +1,73 @@
+name: Linux packages
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deb-appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi python3-gi-cairo python3-pil gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-soup-3.0 desktop-file-utils appstream dpkg-dev libgstreamer1.0-0 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad glib-networking xvfb bubblewrap curl
+      - name: Verify version consistency
+        run: python3 packaging/check_version.py
+      - name: Unit tests
+        run: xvfb-run -a /usr/bin/python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Debian package and launch smoke
+        run: |
+          bash build_deb.sh
+          xvfb-run -a /usr/bin/python3 packaging/smoke.py build/stage/usr/lib/safeer-browser
+      - name: AppImage
+        run: |
+          bash packaging/fetch_linuxdeploy.sh
+          LINUXDEPLOY="$PWD/build/tools/linuxdeploy.AppImage" bash packaging/build_appimage.sh
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a python3 packaging/test_appimage.py dist/*.AppImage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-appimage
+          path: |
+            *.deb
+            dist/*.AppImage
+  flatpak:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Flatpak toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder appstream-compose desktop-file-utils
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub org.gnome.Platform//50 org.gnome.Sdk//50
+      - run: python3 packaging/check_version.py
+      - run: bash packaging/build_flatpak.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: dist/*.flatpak
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [deb-appimage, flatpak]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create draft release for final desktop acceptance checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          find artifacts -type f -exec sha256sum {} + > artifacts/SHA256SUMS
+          gh release create "$TAG" --draft --verify-tag --title "Safeer Browser $TAG" --notes 'Linux packages. Complete the desktop acceptance checklist before publishing.'
+          find artifacts -type f -exec gh release upload "$TAG" {} +

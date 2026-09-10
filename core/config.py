@@ -48,7 +48,7 @@ def normalize_web_url(url: str) -> str:
         return ""
 
 
-CONFIG_DIR = os.path.expanduser("~/.config/safeer-mint")
+CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "safeer-mint")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 SEARCH_ENGINES = {

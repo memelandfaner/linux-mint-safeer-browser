@@ -1,0 +1,25 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Safeer Browser
+GenericName=Web Browser
+GenericName[sl]=Spletni brskalnik
+GenericName[de]=Webbrowser
+GenericName[es]=Navegador Web
+GenericName[fr]=Navigateur Web
+GenericName[it]=Browser Web
+Comment=Sovereign, fast and private web browser for Linux Mint & Ubuntu
+Comment[sl]=Suveren, ultra-hiter in zaseben spletni brskalnik za Linux Mint in Ubuntu
+Exec=safeer %U
+Icon=safeer-browser
+Terminal=false
+StartupNotify=true
+StartupWMClass=safeer-browser
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New Window
+Name[sl]=Novo okno
+Exec=safeer
