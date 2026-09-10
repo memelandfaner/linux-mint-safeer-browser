@@ -52,6 +52,7 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.0.20" date="2026-09-10"><description><p>YouTube Music keeps playing in a minimized or background window: user activity stays current without timers and the idle prompt is confirmed immediately.</p></description></release>
     <release version="1.0.19" date="2026-09-10"><description><p>Hide empty ad inserts and "Please disable adblock or subscribe" placeholders on Push Square, Nintendo Life, Pure Xbox and Time Extension.</p></description></release>
     <release version="1.0.18" date="2026-09-10"><description><p>YouTube and YouTube Music keep playing without the "Video paused. Continue watching?" prompt.</p></description></release>
     <release version="1.0.17" date="2026-09-10"><description><p>Keep WebKit finalization on the GTK thread, prevent crash reload loops and defer restored background tabs.</p></description></release>
