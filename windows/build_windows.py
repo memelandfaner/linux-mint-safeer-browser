@@ -90,8 +90,97 @@ def pyinstaller() -> None:
               if name.lower() == "qtwebengineprocess.exe"]
     if not helper:
         raise SystemExit("QtWebEngineProcess.exe was not bundled")
-    size = sum(os.path.getsize(os.path.join(d, f)) for d, _s, files in os.walk(APP_DIR) for f in files)
-    print(f"built {EXE} ({size / 1048576:.0f} MB); helper: {helper[0]}")
+    print(f"built {EXE} ({dir_size(APP_DIR) / 1048576:.0f} MB); helper: {helper[0]}")
+    prune_bundle()
+
+
+def dir_size(path: str) -> int:
+    return sum(os.path.getsize(os.path.join(d, f)) for d, _s, files in os.walk(path) for f in files)
+
+
+# Qt plugin folders a Qt WebEngine widgets browser never loads.
+UNUSED_PLUGIN_DIRS = {
+    "assetimporters", "canbus", "designer", "geometryloaders", "help", "multimedia", "platforminputcontexts",
+    "qmllint", "qmltooling", "renderers", "renderplugins", "sceneparsers", "scxmldatamodel", "sensors",
+    "sqldrivers", "texttospeech", "virtualkeyboard", "webview", "3dinputdevices", "generic",
+}
+
+
+def pe_imports(path: str) -> set:
+    import pefile  # shipped with PyInstaller on Windows
+
+    pe = pefile.PE(path, fast_load=True)
+    try:
+        pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_IMPORT"],
+                                               pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT"]])
+        names = set()
+        for attribute in ("DIRECTORY_ENTRY_IMPORT", "DIRECTORY_ENTRY_DELAY_IMPORT"):
+            for entry in getattr(pe, attribute, None) or []:
+                names.add(entry.dll.decode("ascii", "ignore").lower())
+        return names
+    finally:
+        pe.close()
+
+
+def prune_bundle() -> None:
+    """Removes Qt modules (Qt 3D, Quick Controls, QML plugins ...) that nothing in the browser loads.
+
+    Roots are every executable, every collected PySide6 extension module (they import each other at
+    runtime), every kept Qt plugin and every non-Qt library; a Qt6*.dll stays when a root reaches it
+    through PE import tables, so the removals cannot break loading.
+    """
+    pyside = os.path.join(APP_DIR, "_internal", "PySide6")
+    if not os.path.isdir(pyside):
+        print("prune: PySide6 folder not found, skipped")
+        return
+    before = dir_size(APP_DIR)
+    shutil.rmtree(os.path.join(pyside, "qml"), ignore_errors=True)
+    plugins = os.path.join(pyside, "plugins")
+    if os.path.isdir(plugins):
+        for name in os.listdir(plugins):
+            if name.lower() in UNUSED_PLUGIN_DIRS:
+                shutil.rmtree(os.path.join(plugins, name), ignore_errors=True)
+    binaries = {}
+    for dirpath, _dirs, files in os.walk(APP_DIR):
+        for name in files:
+            if name.lower().endswith((".dll", ".pyd", ".exe")):
+                binaries.setdefault(name.lower(), os.path.join(dirpath, name))
+    roots = []
+    for name, path in binaries.items():
+        inside_pyside = os.path.abspath(path).lower().startswith(os.path.abspath(pyside).lower() + os.sep)
+        if not inside_pyside:
+            roots.append(path)
+        elif name.endswith(".exe") or os.sep + "plugins" + os.sep in path.lower():
+            roots.append(path)
+        elif not (name.startswith("qt6") and name.endswith(".dll")):
+            roots.append(path)
+    needed = set()
+    queue = list(roots)
+    while queue:
+        path = queue.pop()
+        key = os.path.basename(path).lower()
+        if key in needed:
+            continue
+        needed.add(key)
+        try:
+            imports = pe_imports(path)
+        except Exception as error:  # keep going; an unreadable binary is simply kept
+            print(f"prune: cannot read imports of {path}: {error}")
+            continue
+        queue.extend(binaries[name] for name in imports if name in binaries and name not in needed)
+    removed = []
+    for name, path in binaries.items():
+        inside_pyside = os.path.abspath(path).lower().startswith(os.path.abspath(pyside).lower() + os.sep)
+        if inside_pyside and name not in needed and name.startswith("qt6") and name.endswith(".dll"):
+            os.remove(path)
+            removed.append(name)
+    after = dir_size(APP_DIR)
+    print(f"prune: removed {len(removed)} binaries and unused QML/plugins, {before / 1048576:.0f} MB -> {after / 1048576:.0f} MB")
+    print("prune: removed", ", ".join(sorted(removed)))
+    largest = sorted(((os.path.getsize(os.path.join(d, f)), os.path.relpath(os.path.join(d, f), APP_DIR))
+                      for d, _s, files in os.walk(APP_DIR) for f in files), reverse=True)[:15]
+    for size, name in largest:
+        print(f"  {size / 1048576:6.1f} MB  {name}")
 
 
 def print_report(path: str) -> bool:
@@ -126,8 +215,33 @@ def smoke(command, report: str, online: bool, screenshot: str | None, env=None, 
     print(f"exit code {completed.returncode} after {time.monotonic() - started:.0f}s")
     ok = print_report(report)
     shutil.rmtree(data_dir, ignore_errors=True)
+    if screenshot:
+        print_screenshots(screenshot)
     if completed.returncode != 0 or not ok:
         raise SystemExit("smoke test failed")
+
+
+def print_screenshots(screenshot: str) -> None:
+    """Prints small JPEG previews into the CI log so the Windows UI can be reviewed without downloads."""
+    try:
+        import base64
+        import io
+        from PIL import Image
+    except ImportError:
+        return
+    stem, ext = os.path.splitext(os.path.abspath(screenshot))
+    for path in (stem + ext, stem + "-settings" + ext):
+        if not os.path.exists(path):
+            continue
+        image = Image.open(path).convert("RGB")
+        image.thumbnail((960, 960))
+        buffer = io.BytesIO()
+        image.save(buffer, "JPEG", quality=62, optimize=True)
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        print(f"SAFEER_SCREENSHOT_BEGIN {os.path.basename(path)} {image.size[0]}x{image.size[1]} {len(encoded)}")
+        for start in range(0, len(encoded), 2000):
+            print(encoded[start:start + 2000])
+        print("SAFEER_SCREENSHOT_END")
 
 
 def smoke_source(args) -> None:
