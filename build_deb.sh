@@ -46,7 +46,8 @@ chmod 644 "$BUILD_ROOT/DEBIAN/control"
 # 7. Create DEBIAN/postinst & DEBIAN/postrm
 cat << 'EOF' > "$BUILD_ROOT/DEBIAN/postinst"
 #!/bin/sh
-set -euo pipefail
+# dpkg runs maintainer scripts with /bin/sh (dash): POSIX options only.
+set -eu
 
 if [ -x /usr/bin/update-desktop-database ]; then
     /usr/bin/update-desktop-database -q /usr/share/applications || true
@@ -68,9 +69,10 @@ chmod 755 "$BUILD_ROOT/DEBIAN/postinst"
 
 cat << 'EOF' > "$BUILD_ROOT/DEBIAN/postrm"
 #!/bin/sh
-set -euo pipefail
+# dpkg runs maintainer scripts with /bin/sh (dash): POSIX options only.
+set -eu
 
-if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+if [ "${1:-}" = "remove" ] || [ "${1:-}" = "purge" ]; then
     if [ -x /usr/bin/update-desktop-database ]; then
         /usr/bin/update-desktop-database -q /usr/share/applications || true
     fi
@@ -94,6 +96,12 @@ chmod 644 "$BUILD_ROOT/DEBIAN/control"
 chmod 755 "$BUILD_ROOT/DEBIAN/postinst"
 chmod 755 "$BUILD_ROOT/DEBIAN/postrm"
 chmod 755 "$BUILD_ROOT/usr/bin/safeer"
+
+# Maintainer scripts must be valid for dash, which dpkg uses as /bin/sh.
+for script in "$BUILD_ROOT/DEBIAN/postinst" "$BUILD_ROOT/DEBIAN/postrm"; do
+    if command -v dash >/dev/null 2>&1; then dash -n "$script"; else sh -n "$script"; fi
+    if grep -q pipefail "$script"; then echo "pipefail is not supported by /bin/sh: $script" >&2; exit 1; fi
+done
 
 # 8. Build Debian package (all architecture)
 echo "🔨 Izdelava paketa z dpkg-deb..."
