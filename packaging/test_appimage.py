@@ -13,4 +13,21 @@ with tempfile.TemporaryDirectory(prefix='safeer-appimage-test-') as directory:
         raise SystemExit('Unrecognized AppRun entry point')
     runner.write_text(content.replace(entry,'exec "$PYTHON" "$@"'))
     runner.chmod(0o755)
-    subprocess.run([str(runner),str(repo/'packaging/smoke.py'),str(appdir/'usr/lib/safeer-browser')],check=True,timeout=45)
+    smoke=[str(repo/'packaging/smoke.py'),str(appdir/'usr/lib/safeer-browser')]
+    if subprocess.run([str(runner),*smoke],timeout=45).returncode!=0:
+        # Diagnostics only: find which AppRun variable breaks the bundled runtime. Never used for release.
+        variants={'LD_LIBRARY_PATH':['LD_LIBRARY_PATH'],'GIO_MODULE_DIR':['GIO_MODULE_DIR'],
+                  'GSETTINGS_SCHEMA_DIR':['GSETTINGS_SCHEMA_DIR'],'GST':['GST_PLUGIN_SYSTEM_PATH','GST_PLUGIN_SCANNER'],
+                  'WEBKIT_EXEC_PATH':['WEBKIT_EXEC_PATH','WEBKIT_INJECTED_BUNDLE_PATH'],'GTK_USE_PORTAL':['GTK_USE_PORTAL'],
+                  'XDG_DATA_DIRS':['XDG_DATA_DIRS'],
+                  'ALL_RUNTIME_PATHS':['LD_LIBRARY_PATH','GIO_MODULE_DIR','GSETTINGS_SCHEMA_DIR','GST_PLUGIN_SYSTEM_PATH','GST_PLUGIN_SCANNER','WEBKIT_EXEC_PATH','WEBKIT_INJECTED_BUNDLE_PATH','GTK_USE_PORTAL','XDG_DATA_DIRS']}
+        for label,names in variants.items():
+            variant=appdir/f'.smoke-without-{label}'
+            text=runner.read_text().replace('exec "$PYTHON" "$@"','unset '+' '.join(names)+'\nexec "$PYTHON" "$@"')
+            variant.write_text(text);variant.chmod(0o755)
+            try:
+                code=subprocess.run([str(variant),*smoke],timeout=45,capture_output=True,text=True).returncode
+            except subprocess.TimeoutExpired:
+                code='timeout'
+            print(f'DIAGNOSTIC without {label}: exit {code}',flush=True)
+        raise SystemExit('AppImage smoke failed')
