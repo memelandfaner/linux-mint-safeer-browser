@@ -11,7 +11,7 @@ jobs:
   deb-appimage:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install build and test dependencies
         run: |
           sudo apt-get update
@@ -26,6 +26,12 @@ jobs:
         run: |
           bash build_deb.sh
           xvfb-run -a /usr/bin/python3 packaging/smoke.py build/stage/usr/lib/safeer-browser
+      - name: Install, launch and remove the Debian package
+        run: |
+          sudo apt-get install -y "./safeer-browser_$(cat packaging/VERSION)_all.deb"
+          xvfb-run -a safeer --version | tee /dev/stderr | grep -Fx "Safeer Browser $(cat packaging/VERSION)"
+          desktop-file-validate /usr/share/applications/safeer-browser.desktop
+          sudo apt-get remove -y safeer-browser
       - name: AppImage
         run: |
           bash packaging/fetch_linuxdeploy.sh
@@ -40,7 +46,7 @@ jobs:
   flatpak:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Flatpak toolchain
         run: |
           sudo apt-get update
@@ -70,6 +76,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
-          find artifacts -type f -exec sha256sum {} + > artifacts/SHA256SUMS
+          mkdir -p release
+          find artifacts -type f \( -name '*.deb' -o -name '*.AppImage' -o -name '*.flatpak' \) -exec mv -t release {} +
+          (cd release && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
           gh release create "$TAG" --draft --verify-tag --title "Safeer Browser $TAG" --notes 'Linux packages. Complete the desktop acceptance checklist before publishing.'
-          find artifacts -type f -exec gh release upload "$TAG" {} +
+          gh release upload "$TAG" release/*
