@@ -1045,3 +1045,64 @@ YOUTUBE_KEEP_WATCHING_SCRIPT = r"""
     else document.addEventListener('DOMContentLoaded', start);
 })();
 """
+
+# Push Square, Nintendo Life, Pure Xbox, Time Extension: hide empty ad inserts and the
+# "Please disable adblock or subscribe" placeholder (EasyList: ##.insert, ##.insert-label, ##.item-insert).
+HOOKSHOT_INSERTS_SCRIPT = r"""
+/* Safeer: remove empty ad inserts and the "Please disable adblock or subscribe" placeholders
+   on Hookshot Media sites (Push Square, Nintendo Life, Pure Xbox, Time Extension). */
+(function () {
+    var host = (location.hostname || '').toLowerCase();
+    var sites = ['pushsquare.com', 'nintendolife.com', 'purexbox.com', 'timeextension.com', 'digitalfoundry.net'];
+    var match = false;
+    for (var i = 0; i < sites.length; i++) {
+        if (host === sites[i] || host.slice(-(sites[i].length + 1)) === '.' + sites[i]) match = true;
+    }
+    if (!match || window.__safeerHookshotInserts) return;
+    window.__safeerHookshotInserts = true;
+
+    var CSS = '.insert, .insert-label, .item-insert, .for-mobile.below-article, [style*="min-height:250px;"]' +
+        '{display:none !important;height:0 !important;min-height:0 !important;margin:0 !important;padding:0 !important}';
+
+    function addStyle() {
+        if (document.getElementById('safeer-hookshot-inserts')) return;
+        var style = document.createElement('style');
+        style.id = 'safeer-hookshot-inserts';
+        style.textContent = CSS;
+        var parent = document.head || document.documentElement;
+        if (parent) parent.appendChild(style);
+    }
+
+    var NOTICE = /disable\s+ad\s*block|or\s+subscribe/i;
+    function hideNotices() {
+        var labels = document.querySelectorAll('span, p, div, strong, small');
+        for (var i = 0; i < labels.length; i++) {
+            var el = labels[i];
+            if (el.__safeerChecked || el.children.length > 2) continue;
+            var text = el.textContent || '';
+            if (text.length > 80 || !NOTICE.test(text)) continue;
+            el.__safeerChecked = true;
+            // Hide the whole insert (label plus the reserved subscription box), never the article.
+            var box = el.closest('.insert, .item-insert, [class*="insert"], aside, figure') || el.parentElement;
+            if (!box || box === document.body || box.tagName === 'ARTICLE' || box.tagName === 'MAIN') box = el;
+            box.style.setProperty('display', 'none', 'important');
+        }
+    }
+
+    function run() { addStyle(); hideNotices(); }
+    var queued = false;
+    var observing = false;
+    function start() {
+        run();
+        if (observing || !document.documentElement) return;
+        observing = true;
+        new MutationObserver(function () {
+            if (queued) return;
+            queued = true;
+            setTimeout(function () { queued = false; run(); }, 300);
+        }).observe(document.documentElement, { childList: true, subtree: true });
+    }
+    if (document.documentElement) start();
+    document.addEventListener('DOMContentLoaded', start);
+})();
+"""
