@@ -1,4 +1,6 @@
 import os
+import re
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -31,3 +33,20 @@ class PackagingTests(unittest.TestCase):
             output=subprocess.check_output([str(prefix/'bin/safeer-browser'),'https://example.com/a b'],env={**os.environ,'PYTHON':str(fake)},text=True).splitlines()
             self.assertEqual(output,[str(prefix/'lib/safeer-browser/safeer_mint.py'),'https://example.com/a b'])
             subprocess.run(['desktop-file-validate',str(prefix/'share/applications/safeer-browser.desktop')],check=True)
+
+    def test_debian_maintainer_scripts_are_posix_sh(self):
+        text=(ROOT/'build_deb.sh').read_text()
+        scripts=re.findall(r"cat << 'EOF' > \"\$BUILD_ROOT/DEBIAN/(post(?:inst|rm))\"\n(.*?)\nEOF\n",text,re.S)
+        self.assertEqual({name for name,_ in scripts},{'postinst','postrm'})
+        shell=shutil.which('dash') or shutil.which('sh')
+        for name,body in scripts:
+            self.assertTrue(body.startswith('#!/bin/sh\n'),name)
+            self.assertNotIn('pipefail',body,name)
+            subprocess.run([shell,'-n'],input=body,text=True,check=True)
+            for action in ('configure','remove'):
+                with tempfile.TemporaryDirectory() as directory:
+                    # Run with empty PATH stubs so no host alternatives or caches are touched.
+                    result=subprocess.run([shell,'-c',body.replace('/usr/bin/','/nonexistent/').replace('/usr/sbin/','/nonexistent/'),name,action],
+                                          env={'PATH':directory},capture_output=True,text=True)
+                    self.assertEqual(result.returncode,0,(name,action,result.stderr))
+
