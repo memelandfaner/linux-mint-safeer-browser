@@ -20,6 +20,8 @@ jobs:
         run: python3 packaging/check_version.py
       - name: Unit tests
         run: xvfb-run -a /usr/bin/python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Stability regression
+        run: xvfb-run -a /usr/bin/python3 tests/stability_runtime.py
       - name: Debian package and launch smoke
         run: |
           bash build_deb.sh

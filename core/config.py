@@ -5,6 +5,7 @@ Manages user preferences, modular sidebar integrations, and virtual keyboard set
 """
 
 import os
+import copy
 import re
 import json
 import uuid
@@ -136,13 +137,17 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
             "color": "#ea4335"
         }
     },
-    "custom_portals": [
+    "custom_portals": [],
+    "default_bookmarks_removed": True
+}
+
+
+LEGACY_DEFAULT_PORTALS = [
         {"id": "p0", "title": "YouTube", "url": "https://www.youtube.com", "mark": "📺", "bg": "linear-gradient(145deg, #4a0b0b, #cc0000)", "color": "#cc0000"},
         {"id": "p1", "title": "Wikipedia", "url": "https://www.wikipedia.org", "mark": "🌐", "bg": "linear-gradient(145deg, #1e293b, #475569)", "color": "#64748b"},
         {"id": "p2", "title": "GitHub", "url": "https://github.com", "mark": "🐙", "bg": "linear-gradient(145deg, #1b1f24, #24292e)", "color": "#24292e"},
         {"id": "p3", "title": "DuckDuckGo", "url": "https://duckduckgo.com", "mark": "🦆", "bg": "linear-gradient(145deg, #3d2303, #de5833)", "color": "#de5833"}
     ]
-}
 
 
 class ConfigManager:
@@ -162,13 +167,17 @@ class ConfigManager:
             try:
                 with open(self.config_file, "r", encoding="utf-8") as f:
                     user_settings = json.load(f)
-                    merged = DEFAULT_SETTINGS.copy()
+                    merged = copy.deepcopy(DEFAULT_SETTINGS)
                     merged.update(user_settings)
                     # If youtube was previously in integrations, remove it as requested
                     if "integrations" in merged and "youtube" in merged["integrations"]:
                         del merged["integrations"]["youtube"]
                     # Migration: migrate hydrahd.ws to 365.rtvslo.si and disable sample script
                     migrated = False
+                    if not user_settings.get("default_bookmarks_removed", False):
+                        merged["custom_portals"] = [p for p in merged.get("custom_portals", []) if p not in LEGACY_DEFAULT_PORTALS]
+                        merged["default_bookmarks_removed"] = True
+                        migrated = True
                     for p in merged.get("custom_portals", []):
                         if "hydrahd.ws" in p.get("url", ""):
                             p["url"] = "https://365.rtvslo.si"
@@ -186,7 +195,7 @@ class ConfigManager:
                 print(f"[Config] Napaka pri branju nastavitev: {e}")
 
         self.save_settings(DEFAULT_SETTINGS)
-        return DEFAULT_SETTINGS.copy()
+        return copy.deepcopy(DEFAULT_SETTINGS)
 
     def save_settings(self, settings: Dict[str, Any] = None) -> bool:
         if settings is not None:
@@ -339,9 +348,6 @@ class ConfigManager:
     def get_portals(self):
         """Vrne seznam priljubljenih strani in portalov ter zagotovi enolične ID-je."""
         portals = self.get("custom_portals", [])
-        if not portals:
-            portals = [dict(p) for p in DEFAULT_SETTINGS["custom_portals"]]
-            self.set("custom_portals", portals)
 
         modified = False
         seen_ids = set()

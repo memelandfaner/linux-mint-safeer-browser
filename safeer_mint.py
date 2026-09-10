@@ -36,6 +36,7 @@ GLib.set_application_name("Safeer Browser")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
+from core.runtime_safety import install_main_thread_gc, collect_closed_views
 from core.config import CONFIG_DIR, ConfigManager, SEARCH_ENGINES, normalize_web_url
 from core.doh_proxy import get_doh_proxy, DOH_PROVIDERS
 from core.i18n import t, set_language, get_current_language, SUPPORTED_LANGUAGES
@@ -59,7 +60,7 @@ from core.default_browser import is_default_browser as system_is_default_browser
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
 USER_AGENT = None
-APP_VERSION = "1.0.16"
+APP_VERSION = "1.0.17"
 DOCK_WIDTH = 54
 
 
@@ -85,6 +86,7 @@ def is_safe_web_url(url: str) -> bool:
 
 class SafeerMintBrowser(Gtk.Window):
     def __init__(self, initial_url=None):
+        install_main_thread_gc()
         super().__init__()
         self.config = ConfigManager()
 
@@ -243,6 +245,13 @@ class SafeerMintBrowser(Gtk.Window):
             sock_path = os.path.join(self.config.config_dir, "safeer.sock")
             if os.path.exists(sock_path):
                 os.remove(sock_path)
+            if getattr(self, "ipc_server_sock", None) is not None:
+                try:
+                    self.ipc_server_sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                self.ipc_server_sock.close()
+                self.ipc_server_sock = None
             # Ustavi lokalni DoH posrednik, če je aktiven
             get_doh_proxy(enabled=False)
         except Exception:
@@ -311,7 +320,7 @@ class SafeerMintBrowser(Gtk.Window):
                         is_active = tab_data.get("active", False)
                         if is_active:
                             active_url = url
-                        self.new_tab(url=url, switch=False)
+                        self.new_tab(url=url, switch=False, defer=True)
                 # Preklopi na aktivni zavihek
                 if active_url:
                     for tab in self.tabs:
@@ -3687,7 +3696,7 @@ class SafeerMintBrowser(Gtk.Window):
         tab = self.get_active_tab()
         return tab["webview"] if tab else None
 
-    def new_tab(self, url=None, switch=True, related_view=None):
+    def new_tab(self, url=None, switch=True, related_view=None, defer=False):
         self.tab_counter += 1
         tab_id = f"tab_{self.tab_counter}"
 
@@ -3842,7 +3851,7 @@ class SafeerMintBrowser(Gtk.Window):
             # Dinamični čuvaj zvoka in procesorja:
             # Če zavihek v ozadju predvaja zvok (npr. YouTube Music), ga ohrani na polni hitrosti
             # Če ne predvaja zvoka in ni aktiven, ga uspavaj za prihranek RAM-a in procesorja
-            if tid != self.active_tab_id:
+            if tid != self.active_tab_id and not getattr(w, "_safeer_crashed", False):
                 if playing:
                     w.run_javascript("if (window.__safeerResumeTab) window.__safeerResumeTab();", None, None, None)
                 else:
@@ -3887,6 +3896,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         tab_data = {
             "id": tab_id,
+            "deferred": bool(defer and related_view is None),
             "webview": wv,
             "title": "Nova stran",
             "icon": "🌐",
@@ -3899,7 +3909,9 @@ class SafeerMintBrowser(Gtk.Window):
         self.tabs.append(tab_data)
 
         target = url or "safeer://home"
-        if related_view is not None:
+        if tab_data["deferred"]:
+            pass  # Restored background tabs load only when selected.
+        elif related_view is not None:
             pass  # The create signal's caller loads the exact original request.
         elif target == "safeer://home":
             home_path = os.path.join(BASE_DIR, "ui", "home.html")
@@ -3946,12 +3958,14 @@ class SafeerMintBrowser(Gtk.Window):
         self.tabs.remove(tab_to_close)
 
         self.tabs_box.remove(tab_to_close["event_box"])
+        if tab_to_close.get("crash_notice") is not None:
+            notice = tab_to_close["crash_notice"]
+            self.webview_stack.remove(notice)
+            notice.destroy()
         self.webview_stack.remove(tab_to_close["webview"])
         tab_to_close["webview"].destroy()
-        try:
-            self.web_context.clear_cache()
-        except Exception:
-            pass
+        # Do not flush every other tab's cache when closing one tab.
+        GLib.idle_add(collect_closed_views)
 
         if self.active_tab_id == tab_id:
             new_idx = max(0, idx - 1)
@@ -3964,9 +3978,13 @@ class SafeerMintBrowser(Gtk.Window):
             is_active = (tab["id"] == tab_id)
             if is_active:
                 target = tab
+                if tab.pop("deferred", False):
+                    tab["webview"].load_uri(self.get_home_uri() if tab["uri"] == "safeer://home" else tab["uri"])
                 tab["tab_box"].get_style_context().add_class("active-tab")
                 tab["tab_box"].get_style_context().remove_class("inactive-tab")
                 try:
+                    if tab.get("crashed") or tab.get("deferred"):
+                        continue
                     tab["webview"].run_javascript("if (window.__safeerResumeTab) window.__safeerResumeTab();", None, None, None)
                 except Exception:
                     pass
@@ -3974,6 +3992,8 @@ class SafeerMintBrowser(Gtk.Window):
                 tab["tab_box"].get_style_context().remove_class("active-tab")
                 tab["tab_box"].get_style_context().add_class("inactive-tab")
                 try:
+                    if tab.get("crashed") or tab.get("deferred"):
+                        continue
                     is_audio = tab["webview"].get_property("is-playing-audio")
                     if not is_audio:
                         tab["webview"].run_javascript("if (window.__safeerThrottleTab) window.__safeerThrottleTab();", None, None, None)
@@ -3985,7 +4005,7 @@ class SafeerMintBrowser(Gtk.Window):
         if not target:
             return
 
-        self.webview_stack.set_visible_child(target["webview"])
+        self.webview_stack.set_visible_child(target.get("crash_notice") or target["webview"])
 
         cur_uri = target["webview"].get_uri() or target["uri"] or ""
         self.url_entry.set_text(self.format_clean_url(cur_uri))
@@ -4035,6 +4055,18 @@ class SafeerMintBrowser(Gtk.Window):
             self.switch_to_tab(self.tabs[-1]["id"])
 
     def on_tab_load_changed(self, tab_id, webview, event):
+        if event == WebKit2.LoadEvent.STARTED:
+            webview._safeer_crashed = False
+            for item in self.tabs:
+                if item["id"] == tab_id:
+                    item["crashed"] = False
+                    notice = item.pop("crash_notice", None)
+                    if notice is not None:
+                        self.webview_stack.remove(notice)
+                        notice.destroy()
+                        if self.active_tab_id == tab_id:
+                            self.webview_stack.set_visible_child(webview)
+                    break
         if event == WebKit2.LoadEvent.FINISHED:
             uri = webview.get_uri() or ""
             title = webview.get_title() or ""
@@ -4127,18 +4159,40 @@ class SafeerMintBrowser(Gtk.Window):
         return f"file://{home_path}"
 
     def on_web_process_terminated(self, tab_id, webview, reason):
-        print(f"⚠️ [Safeer WebProcess Guard] Proces zavihka {tab_id} se je ustavil ({reason}). Samodejno obnavljam...")
-        def recover():
-            try:
-                uri = webview.get_uri()
-                if uri and "ui/home.html" not in uri:
-                    webview.load_uri(uri)
-                else:
-                    webview.load_uri(self.get_home_uri())
-            except Exception as e:
-                print(f"[Safeer WebProcess Guard] Napaka pri obnovi: {e}")
-            return False
-        GLib.timeout_add(500, recover)
+        tab = next((item for item in self.tabs if item["id"] == tab_id), None)
+        if tab is None or tab.get("crash_notice") is not None:
+            return
+        tab["crashed"] = True
+        webview._safeer_crashed = True
+        webview._safeer_network_errors.cancel_pending()
+        # Log only the reason: URLs may contain login tokens or private queries.
+        print(f"[Safeer] Web process stopped: {reason.value_nick}; awaiting manual reload", flush=True)
+        notice = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        notice.set_halign(Gtk.Align.CENTER)
+        notice.set_valign(Gtk.Align.CENTER)
+        title = Gtk.Label(label="Zavihek se je ustavil / Tab stopped")
+        notice.pack_start(title, False, False, 0)
+        message = Gtk.Label(label="Zaprite nepotrebne zavihke in poskusite znova.\nClose unused tabs, then try again.")
+        notice.pack_start(message, False, False, 0)
+        retry = Gtk.Button(label="Ponovno naloži / Reload")
+        def reload_tab(_button):
+            if tab not in self.tabs:
+                return
+            tab["crashed"] = False
+            webview._safeer_crashed = False
+            tab["crash_notice"] = None
+            self.webview_stack.remove(notice)
+            notice.destroy()
+            if self.active_tab_id == tab_id:
+                self.webview_stack.set_visible_child(webview)
+            webview.reload()
+        retry.connect("clicked", reload_tab)
+        notice.pack_start(retry, False, False, 0)
+        tab["crash_notice"] = notice
+        self.webview_stack.add_named(notice, tab_id + "-crashed")
+        notice.show_all()
+        if self.active_tab_id == tab_id:
+            self.webview_stack.set_visible_child(notice)
 
 
     # -------------------------------------------------------------

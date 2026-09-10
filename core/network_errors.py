@@ -61,6 +61,10 @@ class NetworkErrorHandler:
                 self.retried.clear()
 
     def destroyed(self, *args):
+        self.cancel_pending()
+
+    def cancel_pending(self):
+        self.generation += 1
         if self.pending:
             GLib.source_remove(self.pending)
             self.pending = None
@@ -75,6 +79,8 @@ class NetworkErrorHandler:
         return True
 
     def load_failed(self, view, event, uri, error):
+        if getattr(view, "_safeer_crashed", False):
+            return True
         if error.matches(WebKit2.network_error_quark(), WebKit2.NetworkError.CANCELLED):
             return False
         if error.matches(WebKit2.policy_error_quark(), WebKit2.PolicyError.FRAME_LOAD_INTERRUPTED_BY_POLICY_CHANGE):
