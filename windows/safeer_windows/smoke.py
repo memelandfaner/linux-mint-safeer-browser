@@ -180,6 +180,8 @@ class SmokeRunner(QObject):
         expected = len(browser.settings.get("custom_portals")) + 1
         self.check("home_page_ready", ready == expected, {"cards": ready, "expected": expected})
         subtitle = yield Js(page, "(document.querySelector('.shield-subtitle')||{}).textContent || ''")
+        icons = {name: not window.app.icons[name].pixmap(18, 18).isNull() for name in ("back", "reload", "home", "star", "menu", "close")}
+        self.check("toolbar_icons_loaded", all(icons.values()), icons)
         self.check("home_page_windows_label", "Windows" in str(subtitle), subtitle)
 
         target = self.base + "/after"
