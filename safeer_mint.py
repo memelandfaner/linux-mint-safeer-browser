@@ -43,6 +43,7 @@ from core.i18n import t, set_language, get_current_language, SUPPORTED_LANGUAGES
 from core.adblock import (
     YOUTUBE_ADBLOCK_SCRIPT,
     YOUTUBE_KEEP_WATCHING_SCRIPT,
+    HOOKSHOT_INSERTS_SCRIPT,
     ADGUARD_PROTECTION_SCRIPT,
     GENERIC_COSMETIC_SCRIPT,
     GPC_AND_DNT_SCRIPT,
@@ -61,7 +62,7 @@ from core.default_browser import is_default_browser as system_is_default_browser
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
 USER_AGENT = None
-APP_VERSION = "1.0.18"
+APP_VERSION = "1.0.19"
 DOCK_WIDTH = 54
 
 
@@ -3745,6 +3746,15 @@ class SafeerMintBrowser(Gtk.Window):
             WebKit2.UserScriptInjectionTime.START,
             ["*://*.youtube.com/*", "*://youtube.com/*"],
             AUTH_SCRIPT_EXCLUSIONS + ["*://accounts.youtube.com/*"]
+        ))
+
+        # 2.0.2. Push Square / Nintendo Life / Pure Xbox / Time Extension ad inserts
+        content_mgr.add_script(WebKit2.UserScript(
+            HOOKSHOT_INSERTS_SCRIPT,
+            WebKit2.UserContentInjectedFrames.TOP_FRAME,
+            WebKit2.UserScriptInjectionTime.START,
+            [f"*://{d}/*" for site in ("pushsquare.com", "nintendolife.com", "purexbox.com", "timeextension.com", "digitalfoundry.net") for d in (site, "*." + site)],
+            None
         ))
 
         # 2.1. Vgrajena AdGuard Zaščitna razširitev (Anti-Adblock Defuser & Cosmetic Rules)
