@@ -484,9 +484,12 @@ HOME_ADAPTER_JS = r"""
     var PREFIX = '__safeer_bridge__:';
     var bridge = { postMessage: function (message) { try { console.log(PREFIX + JSON.stringify(message)); } catch (e) {} } };
     try { window.webkit = { messageHandlers: { safeer: bridge } }; } catch (e) {}
+    var defaultBrowser = { sl: '🌐 Privzeti brskalnik', en: '🌐 Default browser', de: '🌐 Standardbrowser',
+        es: '🌐 Navegador predeterminado', fr: '🌐 Navigateur par défaut', it: '🌐 Browser predefinito' };
     try {
         Object.keys(homeI18n).forEach(function (lang) {
             homeI18n[lang].shield_subtitle = lang === 'sl' ? 'Brskalnik za Windows' : 'Made for Windows';
+            homeI18n[lang].quick_default = defaultBrowser[lang] || defaultBrowser.en;
         });
     } catch (e) {}
     var windowsPortals = null;
@@ -550,6 +553,7 @@ def home_html() -> str:
     page = page.replace("Safeer Browser — Linux Mint Edition", "Safeer Browser")
     page = page.replace("Linux Mint Suverena Izdaja", "Brskalnik za Windows")
     page = page.replace('<span class="shield-status">Linux Mint</span>', '<span class="shield-status">Windows</span>')
+    page = page.replace('>🌐 Privzeti brskalnik</button>', ' data-i18n="quick_default">🌐 Privzeti brskalnik</button>')
     page = page.replace('<script src="home.js"></script>',
                         '<script src="storage-guard.js"></script>\n  <script src="home.js"></script>\n'
                         '  <script src="windows-adapter.js"></script>')
@@ -594,6 +598,29 @@ def scheme_resource(host: str, path: str, query: str, lang: str = "sl") -> Optio
         with open(shared_path(relative), "rb") as handle:
             return mime, handle.read()
     return None
+
+
+ICON_SHAPES = {
+    "back": '<polyline points="15 18 9 12 15 6"/>',
+    "forward": '<polyline points="9 18 15 12 9 6"/>',
+    "reload": '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><polyline points="20 4 20 9 15 9"/>',
+    "stop": '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
+    "home": '<path d="M4 11.5 12 4.5l8 7"/><path d="M6.5 10v9.5h11V10"/>',
+    "star": '<polygon points="12 3.5 14.6 9 20.5 9.6 16 13.6 17.3 19.5 12 16.5 6.7 19.5 8 13.6 3.5 9.6 9.4 9"/>',
+    "download": '<path d="M12 4v11"/><polyline points="7 10.5 12 15.5 17 10.5"/><path d="M5 19.5h14"/>',
+    "menu": '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>',
+    "plus": '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+    "up": '<polyline points="6 15 12 9 18 15"/>',
+    "down": '<polyline points="6 9 12 15 18 9"/>',
+    "close": '<line x1="7" y1="7" x2="17" y2="17"/><line x1="17" y1="7" x2="7" y2="17"/>',
+}
+
+
+def icon_svg(name: str, color: str = "#e2e8f0", fill: str = "none", size: int = 48) -> str:
+    """Simple line icons (drawn for Safeer) as SVG markup."""
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 24 24" '
+            f'fill="{fill}" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+            f'{ICON_SHAPES[name]}</svg>')
 
 
 def home_state(settings: SettingsStore) -> Dict[str, Any]:
