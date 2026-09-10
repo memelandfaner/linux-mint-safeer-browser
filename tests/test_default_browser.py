@@ -25,8 +25,10 @@ MimeType=text/html;
 '''
         repaired=default.desktop_entry_text(original,'/tmp')
         self.assertEqual(default.desktop_entry_text(repaired,'/tmp'),repaired)
-        key=GLib.KeyFile();key.load_from_data(repaired,len(repaired.encode()),GLib.KeyFileFlags.NONE)
+        # KEEP_TRANSLATIONS: without it GLib drops Name[sl] unless the runner locale is Slovenian.
+        key=GLib.KeyFile();key.load_from_data(repaired,len(repaired.encode()),GLib.KeyFileFlags.KEEP_TRANSLATIONS)
         self.assertEqual(set(key.get_string_list('Desktop Entry','MimeType')),set(default.WEB_TYPES))
+        self.assertIn('Name[sl]=Moj brskalnik',repaired)
         self.assertEqual(key.get_string('Desktop Entry','Name[sl]'),'Moj brskalnik')
         self.assertEqual(key.get_string('Desktop Action NewWindow','Exec'),'/usr/bin/true')
         self.assertNotIn('MimeType',key.get_keys('Desktop Action NewWindow')[0])
