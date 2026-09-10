@@ -274,10 +274,32 @@ class SmokeRunner(QObject):
             self.check("youtube_scripts_active", bool(youtube), youtube or view.url().toString())
 
         if self.args.screenshot:
+            from .browser import SettingsDialog
             window.load_in_current(policy.HOME_URL)
             yield from self.wait_js(page, "document.documentElement.getAttribute('data-safeer-ready') === '1'", 30)
             yield Sleep(1.5)
-            self.check("screenshot_saved", window.grab().save(self.args.screenshot), self.args.screenshot, required=False)
+            self.check("screenshot_saved", self.capture(window, self.args.screenshot), self.args.screenshot, required=False)
+            dialog = SettingsDialog(window)
+            dialog.show()
+            yield Sleep(1.0)
+            settings_shot = os.path.splitext(self.args.screenshot)[0] + "-settings" + os.path.splitext(self.args.screenshot)[1]
+            self.check("settings_screenshot_saved", self.capture(dialog, settings_shot), settings_shot, required=False)
+            dialog.close()
+
+    @staticmethod
+    def capture(widget, path: str) -> bool:
+        widget.raise_()
+        widget.activateWindow()
+        try:
+            from PIL import ImageGrab
+            geometry = widget.frameGeometry()
+            ratio = widget.devicePixelRatioF()
+            box = (int(geometry.x() * ratio), int(geometry.y() * ratio),
+                   int((geometry.x() + geometry.width()) * ratio), int((geometry.y() + geometry.height()) * ratio))
+            ImageGrab.grab(bbox=box, all_screens=True).save(path)
+            return True
+        except Exception:
+            return bool(widget.grab().save(path))
 
     # -- report -------------------------------------------------------------------
     def finish(self) -> None:
