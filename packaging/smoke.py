@@ -31,10 +31,10 @@ result={'ok':False,'started':False}
 def finish_download(download):
     target=pathlib.Path(profile.name)/'smoke.txt'
     if target.read_bytes()!=b'Safeer download fixture':
-        Gtk.main_quit();return
+        print('FAIL: downloaded bytes differ',flush=True);Gtk.main_quit();return
     window.config.set('packaging_smoke_marker','persistent')
     if ConfigManager().get('packaging_smoke_marker')!='persistent':
-        Gtk.main_quit();return
+        print('FAIL: settings were not persisted',flush=True);Gtk.main_quit();return
     result['ok']=bool(window.web_context.get_sandbox_enabled())
     print('PASS: full browser rendered HTTP, downloaded exact bytes and persisted settings',flush=True)
     print('WebKit sandbox enabled:',window.web_context.get_sandbox_enabled(),flush=True)
@@ -45,12 +45,17 @@ def finish_check(webview, event):
     result['started']=True
     download=window.web_context.download_uri(url+'/download')
     download.connect('finished',finish_download)
-    download.connect('failed',lambda *_: Gtk.main_quit())
+    download.connect('failed',lambda _d,error: (print('FAIL: download failed:',error.message,flush=True),Gtk.main_quit()))
 view.connect('load-changed',finish_check)
 view.connect('notify::title',lambda v,p: finish_check(v,WebKit2.LoadEvent.FINISHED))
-view.connect('web-process-terminated',lambda *_: Gtk.main_quit())
+view.connect('web-process-terminated',lambda _v,reason: (print('FAIL: web process terminated:',reason.value_nick,flush=True),Gtk.main_quit()))
+view.connect('load-failed',lambda _v,_e,uri,error: print('load-failed:',uri,error.message,flush=True))
 window.show_all()
-GLib.timeout_add_seconds(30,lambda: (Gtk.main_quit(),False)[1])
+def timed_out():
+    print('FAIL: timeout; title=%r uri=%r download_started=%s' % (view.get_title(),view.get_uri(),result['started']),flush=True)
+    Gtk.main_quit();return False
+print('WebKitGTK %d.%d.%d' % (WebKit2.get_major_version(),WebKit2.get_minor_version(),WebKit2.get_micro_version()),flush=True)
+GLib.timeout_add_seconds(30,timed_out)
 Gtk.main()
 window.destroy()
 server.shutdown();server.server_close();profile.cleanup()
