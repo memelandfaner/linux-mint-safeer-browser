@@ -16,7 +16,8 @@ export WEBKIT_EXEC_PATH="$APPDIR/usr/lib/$TRIPLET/webkit2gtk-4.1"
 export WEBKIT_INJECTED_BUNDLE_PATH="$WEBKIT_EXEC_PATH/injected-bundle"
 export GST_PLUGIN_SYSTEM_PATH="$APPDIR/usr/lib/$TRIPLET/gstreamer-1.0"
 export GST_PLUGIN_SCANNER="$APPDIR/usr/lib/$TRIPLET/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
-export GTK_USE_PORTAL=1
+# Do not force GTK_USE_PORTAL: GLib then routes proxy/network monitoring through
+# xdg-desktop-portal and page loads hang where no portal is running.
 export XDG_DATA_DIRS="$APPDIR/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 # WebKit's process sandbox remains enabled. No --no-sandbox fallback.
 exec "$APPDIR/usr/bin/safeer" "$@"
