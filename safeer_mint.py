@@ -42,6 +42,7 @@ from core.doh_proxy import get_doh_proxy, DOH_PROVIDERS
 from core.i18n import t, set_language, get_current_language, SUPPORTED_LANGUAGES
 from core.adblock import (
     YOUTUBE_ADBLOCK_SCRIPT,
+    YOUTUBE_KEEP_WATCHING_SCRIPT,
     ADGUARD_PROTECTION_SCRIPT,
     GENERIC_COSMETIC_SCRIPT,
     GPC_AND_DNT_SCRIPT,
@@ -60,7 +61,7 @@ from core.default_browser import is_default_browser as system_is_default_browser
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
 USER_AGENT = None
-APP_VERSION = "1.0.17"
+APP_VERSION = "1.0.18"
 DOCK_WIDTH = 54
 
 
@@ -3736,6 +3737,15 @@ class SafeerMintBrowser(Gtk.Window):
             AUTH_SCRIPT_EXCLUSIONS + ["*://accounts.youtube.com/*", "*://accounts.google.com/*", "*://myaccount.google.com/*"]
         )
         content_mgr.add_script(yt_script)
+
+        # 2.0.1. Keep YouTube / YouTube Music playing without the "Continue watching?" pause
+        content_mgr.add_script(WebKit2.UserScript(
+            YOUTUBE_KEEP_WATCHING_SCRIPT,
+            WebKit2.UserContentInjectedFrames.TOP_FRAME,
+            WebKit2.UserScriptInjectionTime.START,
+            ["*://*.youtube.com/*", "*://youtube.com/*"],
+            AUTH_SCRIPT_EXCLUSIONS + ["*://accounts.youtube.com/*"]
+        ))
 
         # 2.1. Vgrajena AdGuard Zaščitna razširitev (Anti-Adblock Defuser & Cosmetic Rules)
         if self.config.get("adguard_protection_enabled", True):
