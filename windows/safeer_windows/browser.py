@@ -12,9 +12,9 @@ import time
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import (QBuffer, QByteArray, QCoreApplication, QEvent, QIODevice, QObject, QStandardPaths, Qt,
-                            QTimer, QUrl)
-from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QShortcut
+from PySide6.QtCore import (QBuffer, QByteArray, QCoreApplication, QEvent, QIODevice, QObject, QSize, QStandardPaths,
+                            Qt, QTimer, QUrl)
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWebEngineCore import (QWebEngineDownloadRequest, QWebEnginePage, QWebEngineProfile, QWebEngineScript,
                                      QWebEngineSettings, QWebEngineUrlRequestInfo, QWebEngineUrlRequestInterceptor,
@@ -111,6 +111,8 @@ QTabBar { background: #0b120e; }
 QTabBar::tab { background: #0b120e; color: #adbbb2; padding: 7px 12px; border: 0; min-width: 110px; max-width: 220px; }
 QTabBar::tab:selected { background: #19241e; color: #f8fafc; border-top: 2px solid #87cf3e; }
 QTabBar::tab:hover:!selected { background: #141e18; }
+QTabBar::close-button { subcontrol-position: right; padding: 2px; border-radius: 4px; }
+QTabBar::close-button:hover { background: #2f4238; }
 QWidget#findbar { background: #19241e; border-top: 1px solid #2f4238; }
 QWidget#findbar QLineEdit { background: #101814; color: #f1f5f9; border: 1px solid #2f4238; border-radius: 8px; padding: 4px 8px; }
 QStatusBar { background: #0b120e; color: #adbbb2; }
@@ -123,6 +125,28 @@ QPushButton { background: #19241e; color: #f1f5f9; border: 1px solid #50616b; bo
 QPushButton:hover { background: #20312d; border-color: #6b7c86; }
 QPushButton:default { background: #9bd478; color: #0b120e; border-color: #9bd478; }
 """
+
+
+def make_icon(name: str, color: str = "#e2e8f0", fill: str = "none") -> QIcon:
+    icon = QIcon()
+    for mode, stroke in ((QIcon.Mode.Normal, color), (QIcon.Mode.Disabled, "#4b5b52")):
+        pixmap = QPixmap()
+        pixmap.loadFromData(QByteArray(policy.icon_svg(name, stroke, fill if mode == QIcon.Mode.Normal else "none").encode("utf-8")), "SVG")
+        if not pixmap.isNull():
+            icon.addPixmap(pixmap, mode)
+    return icon
+
+
+def tab_close_style() -> str:
+    folder = os.path.join(policy.data_dir(), "ui")
+    try:
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, "tab-close.svg")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(policy.icon_svg("close", "#adbbb2", size=16))
+    except OSError:
+        return ""
+    return 'QTabBar::close-button { image: url("%s"); }\n' % path.replace("\\", "/")
 
 
 def tr(browser: "SafeerBrowserApp", key: str, **values: Any) -> str:
@@ -275,7 +299,9 @@ class SafeerBrowserApp(QObject):
         self.save_timer.setInterval(4000)
         self.save_timer.timeout.connect(self.flush_counters)
         self.save_timer.start()
-        qt_app.setStyleSheet(STYLE)
+        qt_app.setStyleSheet(STYLE + tab_close_style())
+        self.icons = {name: make_icon(name) for name in policy.ICON_SHAPES}
+        self.icons["star_filled"] = make_icon("star", "#9bd478", "#9bd478")
         icon_path = self.icon_path()
         if icon_path:
             qt_app.setWindowIcon(QIcon(icon_path))
@@ -544,17 +570,17 @@ class BrowserWindow(QMainWindow):
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self.on_current_changed)
         self.new_tab_button = QToolButton(self)
-        self.new_tab_button.setText("+")
+        self.new_tab_button.setIcon(app.icons["plus"])
         self.new_tab_button.clicked.connect(lambda: self.new_tab(policy.HOME_URL))
         self.tabs.setCornerWidget(self.new_tab_button, Qt.Corner.TopRightCorner)
 
         self.toolbar = QToolBar(self)
         self.toolbar.setMovable(False)
         self.addToolBar(self.toolbar)
-        self.back_button = self._tool("←", lambda: self.current_view() and self.current_view().back())
-        self.forward_button = self._tool("→", lambda: self.current_view() and self.current_view().forward())
-        self.reload_button = self._tool("↻", self.reload_or_stop)
-        self.home_button = self._tool("⌂", lambda: self.load_in_current(policy.HOME_URL))
+        self.back_button = self._tool("back", lambda: self.current_view() and self.current_view().back())
+        self.forward_button = self._tool("forward", lambda: self.current_view() and self.current_view().forward())
+        self.reload_button = self._tool("reload", self.reload_or_stop)
+        self.home_button = self._tool("home", lambda: self.load_in_current(policy.HOME_URL))
         self.address = QLineEdit(self)
         self.address.setObjectName("address")
         self.address.setClearButtonEnabled(True)
@@ -563,10 +589,11 @@ class BrowserWindow(QMainWindow):
         self.shield_label = QLabel(self)
         self.shield_label.setObjectName("shield")
         self.toolbar.addWidget(self.shield_label)
-        self.star_button = self._tool("☆", self.add_current_to_home)
-        self.downloads_button = self._tool("⤓", self.show_downloads)
+        self.star_button = self._tool("star", self.add_current_to_home)
+        self.downloads_button = self._tool("download", self.show_downloads)
         self.menu_button = QToolButton(self)
-        self.menu_button.setText("≡")
+        self.menu_button.setIcon(app.icons["menu"])
+        self.menu_button.setIconSize(QSize(18, 18))
         self.menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.menu = QMenu(self)
         self.menu_button.setMenu(self.menu)
@@ -587,9 +614,10 @@ class BrowserWindow(QMainWindow):
         self.update_shield()
 
     # -- construction helpers ---------------------------------------------
-    def _tool(self, text: str, callback) -> QToolButton:
+    def _tool(self, icon: str, callback) -> QToolButton:
         button = QToolButton(self)
-        button.setText(text)
+        button.setIcon(self.app.icons[icon])
+        button.setIconSize(QSize(18, 18))
         button.clicked.connect(callback)
         self.toolbar.addWidget(button)
         return button
@@ -603,13 +631,13 @@ class BrowserWindow(QMainWindow):
         self.find_input.textChanged.connect(lambda text: self.find(text))
         self.find_input.returnPressed.connect(lambda: self.find(self.find_input.text()))
         previous = QToolButton(bar)
-        previous.setText("↑")
+        previous.setIcon(self.app.icons["up"])
         previous.clicked.connect(lambda: self.find(self.find_input.text(), backward=True))
         following = QToolButton(bar)
-        following.setText("↓")
+        following.setIcon(self.app.icons["down"])
         following.clicked.connect(lambda: self.find(self.find_input.text()))
         close = QToolButton(bar)
-        close.setText("✕")
+        close.setIcon(self.app.icons["close"])
         close.clicked.connect(self.hide_find)
         row.addWidget(self.find_input, 1)
         row.addWidget(previous)
@@ -902,7 +930,7 @@ class BrowserWindow(QMainWindow):
     def on_load_state(self, view: QWebEngineView, loading: bool) -> None:
         view.setProperty("loading", loading)
         if view is self.current_view():
-            self.reload_button.setText("✕" if loading else "↻")
+            self.reload_button.setIcon(self.app.icons["stop" if loading else "reload"])
             self.reload_button.setToolTip(tr(self.app, "stop" if loading else "reload"))
 
     def on_load_finished(self, view: QWebEngineView, ok: bool) -> None:
@@ -1069,8 +1097,8 @@ class BrowserWindow(QMainWindow):
             self.app.settings.set("custom_portals", portals)
             self.refresh_all_home_tabs()
         self.statusBar().showMessage(tr(self.app, "added_home"), 4000)
-        self.star_button.setText("★")
-        QTimer.singleShot(1500, lambda: self.star_button.setText("☆"))
+        self.star_button.setIcon(self.app.icons["star_filled"])
+        QTimer.singleShot(1500, lambda: self.star_button.setIcon(self.app.icons["star"]))
 
     def refresh_all_home_tabs(self) -> None:
         for window in self.app.windows:
