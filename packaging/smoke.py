@@ -53,6 +53,8 @@ view.connect('load-failed',lambda _v,_e,uri,error: print('load-failed:',uri,erro
 window.show_all()
 def timed_out():
     print('FAIL: timeout; title=%r uri=%r download_started=%s' % (view.get_title(),view.get_uri(),result['started']),flush=True)
+    import subprocess as _sp
+    print(_sp.run(['ps','-eo','pid,ppid,stat,wchan:24,args'],capture_output=True,text=True).stdout.replace('\n','\n  ')[:6000] if True else '',flush=True)
     Gtk.main_quit();return False
 print('WebKitGTK %d.%d.%d' % (WebKit2.get_major_version(),WebKit2.get_minor_version(),WebKit2.get_micro_version()),flush=True)
 GLib.timeout_add_seconds(30,timed_out)
