@@ -922,12 +922,22 @@ YOUTUBE_KEEP_WATCHING_SCRIPT = r"""
     if (window.top !== window || window.__safeerKeepWatching) return;
     window.__safeerKeepWatching = true;
 
-    // YouTube compares window._lact (time of the last user activity) with its idle limit.
+    // YouTube and YouTube Music show the idle prompt only when Date.now() - window._lact
+    // (time of the last user activity) exceeds the limit sent by the server. A getter keeps the
+    // value current without timers, which browsers delay for minutes in hidden or minimized windows.
     function markActive() {
         try { window._lact = Date.now(); } catch (e) {}
     }
-    markActive();
-    setInterval(markActive, 30000);
+    try {
+        Object.defineProperty(window, '_lact', {
+            configurable: true,
+            get: function () { return Date.now(); },
+            set: function () {}
+        });
+    } catch (e) {
+        markActive();
+        setInterval(markActive, 30000);
+    }
 
     var lastUserInput = 0;
     var lastAutoPause = 0;
@@ -944,8 +954,11 @@ YOUTUBE_KEEP_WATCHING_SCRIPT = r"""
         if (Date.now() - lastUserInput > 2000) {
             lastAutoPause = Date.now();
             autoPausedVideo = v;
+            scanSoon();
         }
     }, true);
+    // YouTube announces its dialogs; react in a microtask instead of waiting for a (throttled) timer.
+    document.addEventListener('yt-popup-opened', function () { scanSoon(); }, true);
 
     var PROMPTS = 'ytmusic-you-there-renderer, ytd-you-there-renderer, ytm-you-there-renderer, yt-confirm-dialog-renderer';
     // In priority order: querySelector with a selector list would return the outer wrapper first.
@@ -1019,6 +1032,8 @@ YOUTUBE_KEEP_WATCHING_SCRIPT = r"""
                 var button = el.querySelector(BUTTONS[b]);
                 if (button) { button.click(); clicked = true; break; }
             }
+            // Resume at once as well: the timer below can be delayed in a hidden window.
+            if (clicked) scanSoonResume();
             (function (prompt, wasClicked) {
                 setTimeout(function () {
                     // TV layouts react to the remote's Enter key rather than to click().
@@ -1027,6 +1042,14 @@ YOUTUBE_KEEP_WATCHING_SCRIPT = r"""
                 }, 300);
             })(el, clicked);
         }
+    }
+
+    function scanSoon() {
+        try { Promise.resolve().then(scan); } catch (e) {}
+    }
+
+    function scanSoonResume() {
+        try { Promise.resolve().then(resume); } catch (e) {}
     }
 
     var queued = false;
