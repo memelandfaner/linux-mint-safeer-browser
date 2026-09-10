@@ -76,6 +76,7 @@ def pyinstaller() -> None:
         "--paths", WINDOWS,
         "--hidden-import", "safeer_windows.smoke",
         "--exclude-module", "tkinter",
+        "--exclude-module", "PIL",  # only used by the build and CI screenshots
     ]
     for source, target in SHARED_DATA:
         command += ["--add-data", os.path.join(ROOT, *source.split("/")) + os.pathsep + target]
@@ -135,6 +136,11 @@ def prune_bundle() -> None:
         return
     before = dir_size(APP_DIR)
     shutil.rmtree(os.path.join(pyside, "qml"), ignore_errors=True)
+    resources = os.path.join(pyside, "resources")
+    if os.path.isdir(resources):
+        for name in os.listdir(resources):
+            if name.lower().endswith(".debug.pak"):  # developer-build DevTools resources, never loaded
+                os.remove(os.path.join(resources, name))
     plugins = os.path.join(pyside, "plugins")
     if os.path.isdir(plugins):
         for name in os.listdir(plugins):
