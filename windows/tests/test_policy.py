@@ -171,12 +171,18 @@ class StartPageTests(unittest.TestCase):
         self.assertEqual(mime, "text/html")
         self.assertIn("windows-adapter.js", page)
         self.assertIn('<span class="shield-status">Windows</span>', page)
+        self.assertIn('data-i18n="quick_default"', page)
         self.assertLess(page.index("storage-guard.js"), page.index('src="home.js"'))
         self.assertLess(page.index('src="home.js"'), page.index("windows-adapter.js"))
         for path in ("/home.css", "/home.js", "/assets/safeer-mark.svg", "/windows-adapter.js"):
             self.assertIsNotNone(policy.scheme_resource("home", path, ""), path)
         self.assertIsNone(policy.scheme_resource("home", "/../../core/config.py", ""))
         self.assertIsNone(policy.scheme_resource("evil", "/", ""))
+
+    def test_icons_are_valid_svg(self):
+        from xml.dom import minidom
+        for name in policy.ICON_SHAPES:
+            minidom.parseString(policy.icon_svg(name, fill="#9bd478"))
 
     def test_block_page_escapes_url(self):
         _mime, body = policy.scheme_resource("home", "/blocked", "url=%22%3E%3Cscript%3Ex%3C%2Fscript%3E", "sl")
