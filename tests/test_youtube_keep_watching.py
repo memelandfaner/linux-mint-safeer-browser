@@ -15,6 +15,11 @@ class YouTubeKeepWatchingTests(unittest.TestCase):
         script = YOUTUBE_KEEP_WATCHING_SCRIPT
         self.assertIn("host === 'youtube.com'", script)
         self.assertIn("window._lact = Date.now()", script)
+        # Activity must stay current without timers (throttled in hidden/minimized windows).
+        self.assertIn("Object.defineProperty(window, '_lact'", script)
+        self.assertIn("get: function () { return Date.now(); }", script)
+        self.assertIn("'yt-popup-opened'", script)
+        self.assertIn("Promise.resolve().then(scan)", script)
         for renderer in ("ytmusic-you-there-renderer", "ytd-you-there-renderer", "yt-confirm-dialog-renderer"):
             self.assertIn(renderer, script)
 
