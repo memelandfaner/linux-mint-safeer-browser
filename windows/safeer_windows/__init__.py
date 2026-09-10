@@ -1,0 +1,1 @@
+"""Safeer Browser for Windows."""
