@@ -52,6 +52,7 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.0.18" date="2026-09-10"><description><p>YouTube and YouTube Music keep playing without the "Video paused. Continue watching?" prompt.</p></description></release>
     <release version="1.0.17" date="2026-09-10"><description><p>Keep WebKit finalization on the GTK thread, prevent crash reload loops and defer restored background tabs.</p></description></release>
     <release version="1.0.16" date="2026-09-09"><description><p>Linux packaging and desktop appearance improvements.</p></description></release>
     <release version="1.0.14" date="2026-09-07"><description><p>Preserve Grok sign-in pages, use native WebKit identity, and retain YouTube playback configuration.</p></description></release>
