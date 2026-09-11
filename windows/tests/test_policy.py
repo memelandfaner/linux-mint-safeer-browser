@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.parse
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -283,6 +284,60 @@ class SignedThreatFeedTests(unittest.TestCase):
             self.assertEqual(policy.request_decision("https://phish.example/", True, "", False), "block-threat")
         finally:
             policy.adblock._extra_threat_matchers.remove(service.match)
+
+
+class BankGuardPolicyTests(unittest.TestCase):
+    def tearDown(self):
+        policy.adblock._fake_bank_allowed_hosts.clear()
+
+    def page(self, url):
+        parsed = urllib.parse.urlsplit(url)
+        mime, body = policy.scheme_resource(parsed.netloc, parsed.path, parsed.query, "sl")
+        self.assertEqual(mime, "text/html")
+        return body.decode("utf-8")
+
+    def test_typed_fake_bank_address_opens_the_warning(self):
+        kind, url = policy.resolve_input("nlb-klik-varnost.net/prijava?x=<b>")
+        self.assertEqual(kind, "blocked")
+        self.assertTrue(url.startswith(policy.HOME_URL + "fake-bank?token="))
+        page = self.page(url)
+        self.assertIn('data-safeer-fake-bank="nlb"', page)
+        self.assertIn('href="https://nlb.si/"', page)
+        self.assertIn("history.go(-1)", page)
+        self.assertNotIn("<b>", page)
+        self.assertEqual(policy.resolve_input("klik.nlb.si")[0], "url")
+
+    def test_warning_content_cannot_be_forged_by_a_link(self):
+        page = self.page(policy.HOME_URL + "fake-bank?token=forged&official=evil.example&bank=NLB")
+        self.assertNotIn("evil.example", page)
+        self.assertNotIn("data-safeer-fake-bank", page)
+        self.assertIsNone(policy.fake_bank_continue("token=forged"))
+
+    def test_continue_allows_the_host_once_for_the_session(self):
+        verdict = policy.adblock.fake_bank_verdict("https://otpbamka.si/login")
+        warning = policy.fake_bank_page_url("https://otpbamka.si/login", verdict, after_load=True)
+        page = self.page(warning)
+        self.assertIn("history.go(-2)", page)
+        continue_url = re.search(r'id="continue" href="([^"]+)"', page).group(1)
+        redirect = self.page(continue_url)
+        self.assertIn('content="0;url=https://otpbamka.si/login"', redirect)
+        self.assertIsNone(policy.adblock.fake_bank_verdict("https://otpbamka.si/login"))
+        self.assertEqual(policy.resolve_input("otpbamka.si/login")[0], "url")
+        self.assertNotIn("otpbamka.si", self.page(continue_url), "the continue link works once")
+
+    def test_page_signals_and_real_banks(self):
+        signals = {"host": "secure-login.example", "scheme": "https", "password": True, "title": "NLB Klik - prijava"}
+        self.assertEqual(policy.fake_bank_page_verdict("https://secure-login.example/", signals).bank_id, "nlb")
+        self.assertIsNone(policy.fake_bank_page_verdict("https://secure-login.example/", "not a dict"))
+        self.assertIsNone(policy.fake_bank_page_verdict("https://klik.nlb.si/", dict(signals, host="klik.nlb.si")))
+        self.assertEqual(policy.request_decision("https://www.nlb.si/static/app.js", False, "https://www.nlb.si/", True), "allow")
+        self.assertIn("one-time-code", policy.adblock.bank_guard_page_script())
+
+    def test_windows_bundle_contains_the_bank_catalogue(self):
+        with open(os.path.join(os.path.dirname(__file__), "..", "build_windows.py"), encoding="utf-8") as handle:
+            build = handle.read()
+        for name in ("core/bank_guard.py", "core/banks.json", "core/bank_guard_page.js"):
+            self.assertIn(f'("{name}", "shared/core")', build)
 
 
 if __name__ == "__main__":

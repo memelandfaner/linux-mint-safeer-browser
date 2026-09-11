@@ -53,6 +53,8 @@ class _Handler(BaseHTTPRequestHandler):
                      "<img src='https://googleads.g.doubleclick.net/pagead/viewthroughconversion/1/?smoke=1'>"
                      "<a id='trk' href='/landing?id=5&utm_source=smoke&fbclid=abc'>tracked link</a>"),
             "/popup": "<title>Popup</title><script>window.__popupResult = window.open('/after');</script>",
+            "/bank-login": ("<title>NLB Klik - prijava</title><h1>Prijava v spletno banko</h1>"
+                            "<form><input name='user'><input type='password' name='pass'><button>Prijava</button></form>"),
         }
         if path == "/download.bin":
             body = bytes(range(256)) * (DOWNLOAD_SIZE // 256)
@@ -223,6 +225,18 @@ class SmokeRunner(QObject):
         window.open_input(f"{threat}/typed")
         typed = yield Wait(lambda: view.url().path() == "/blocked" and "typed" in view.url().query(), 20)
         self.check("threat_typed_address_blocked", bool(typed), view.url().toString())
+
+        window.open_input("nlb-klik-varnost.net/prijava")
+        fake_host = yield Wait(lambda: view.url().scheme() == "safeer" and view.url().path() == "/fake-bank", 20)
+        bank_marker = yield from self.wait_js(page, "var m = document.querySelector('[data-safeer-fake-bank]'); "
+                                                    "m ? m.getAttribute('data-safeer-fake-bank') : ''", 15)
+        self.check("fake_bank_address_warned", bool(fake_host) and bank_marker == "nlb", view.url().toString())
+
+        window.load_in_current(self.base + "/bank-login")
+        fake_page = yield Wait(lambda: view.url().path() == "/fake-bank", 25)
+        self.check("fake_bank_page_warned", bool(fake_page), view.url().toString())
+        real_link = yield Js(page, "(document.querySelector('a.real')||{}).href || ''")
+        self.check("fake_bank_real_site_link", real_link == "https://nlb.si/", real_link)
 
         tabs_before = window.tabs.count()
         window.load_in_current(self.base + "/popup")

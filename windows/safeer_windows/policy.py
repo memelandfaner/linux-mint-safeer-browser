@@ -20,7 +20,10 @@ import re
 import shutil
 import sqlite3
 import sys
+import secrets
 import tempfile
+import threading
+import time
 import urllib.parse
 import uuid
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -316,6 +319,9 @@ def resolve_input(text: str, engine: str = "duckduckgo", tracking_protection: bo
         return "search", search_url(value, engine)
     if adblock.is_threat_domain(url):
         return "blocked", blocked_page_url(url)
+    bank_verdict = adblock.fake_bank_verdict(url)
+    if bank_verdict is not None:
+        return "blocked", fake_bank_page_url(url, bank_verdict)
     if tracking_protection:
         url = adblock.strip_tracking_parameters(url)
     return "url", url
@@ -545,12 +551,22 @@ UI_STRINGS: Dict[str, Dict[str, str]] = {
         "blocked_text": "Safeer je ustavil povezavo, ker je naslov na seznamu znanih groženj (zlonamerna koda, botneti ali lažno predstavljanje).",
         "blocked_back": "Nazaj na varno",
         "blocked_home": "Domača stran",
+        "fake_bank_title": "Lažna spletna banka",
+        "fake_bank_text": "Ta stran ni prava spletna banka, predstavlja pa se kot {bank}. Na njej ne vpisujte uporabniškega imena, "
+                          "gesla, kode SMS ali podatkov kartice. Do banke vedno dostopajte z vpisom uradnega naslova ali prek uradne aplikacije.",
+        "fake_bank_open": "Odpri pravo stran: {domain}",
+        "fake_bank_continue": "Vseeno nadaljuj (samo za to sejo)",
     },
     "en": {
         "blocked_title": "Page blocked",
         "blocked_text": "Safeer stopped this connection because the address is on a list of known threats (malware, botnets or phishing).",
         "blocked_back": "Go back to safety",
         "blocked_home": "Home",
+        "fake_bank_title": "Fake online bank",
+        "fake_bank_text": "This is not a real online bank, although it presents itself as {bank}. Do not enter your user name, "
+                          "password, SMS code or card details here. Always open your bank by typing its official address or use its official app.",
+        "fake_bank_open": "Open the real site: {domain}",
+        "fake_bank_continue": "Continue anyway (this session only)",
     },
 }
 
@@ -587,6 +603,80 @@ a.secondary{{background:transparent;color:#f1f5f9;border:1px solid #50616b}}
 <a class="secondary" href="{HOME_URL}">{html.escape(strings['blocked_home'])}</a></main></body></html>"""
 
 
+# ---------------------------------------------------------------------------
+# 🏦 Safeer BankGuard: warning page for fake online banks
+# ---------------------------------------------------------------------------
+
+_FAKE_BANK_WARNINGS: Dict[str, Tuple[str, Any, int, float]] = {}  # token -> (url, verdict, back steps, expiry)
+_FAKE_BANK_LOCK = threading.Lock()
+FAKE_BANK_TOKEN_SECONDS = 600
+
+
+def fake_bank_page_url(url: str, verdict: Any, after_load: bool = False) -> str:
+    """safeer:// warning page for a fake bank. Everything shown comes from the token, never from the URL,
+    so no web page can craft a Safeer warning with a false "real site"."""
+    token = secrets.token_urlsafe(24)
+    now = time.monotonic()
+    with _FAKE_BANK_LOCK:
+        for key in [k for k, entry in _FAKE_BANK_WARNINGS.items() if entry[3] < now]:
+            del _FAKE_BANK_WARNINGS[key]
+        while len(_FAKE_BANK_WARNINGS) >= 64:
+            del _FAKE_BANK_WARNINGS[next(iter(_FAKE_BANK_WARNINGS))]
+        _FAKE_BANK_WARNINGS[token] = (url, verdict, 2 if after_load else 1, now + FAKE_BANK_TOKEN_SECONDS)
+    return HOME_URL + "fake-bank?token=" + token
+
+
+def _fake_bank_entry(query: str, consume: bool = False):
+    token = urllib.parse.parse_qs(query or "").get("token", [""])[0]
+    with _FAKE_BANK_LOCK:
+        entry = _FAKE_BANK_WARNINGS.pop(token, None) if consume else _FAKE_BANK_WARNINGS.get(token)
+    if entry is None or entry[3] < time.monotonic():
+        return None, ""
+    return entry, token
+
+
+def fake_bank_html(query: str, lang: str) -> str:
+    entry, token = _fake_bank_entry(query)
+    if entry is None:
+        return blocked_html("", lang)
+    url, verdict, back, _expiry = entry
+    strings = UI_STRINGS.get(lang, UI_STRINGS["en"])
+    domain = html.escape(verdict.official_domain, quote=True)
+    back_href = f"javascript:history.length>{back}?history.go(-{back}):location.replace('{HOME_URL}')"
+    return f"""<!DOCTYPE html>
+<html lang="{lang}"><head><meta charset="utf-8"><title>{html.escape(strings['fake_bank_title'])}</title>
+<style>
+body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#101814;color:#f1f5f9;font-family:"Segoe UI",system-ui,sans-serif}}
+main{{max-width:620px;padding:40px;border:1px solid rgba(248,113,113,.45);border-radius:20px;background:#19241e}}
+h1{{margin:0 0 12px;color:#fca5a5;font-size:28px}} p{{line-height:1.6;color:#cbd5e1}}
+code{{display:block;margin:18px 0;padding:12px;border-radius:10px;background:#0b120e;color:#fecaca;word-break:break-all}}
+a{{display:inline-block;margin:0 12px 12px 0;padding:10px 18px;border-radius:12px;background:#9bd478;color:#0b120e;font-weight:600;text-decoration:none}}
+a.real{{background:#22c55e}} a.secondary{{background:transparent;color:#94a3b8;border:1px solid #50616b;font-weight:400}}
+</style></head>
+<body><main data-safeer-blocked="1" data-safeer-fake-bank="{html.escape(verdict.bank_id, quote=True)}">
+<h1>🏦 {html.escape(strings['fake_bank_title'])}</h1>
+<p>{html.escape(strings['fake_bank_text'].format(bank=verdict.bank_name))}</p><code>{html.escape(url, quote=True)}</code>
+<a href="{back_href}">{html.escape(strings['blocked_back'])}</a>
+<a class="real" href="https://{domain}/">{html.escape(strings['fake_bank_open'].format(domain=verdict.official_domain))}</a>
+<a class="secondary" id="continue" href="{HOME_URL}fake-bank-continue?token={urllib.parse.quote(token)}">{html.escape(strings['fake_bank_continue'])}</a>
+</main></body></html>"""
+
+
+def fake_bank_continue(query: str) -> Optional[str]:
+    """The user continues past the warning: the host is allowed for this session. Returns the address to open."""
+    entry, _token = _fake_bank_entry(query, consume=True)
+    if entry is None:
+        return None
+    url = entry[0]
+    adblock.allow_fake_bank_host(url)
+    return url
+
+
+def fake_bank_page_verdict(url: str, signals: Any):
+    """BankGuard verdict for a loaded page (signals from adblock.bank_guard_page_script()), or None."""
+    return adblock.fake_bank_page_verdict(url, signals if isinstance(signals, dict) else None)
+
+
 def scheme_resource(host: str, path: str, query: str, lang: str = "sl") -> Optional[Tuple[str, bytes]]:
     """Content for safeer://home/... requests; None means not found."""
     if (host or "").lower() != "home":
@@ -597,6 +687,15 @@ def scheme_resource(host: str, path: str, query: str, lang: str = "sl") -> Optio
     if name == "blocked":
         target = urllib.parse.parse_qs(query or "").get("url", [""])[0]
         return "text/html", blocked_html(target, lang).encode("utf-8")
+    if name == "fake-bank":
+        return "text/html", fake_bank_html(query, lang).encode("utf-8")
+    if name == "fake-bank-continue":
+        target = fake_bank_continue(query)
+        if not target or not target.lower().startswith(("http://", "https://")):
+            return "text/html", blocked_html("", lang).encode("utf-8")
+        safe = html.escape(target, quote=True)
+        return "text/html", (f'<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={safe}">'
+                             f'<a href="{safe}">{safe}</a>').encode("utf-8")
     if name == "windows-adapter.js":
         return "application/javascript", HOME_ADAPTER_JS.encode("utf-8")
     if name == "storage-guard.js":

@@ -112,6 +112,26 @@ class SignedThreatFeedTests(unittest.TestCase):
         service.stop()
         self.assertEqual(service.status()["version"], 100)
 
+    def test_start_returns_at_once_and_loads_the_stored_bundle_in_the_background(self):
+        self.server.scenario = "valid-100"
+        self.assertTrue(self.service().update_now())
+        restarted = self.service(first_delay=3600)
+        original_load = restarted.store.load
+
+        def slow_load():
+            time.sleep(0.5)
+            return original_load()
+
+        restarted.store.load = slow_load
+        started = time.monotonic()
+        self.assertTrue(restarted.start())
+        self.assertLess(time.monotonic() - started, 0.2)
+        requests_before = len(self.server.requests)
+        self.assertTrue(restarted.loaded.wait(10))
+        restarted.stop()
+        self.assertEqual(restarted.status()["version"], 100)
+        self.assertEqual(len(self.server.requests), requests_before)  # the network check waits for first_delay
+
     def test_adblock_consults_registered_matcher_but_keeps_passthrough(self):
         service = self.service()
         self.server.scenario = "valid-100"

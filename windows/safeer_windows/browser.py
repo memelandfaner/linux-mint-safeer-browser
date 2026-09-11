@@ -863,6 +863,12 @@ class BrowserWindow(QMainWindow):
             self.app.note_blocked(text, "block-threat")
             QTimer.singleShot(0, lambda: page.load(QUrl(policy.blocked_page_url(text))))
             return False
+        bank_verdict = policy.adblock.fake_bank_verdict(text)
+        if bank_verdict is not None:  # 🏦 BankGuard: the address imitates a bank
+            self.app.note_blocked(text, "block-threat")
+            warning = policy.fake_bank_page_url(text, bank_verdict)
+            QTimer.singleShot(0, lambda: page.load(QUrl(warning)))
+            return False
         if self.app.settings.get("adblock_enabled") and policy.adblock.is_ad_domain(text):
             self.app.note_blocked(text, "block-ad")
             if page.opened_as_popup and not page.committed_navigation:
@@ -936,6 +942,8 @@ class BrowserWindow(QMainWindow):
 
     def on_load_state(self, view: QWebEngineView, loading: bool) -> None:
         view.setProperty("loading", loading)
+        if loading:
+            view.setProperty("bankCheck", int(view.property("bankCheck") or 0) + 1)  # cancels a pending page check
         if view is self.current_view():
             self.reload_button.setIcon(self.app.icons["stop" if loading else "reload"])
             self.reload_button.setToolTip(tr(self.app, "stop" if loading else "reload"))
@@ -944,7 +952,44 @@ class BrowserWindow(QMainWindow):
         self.on_load_state(view, False)
         if view.url().scheme() == "safeer" and view.url().path() in ("", "/"):
             self.push_home_state(view)
+        if ok:
+            self.schedule_fake_bank_check(view)
         self.update_nav_state()
+
+    def schedule_fake_bank_check(self, view: QWebEngineView) -> None:
+        """🏦 BankGuard: after loading, a page with password, code or card fields that presents itself as a bank
+        on a foreign host gets the fake bank warning. Runs locally in an isolated script world."""
+        url = view.url().toString()
+        if not url.startswith(("https://", "http://")) or policy.adblock.is_real_bank_host(url):
+            return
+        script = policy.adblock.bank_guard_page_script()
+        if not script:
+            return
+        generation = int(view.property("bankCheck") or 0) + 1
+        view.setProperty("bankCheck", generation)
+
+        def current() -> bool:
+            try:
+                return int(view.property("bankCheck") or 0) == generation and view.url().toString() == url
+            except RuntimeError:  # the tab was closed
+                return False
+
+        def on_signals(signals: Any) -> None:
+            if not current():
+                return
+            verdict = policy.fake_bank_page_verdict(url, signals)
+            if verdict is None:
+                return
+            view.setProperty("bankCheck", generation + 1)  # one warning per page
+            self.app.note_blocked(url, "block-threat")
+            view.load(QUrl(policy.fake_bank_page_url(url, verdict, after_load=True)))
+
+        def run() -> None:
+            if current():
+                view.page().runJavaScript(script, 1, on_signals)  # 1 = QWebEngineScript.ApplicationWorld (isolated from the page)
+
+        QTimer.singleShot(0, run)
+        QTimer.singleShot(2500, run)  # pages that draw their login form later
 
     def push_home_state(self, view: QWebEngineView) -> None:
         state = json.dumps(policy.home_state(self.app.settings), ensure_ascii=False)
