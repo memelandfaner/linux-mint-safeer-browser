@@ -39,6 +39,7 @@ _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 _HOST = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$")
 _URL = re.compile(r"^https?://[\x21\x23-\x5b\x5d-\x7e]+$")
+_IPV6_TEXT = re.compile(r"^[0-9a-f:]{2,39}$")
 
 
 class FeedVerificationError(Exception):
@@ -168,6 +169,40 @@ def canonical_json(value) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
 
 
+MAX_SAFE_INTEGER = 2**53 - 1
+MAX_SOURCES = 256
+
+
+_DISALLOWED_BYTE = re.compile(rb"[^\x09\x0a\x0d\x20-\x7e]")
+
+
+def _check_text(data: bytes) -> None:
+    """Only printable ASCII and JSON whitespace; inside strings only the escapes \\" and \\\\."""
+    if _DISALLOWED_BYTE.search(data):
+        raise FeedVerificationError("character outside printable ASCII")
+    # Escapes pair up from the left, exactly like bytes.replace; any backslash left over is another escape.
+    if b"\\" in data.replace(b"\\\\", b"").replace(b'\\"', b""):
+        raise FeedVerificationError("unsupported escape sequence")
+
+
+def _check_values(value, depth=0) -> None:
+    if depth > 8:
+        raise FeedVerificationError("nesting too deep")
+    if isinstance(value, dict):
+        for item in value.values():
+            _check_values(item, depth + 1)
+    elif isinstance(value, list):
+        for item in value:
+            _check_values(item, depth + 1)
+    elif isinstance(value, str):
+        if any(not 0x20 <= ord(ch) <= 0x7E for ch in value):
+            raise FeedVerificationError("string outside printable ASCII")
+    elif isinstance(value, bool) or not isinstance(value, int):
+        raise FeedVerificationError("only objects, arrays, strings and integers are allowed")
+    elif not 0 <= value <= MAX_SAFE_INTEGER:
+        raise FeedVerificationError("integer out of range")
+
+
 def _strict_loads(data: bytes):
     def no_duplicates(pairs):
         result = {}
@@ -180,27 +215,37 @@ def _strict_loads(data: bytes):
     def no_floats(_):
         raise FeedVerificationError("floating point numbers are not allowed")
 
+    _check_text(data)
     try:
         text = data.decode("ascii")
-        return json.loads(text, object_pairs_hook=no_duplicates, parse_float=no_floats,
-                          parse_constant=no_floats)
+        value = json.loads(text, object_pairs_hook=no_duplicates, parse_float=no_floats,
+                           parse_constant=no_floats)
     except (UnicodeDecodeError, ValueError) as exc:
         raise FeedVerificationError(f"invalid JSON: {exc}") from exc
+    _check_values(value)
+    return value
 
 
 def _b64decode(text) -> bytes:
+    """Standard base64 with padding; decoding and re-encoding must give the same text."""
     if not isinstance(text, str):
         raise FeedVerificationError("expected base64 text")
     try:
-        return base64.b64decode(text.encode("ascii"), validate=True)
+        raw = base64.b64decode(text.encode("ascii"), validate=True)
     except (ValueError, UnicodeEncodeError) as exc:
         raise FeedVerificationError("invalid base64") from exc
+    if base64.b64encode(raw).decode("ascii") != text:
+        raise FeedVerificationError("non-canonical base64")
+    return raw
 
 
 def _parse_time(value) -> datetime:
     if not isinstance(value, str) or not _TIME.match(value):
         raise FeedVerificationError("invalid timestamp")
-    return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise FeedVerificationError("invalid timestamp") from exc
 
 
 def _int(value, name, minimum=0):
@@ -209,15 +254,21 @@ def _int(value, name, minimum=0):
     return value
 
 
+def _signature_shape_ok(entry) -> bool:
+    return (isinstance(entry, dict) and set(entry) == {"alg", "key_id", "sig"}
+            and all(isinstance(entry[name], str) for name in ("alg", "key_id", "sig")))
+
+
 def _signature_ok(entry, trusted_keys, context, data) -> bool:
-    if not isinstance(entry, dict) or set(entry) != {"alg", "key_id", "sig"} or entry["alg"] != "ed25519":
-        return False
-    if not isinstance(entry["key_id"], str):
+    if not _signature_shape_ok(entry) or entry["alg"] != "ed25519":
         return False
     public = trusted_keys.get(entry["key_id"])
     if not public:
         return False
-    return ed25519_verify(base64.b64decode(public), context + data, _b64decode(entry["sig"]))
+    try:
+        return ed25519_verify(_b64decode(public), context + data, _b64decode(entry["sig"]))
+    except FeedVerificationError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -261,7 +312,8 @@ def verify_manifest(envelope_bytes: bytes, trusted_keys: dict, feed_type: str, *
         raise FeedVerificationError("manifest is for a different feed")
     version = _int(manifest["version"], "version", 1)
     bundle = manifest["bundle"]
-    if not isinstance(bundle, dict) or set(bundle) != {"path", "size", "sha256", "signature"}:
+    if (not isinstance(bundle, dict) or set(bundle) != {"path", "size", "sha256", "signature"}
+            or not _signature_shape_ok(bundle["signature"])):
         raise FeedVerificationError("invalid bundle reference")
     if bundle["path"] != f"{feed_type}-{version}.json":
         raise FeedVerificationError("unexpected bundle path")
@@ -301,8 +353,8 @@ def _valid_rule_value(value: str, kind: str) -> bool:
     try:
         if kind == "ipv4":
             return str(ipaddress.IPv4Address(value)) == value
-        if kind == "ipv6":
-            return ipaddress.IPv6Address(value).compressed == value
+        if kind == "ipv6":  # hexadecimal RFC 5952 text only: no zone identifier, no embedded IPv4
+            return bool(_IPV6_TEXT.match(value)) and ipaddress.IPv6Address(value).compressed == value
     except ValueError:
         return False
     return False
@@ -328,14 +380,15 @@ def verify_bundle(bundle_bytes: bytes, manifest: Manifest, trusted_keys: dict) -
         raise FeedVerificationError("bundle metadata does not match the manifest")
     rules = payload["rules"]
     sources = payload["sources"]
-    if not isinstance(rules, list) or not isinstance(sources, list) or not sources:
+    if not isinstance(rules, list) or not isinstance(sources, list) or not 1 <= len(sources) <= MAX_SOURCES:
         raise FeedVerificationError("invalid rules or sources")
     if payload["rule_count"] != len(rules) or manifest.rule_count != len(rules):
         raise FeedVerificationError("rule count mismatch")
     if payload["sha256"] != manifest.rules_sha256 or hashlib.sha256(canonical_json(rules)).hexdigest() != payload["sha256"]:
         raise FeedVerificationError("rules SHA-256 mismatch")
     for source in sources:
-        if not isinstance(source, dict) or set(source) != {"id", "name", "license", "url"}:
+        if (not isinstance(source, dict) or set(source) != {"id", "name", "license", "url"}
+                or not all(isinstance(item, str) for item in source.values())):
             raise FeedVerificationError("invalid source entry")
     checked = []
     for rule in rules:

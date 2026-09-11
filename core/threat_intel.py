@@ -24,6 +24,7 @@ from pathlib import Path
 TRUSTED_KEYS: dict = {}
 
 BASE_URLS = ("https://intel.safeer.si",)
+SECURITY_CATEGORIES = frozenset({"botnet_c2", "malware", "phishing", "scam"})
 UPDATE_INTERVAL_SECONDS = 6 * 3600
 RETRY_SECONDS = 3600
 FIRST_UPDATE_DELAY_SECONDS = 30
@@ -101,15 +102,17 @@ class ThreatIntelService:
                 return
 
     def match(self, url_or_host: str):
-        """Returns the threat category for a URL or host name, or None."""
+        """Returns the security category (botnet_c2, malware, phishing, scam) for a URL or host, or None."""
         if not self.enabled or not url_or_host:
             return None
         try:
             if "://" in url_or_host:
-                return self.store.match_url(url_or_host)
-            return self.store.match_host(url_or_host.split("/", 1)[0].split(":", 1)[0])
+                category = self.store.match_url(url_or_host)
+            else:
+                category = self.store.match_host(url_or_host.split("/", 1)[0].split(":", 1)[0])
         except Exception:  # noqa: BLE001 - matching must never break navigation
             return None
+        return category if category in SECURITY_CATEGORIES else None  # ads and trackers are not threats
 
     def status(self) -> dict:
         bundle = self.store.bundle
