@@ -63,6 +63,7 @@ from core.adblock import (
 )
 from core.reader import READER_MODE_JS
 from core.network_errors import NetworkErrorHandler
+from core.external_apps import ExternalLinkGate, external_scheme, is_allowed, remember, site_of
 from core.default_browser import is_default_browser as system_is_default_browser, set_default_browser
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
@@ -96,6 +97,8 @@ class SafeerMintBrowser(Gtk.Window):
         install_main_thread_gc()
         super().__init__()
         self.config = ConfigManager()
+        self.external_link_gate = ExternalLinkGate()
+        self._external_app_missing_shown = set()
 
         # Style the native window before creating or loading any web views.
         # Keep this preference local to Safeer; never change the desktop theme.
@@ -2230,6 +2233,13 @@ class SafeerMintBrowser(Gtk.Window):
                 req = nav_action.get_request()
                 uri = req.get_uri() if req else ""
                 if uri:
+                    scheme = external_scheme(uri)
+                    if scheme:
+                        # e.g. claude:// after signing in: belongs to an installed program, not to a tab
+                        decision.ignore()
+                        GLib.idle_add(self.open_external_app_link, uri, scheme, webview.get_uri() or "",
+                                      self.navigation_is_user_gesture(nav_action))
+                        return True
                     if not is_safe_web_url(uri):
                         print(f"[Policy Security] Blokiran nedovoljen protokol za novo okno: {uri}")
                         decision.ignore()
@@ -2257,6 +2267,13 @@ class SafeerMintBrowser(Gtk.Window):
                 req = nav_action.get_request()
                 uri = req.get_uri() if req else ""
                 if uri:
+                    scheme = external_scheme(uri)
+                    if scheme:
+                        # e.g. the return to the Claude app (claude://) after Google sign-in
+                        decision.ignore()
+                        GLib.idle_add(self.open_external_app_link, uri, scheme, webview.get_uri() or "",
+                                      self.navigation_is_user_gesture(nav_action))
+                        return True
                     if is_passthrough_host(uri):
                         # Popoln passthrough za Cloudflare Turnstile in xAI/Grok prijavo (brez motenj)
                         pass
@@ -3707,6 +3724,112 @@ class SafeerMintBrowser(Gtk.Window):
             return
         webview._safeer_bank_check = generation + 1  # eno opozorilo na stran
         self.show_fake_bank_warning(webview, uri, verdict, True)
+
+    @staticmethod
+    def navigation_is_user_gesture(nav_action):
+        try:
+            return bool(nav_action.is_user_gesture())
+        except Exception:
+            return nav_action.get_navigation_type() == WebKit2.NavigationType.LINK_CLICKED
+
+    def open_external_app_link(self, uri, scheme, page_uri, user_gesture=True):
+        """Povezavo, ki pripada nameščenemu programu (npr. claude:// po prijavi), odpre po potrditvi uporabnika."""
+        site = site_of(page_uri)
+        app = None
+        if not os.path.exists("/.flatpak-info"):
+            try:
+                app = Gio.AppInfo.get_default_for_uri_scheme(scheme)
+            except Exception:
+                app = None
+            if app is None:
+                # pages that only probe for an installed program (without a click) get no notice
+                if user_gesture:
+                    self.show_missing_external_app(site, scheme)
+                else:
+                    print(f"[Zunanji program] Za povezavo {scheme}: ni nameščenega programa.")
+                return False
+            app_id = (app.get_id() or "").lower()
+            if app_id.startswith("safeer-browser") or app_id.startswith("io.github.memelandfaner.safeerbrowser"):
+                print(f"[Zunanji program] Povezava {scheme}: vodi nazaj v Safeer, prezrto.")
+                return False
+        app_name = app.get_display_name() if app is not None else t("external_app_generic", "zunanji program")
+
+        permissions = self.config.get("external_app_permissions", {})
+        if not is_allowed(permissions, site, scheme):
+            gate = self.external_link_gate
+            if not gate.may_ask(site, scheme):
+                return False
+            gate.asking()
+            accepted = False
+            always = False
+            try:
+                dialog = Gtk.MessageDialog(
+                    transient_for=self,
+                    flags=0,
+                    message_type=Gtk.MessageType.QUESTION,
+                    buttons=Gtk.ButtonsType.NONE,
+                    text=t("external_app_title", "Odprem program »{app}«?").format(app=app_name)
+                )
+                dialog.format_secondary_text(
+                    t("external_app_body", "{site} želi odpreti program »{app}« (povezava {scheme}:).").format(
+                        site=site or t("external_app_this_page", "Ta stran"), app=app_name, scheme=scheme)
+                )
+                check = None
+                if site:
+                    check = Gtk.CheckButton.new_with_label(
+                        t("external_app_remember", "Vedno dovoli, da {site} odpre ta program").format(site=site))
+                    dialog.get_message_area().pack_start(check, False, False, 0)
+                    check.show()
+                dialog.add_button(t("cancel", "Prekliči"), Gtk.ResponseType.CANCEL)
+                dialog.add_button(t("external_app_open", "Odpri program"), Gtk.ResponseType.ACCEPT)
+                dialog.set_default_response(Gtk.ResponseType.CANCEL)
+                accepted = dialog.run() == Gtk.ResponseType.ACCEPT
+                always = bool(check is not None and check.get_active())
+                dialog.destroy()
+            except Exception as exc:
+                print(f"[Zunanji program] Vprašanja ni bilo mogoče prikazati: {exc}")
+            finally:
+                gate.answered(site, scheme, accepted)
+            if not accepted:
+                return False
+            if always:
+                self.config.set("external_app_permissions", remember(permissions, site, scheme))
+
+        try:
+            display = Gdk.Display.get_default()
+            context = display.get_app_launch_context() if display else None
+            if app is not None:
+                app.launch_uris([uri], context)
+            else:
+                Gio.AppInfo.launch_default_for_uri(uri, context)
+        except Exception as exc:
+            print(f"[Zunanji program] Povezave {scheme}: ni bilo mogoče odpreti: {exc}")
+            self.show_missing_external_app(site, scheme)
+        return False
+
+    def show_missing_external_app(self, site, scheme):
+        """Enkratno obvestilo, da za povezavo ni nameščenega programa (namesto tihega neuspeha)."""
+        key = (site, scheme)
+        if key in self._external_app_missing_shown:
+            return False
+        self._external_app_missing_shown.add(key)
+        try:
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.INFO,
+                buttons=Gtk.ButtonsType.OK,
+                text=t("external_app_missing_title", "Program ni najden")
+            )
+            dialog.format_secondary_text(
+                t("external_app_missing_body",
+                  "Za povezave {scheme}: v sistemu ni nameščenega programa, zato je Safeer ne more odpreti.").format(scheme=scheme)
+            )
+            dialog.run()
+            dialog.destroy()
+        except Exception as exc:
+            print(f"[Zunanji program] Obvestila ni bilo mogoče prikazati: {exc}")
+        return False
 
     def show_threat_warning(self, domain):
         self.increment_shields_blocked()

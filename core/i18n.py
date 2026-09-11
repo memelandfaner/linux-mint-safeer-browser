@@ -18,6 +18,14 @@ SUPPORTED_LANGUAGES = {
 
 TRANSLATIONS = {
     "en": {
+        "external_app_title": "Open {app}?",
+        "external_app_body": "{site} wants to open the program \u201c{app}\u201d ({scheme}: link).",
+        "external_app_this_page": "This page",
+        "external_app_remember": "Always allow {site} to open this program",
+        "external_app_open": "Open program",
+        "external_app_generic": "an external program",
+        "external_app_missing_title": "Program not found",
+        "external_app_missing_body": "No program for {scheme}: links is installed, so Safeer cannot open this link.",
         "customizer_subtitle": "Personalize your browsing experience • Themes, Custom CSS, Portals & UserScripts",
         "active_theme_badge": "Active",
         "select_theme_btn": "Select",
@@ -191,6 +199,14 @@ TRANSLATIONS = {
         "btn_clear_browsing_data": "🧹 Clear History, Cookies, and Cache (Ctrl+Shift+Del)"
     },
     "sl": {
+        "external_app_title": "Odprem program »{app}«?",
+        "external_app_body": "{site} želi odpreti program »{app}« (povezava {scheme}:).",
+        "external_app_this_page": "Ta stran",
+        "external_app_remember": "Vedno dovoli, da {site} odpre ta program",
+        "external_app_open": "Odpri program",
+        "external_app_generic": "zunanji program",
+        "external_app_missing_title": "Program ni najden",
+        "external_app_missing_body": "Za povezave {scheme}: v sistemu ni nameščenega programa, zato je Safeer ne more odpreti.",
         "customizer_subtitle": "Prilagodite izgled brskalnika, barvne teme, pisave, CSS sloge, bližnjice in skripte po meri",
         "active_theme_badge": "Aktivno",
         "select_theme_btn": "Izberi",
