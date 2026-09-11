@@ -35,6 +35,9 @@ MAX_MANIFEST_BYTES = 64 * 1024
 MAX_BUNDLE_BYTES = 48 * 1024 * 1024
 INDICATOR_TYPES = ("domain", "hostname", "url", "ipv4", "ipv6")
 CATEGORIES = ("botnet_c2", "malware", "phishing", "scam", "ads", "tracker")
+FEED_CATEGORIES = {"threats": frozenset({"botnet_c2", "malware", "phishing", "scam"}),
+                   "adblock": frozenset({"ads", "tracker"})}
+SEVERITY = {"botnet_c2": 6, "malware": 5, "phishing": 4, "scam": 3, "tracker": 2, "ads": 1}
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 _HOST = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$")
@@ -215,13 +218,18 @@ def _strict_loads(data: bytes):
     def no_floats(_):
         raise FeedVerificationError("floating point numbers are not allowed")
 
+    def unsigned_int(text):
+        if text.startswith("-"):
+            raise FeedVerificationError("signed integers are not allowed")
+        return int(text)
+
     _check_text(data)
     try:
         text = data.decode("ascii")
         value = json.loads(text, object_pairs_hook=no_duplicates, parse_float=no_floats,
-                           parse_constant=no_floats)
-    except (UnicodeDecodeError, ValueError) as exc:
-        raise FeedVerificationError(f"invalid JSON: {exc}") from exc
+                           parse_constant=no_floats, parse_int=unsigned_int)
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
+        raise FeedVerificationError(f"invalid JSON: {exc.__class__.__name__}") from exc
     _check_values(value)
     return value
 
@@ -240,7 +248,7 @@ def _b64decode(text) -> bytes:
 
 
 def _parse_time(value) -> datetime:
-    if not isinstance(value, str) or not _TIME.match(value):
+    if not isinstance(value, str) or not _TIME.match(value) or value[:4] < "1970":
         raise FeedVerificationError("invalid timestamp")
     try:
         return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
@@ -353,8 +361,11 @@ def _valid_rule_value(value: str, kind: str) -> bool:
     try:
         if kind == "ipv4":
             return str(ipaddress.IPv4Address(value)) == value
-        if kind == "ipv6":  # hexadecimal RFC 5952 text only: no zone identifier, no embedded IPv4
-            return bool(_IPV6_TEXT.match(value)) and ipaddress.IPv6Address(value).compressed == value
+        if kind == "ipv6":  # hexadecimal RFC 5952 text only: no zone, no embedded or mapped IPv4
+            if not _IPV6_TEXT.match(value):
+                return False
+            address = ipaddress.IPv6Address(value)
+            return address.ipv4_mapped is None and address.compressed == value
     except ValueError:
         return False
     return False
@@ -391,9 +402,10 @@ def verify_bundle(bundle_bytes: bytes, manifest: Manifest, trusted_keys: dict) -
                 or not all(isinstance(item, str) for item in source.values())):
             raise FeedVerificationError("invalid source entry")
     checked = []
+    allowed_categories = FEED_CATEGORIES.get(manifest.feed_type, frozenset())
     for rule in rules:
         if (not isinstance(rule, list) or len(rule) != 4 or not isinstance(rule[0], str)
-                or rule[1] not in INDICATOR_TYPES or rule[2] not in CATEGORIES
+                or rule[1] not in INDICATOR_TYPES or rule[2] not in allowed_categories
                 or isinstance(rule[3], bool) or not isinstance(rule[3], int) or not 0 <= rule[3] < len(sources)
                 or not _valid_rule_value(rule[0], rule[1])):
             raise FeedVerificationError(f"invalid rule {str(rule)[:120]}")
@@ -417,49 +429,76 @@ class ThreatIndex:
                 node = self._suffix
                 for label in reversed(value.split(".")):
                     node = node.setdefault(label, {})
-                node.setdefault("\0", category)
+                node["\0"] = _more_severe(node.get("\0"), category)
             elif kind in ("hostname", "ipv4", "ipv6"):
-                self._hosts.setdefault(value, category)
+                self._hosts[value] = _more_severe(self._hosts.get(value), category)
             elif kind == "url":
-                self._urls.setdefault(value, category)
+                self._urls[value] = _more_severe(self._urls.get(value), category)
         self.size = len(rules)
 
     def match_host(self, host: str):
-        host = (host or "").strip().lower().rstrip(".")
-        if host.startswith("[") and host.endswith("]"):
-            host = host[1:-1]
+        """Considers every rule covering the host; the most severe category wins."""
+        host = _normalize_host(host)
         if not host:
             return None
-        category = self._hosts.get(host)
-        if category:
-            return category
+        best = self._hosts.get(host)
         node = self._suffix
         for label in reversed(host.split(".")):
             node = node.get(label)
             if node is None:
-                return None
+                break
             if "\0" in node:
-                return node["\0"]
-        return None
+                best = _more_severe(best, node["\0"])
+        return best
 
     def match_url(self, url: str):
+        """Considers host rules and the exact URL rule; the most severe category wins."""
+        if not isinstance(url, str) or "://" not in url:
+            return None
+        scheme_end = url.index("://")
+        if url[:scheme_end].lower() in ("http", "https"):
+            url = url[:scheme_end + 3] + url[scheme_end + 3:].replace("\\", "/")  # like browsers do
         try:
             parts = urlsplit(url)
             host = parts.hostname or ""
-        except ValueError:
-            return None
-        category = self.match_host(host)
-        if category or not self._urls or parts.scheme not in ("http", "https"):
-            return category
-        try:
             port = parts.port
         except ValueError:
             return None
-        netloc = f"[{host}]" if ":" in host else host
+        best = self.match_host(host)
+        if not self._urls or parts.scheme not in ("http", "https"):
+            return best
+        normalized = _normalize_host(host)
+        if not normalized:
+            return best
+        netloc = f"[{normalized}]" if ":" in normalized else normalized
         if port is not None and not ((parts.scheme == "http" and port == 80) or (parts.scheme == "https" and port == 443)):
             netloc = f"{netloc}:{port}"
         key = f"{parts.scheme}://{netloc}{parts.path or '/'}" + (f"?{parts.query}" if parts.query else "")
-        return self._urls.get(key)
+        return _more_severe(best, self._urls.get(key))
+
+
+def _more_severe(current, candidate):
+    if current is None:
+        return candidate
+    if candidate is None:
+        return current
+    return candidate if SEVERITY.get(candidate, 0) > SEVERITY.get(current, 0) else current
+
+
+def _normalize_host(host) -> str:
+    host = (host or "").strip().lower()
+    if host.startswith("[") and host.endswith("]"):
+        host = host[1:-1]
+    host = host.rstrip(".")
+    if ":" in host:
+        try:
+            address = ipaddress.IPv6Address(host)
+        except ValueError:
+            return host
+        if address.ipv4_mapped is not None:  # ::ffff:a.b.c.d reaches the IPv4 address
+            return str(address.ipv4_mapped)
+        return address.compressed
+    return host
 
 
 # --------------------------------------------------------------------------------------------------
