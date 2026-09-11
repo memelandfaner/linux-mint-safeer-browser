@@ -325,6 +325,22 @@ class BankGuardPolicyTests(unittest.TestCase):
         self.assertEqual(policy.resolve_input("otpbamka.si/login")[0], "url")
         self.assertNotIn("otpbamka.si", self.page(continue_url), "the continue link works once")
 
+    def test_back_from_the_after_load_warning_skips_the_fake_page(self):
+        url = "https://secure-login.example/nlb"
+        verdict = policy.fake_bank_page_verdict(url, {"host": "secure-login.example", "password": True, "title": "NLB Klik"})
+        after_load = policy.fake_bank_page_url(url, verdict, after_load=True)
+        self.assertTrue(policy.returned_from_fake_bank_warning(after_load, url))
+        self.assertFalse(policy.returned_from_fake_bank_warning(after_load, "https://other.example/"))
+        self.assertFalse(policy.returned_from_fake_bank_warning(policy.fake_bank_page_url(url, verdict), url), "address warnings have no fake page behind them")
+        self.assertFalse(policy.returned_from_fake_bank_warning("https://example.com/fake-bank?token=x", url))
+        policy.adblock.allow_fake_bank_host(url)
+        self.assertFalse(policy.returned_from_fake_bank_warning(after_load, url), "the user chose to continue")
+
+    def test_unicode_address_from_qt_is_checked(self):
+        kind, target = policy.resolve_input("https://pаypаl-login.com/")
+        self.assertEqual(kind, "blocked")
+        self.assertIn("fake-bank", target)
+
     def test_page_signals_and_real_banks(self):
         signals = {"host": "secure-login.example", "scheme": "https", "password": True, "title": "NLB Klik - prijava"}
         self.assertEqual(policy.fake_bank_page_verdict("https://secure-login.example/", signals).bank_id, "nlb")

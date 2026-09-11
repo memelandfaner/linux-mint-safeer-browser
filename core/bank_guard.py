@@ -108,6 +108,11 @@ class BankGuard:
         host = (host or "").strip().lower().rstrip(".")
         if host.startswith("[") and host.endswith("]"):
             host = host[1:-1]
+        if host and not host.isascii():
+            try:  # browsers may report internationalized names in Unicode; the rules work on the xn-- form
+                host = host.encode("idna").decode("ascii")
+            except UnicodeError:
+                pass
         return host
 
     def official_bank(self, host: str):
@@ -141,10 +146,13 @@ class BankGuard:
                     unicode_label = label.encode("ascii").decode("idna")
                 except UnicodeError:
                     continue
-                skeleton = fold(unicode_label).translate(CONFUSABLES).replace("-", "")
-                bank = self._labels.get(skeleton)
-                if bank is None:
-                    bank = next((b for b in self.banks for t in b["tokens"] if len(t) >= 4 and t in skeleton), None)
+                skeleton = fold(unicode_label).translate(CONFUSABLES)
+                bank = self._labels.get(skeleton.replace("-", ""))
+                parts = set(p for p in re.split(r"[-_]", skeleton) if p)
+                if bank is None and (parts & self.context or context):
+                    # a whole word of the label is a bank name, next to banking words (not a substring:
+                    # "delavska-čitalnica" or "révolution" are ordinary names)
+                    bank = next((b for b in self.banks for t in b["tokens"] if len(t) >= 4 and t in parts), None)
                 if bank is not None:
                     return self._verdict(bank, "homoglyph", unicode_label)
         for bank in self.banks:
@@ -163,7 +171,9 @@ class BankGuard:
         for official_label, bank in self._labels.items():
             same_tld = any(d.split(".")[0].replace("-", "") == official_label and d.endswith("." + tld)
                            for d in bank["official"])
-            if len(official_label) >= 6 and same_tld and _damerau_one(plain, official_label):
+            # a missing letter only counts for longer names ("revolt" is a word, "sparkase" is a typo)
+            long_enough = len(plain) >= len(official_label) or len(plain) >= 7
+            if len(official_label) >= 6 and same_tld and long_enough and _damerau_one(plain, official_label):
                 return self._verdict(bank, "typosquat", registrable)
         return None
 

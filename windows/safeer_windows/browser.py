@@ -965,6 +965,11 @@ class BrowserWindow(QMainWindow):
         script = policy.adblock.bank_guard_page_script()
         if not script:
             return
+        history = view.history()
+        if history.canGoForward() and history.canGoBack() and \
+                policy.returned_from_fake_bank_warning(history.forwardItem().url().toString(), url):
+            QTimer.singleShot(0, view.back)  # Back from the warning skips the fake page instead of warning again
+            return
         generation = int(view.property("bankCheck") or 0) + 1
         view.setProperty("bankCheck", generation)
 

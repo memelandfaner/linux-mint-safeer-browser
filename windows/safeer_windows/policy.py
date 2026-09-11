@@ -672,6 +672,15 @@ def fake_bank_continue(query: str) -> Optional[str]:
     return url
 
 
+def returned_from_fake_bank_warning(forward_url: str, page_url: str) -> bool:
+    """True when the page was reached with Back from its own after-load warning (and not allowed by the user)."""
+    parsed = urllib.parse.urlsplit(forward_url or "")
+    if parsed.scheme != "safeer" or parsed.netloc != "home" or parsed.path != "/fake-bank":
+        return False
+    entry, _token = _fake_bank_entry(parsed.query)
+    return bool(entry and entry[0] == page_url and entry[2] == 2 and not adblock.is_fake_bank_host_allowed(page_url))
+
+
 def fake_bank_page_verdict(url: str, signals: Any):
     """BankGuard verdict for a loaded page (signals from adblock.bank_guard_page_script()), or None."""
     return adblock.fake_bank_page_verdict(url, signals if isinstance(signals, dict) else None)
