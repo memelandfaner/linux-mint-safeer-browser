@@ -19,9 +19,10 @@ import time
 from pathlib import Path
 
 # Public keys trusted to sign feed manifests: key_id -> base64 Ed25519 public key.
-# Empty until the production key is generated on the Safeer worker; with no trusted key the
-# signed feed stays disabled and only the built-in protection is used.
-TRUSTED_KEYS: dict = {}
+# Without a trusted key the signed feed stays disabled and only the built-in protection is used.
+# TEST KEY: "safeer-test-2026-09" is for the test project only. Builds that trust it are not
+# published; the production key generated on the Safeer worker replaces it before any release.
+TRUSTED_KEYS: dict = {"safeer-test-2026-09": "mGtehv7JGwvJfW61dqK0JBj+4cRlioTMZb7x3uszaH4="}
 
 BASE_URLS = ("https://intel.safeer.si",)
 SECURITY_CATEGORIES = frozenset({"botnet_c2", "malware", "phishing", "scam"})
