@@ -5892,6 +5892,21 @@ class SafeerMintBrowser(Gtk.Window):
         self.set_title(f"{t('app_title')} — Linux Mint Edition")
 
 
+def start_threat_intel():
+    """Starts the signed Safeer threat feed as an extra layer; the built-in list works without it."""
+    try:
+        from core import adblock
+        from core.threat_intel import ThreatIntelService, default_data_dir
+
+        service = ThreatIntelService(default_data_dir("safeer-mint"))
+        adblock.register_threat_matcher(service.match)
+        service.start()
+        return service
+    except Exception as exc:
+        print(f"Safeer threat feed unavailable: {exc}", file=sys.stderr)
+        return None
+
+
 def main():
     if "--version" in sys.argv:
         print(f"Safeer Browser {APP_VERSION}")
@@ -5927,6 +5942,7 @@ def main():
             except Exception:
                 pass
 
+    start_threat_intel()
     app = SafeerMintBrowser(initial_url=target_url)
     app.connect("destroy", Gtk.main_quit)
 

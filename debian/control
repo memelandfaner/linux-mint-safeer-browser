@@ -18,7 +18,7 @@ Depends: ${misc:Depends},
          gir1.2-gtk-3.0,
          gir1.2-webkit2-4.1, gir1.2-soup-3.0,
          gir1.2-glib-2.0
-Recommends: gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav
+Recommends: gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav, python3-cryptography
 Description: Sovereign, ultra-fast, and private web browser for Linux Mint & Ubuntu
  Safeer Browser is an open-source, ultra-fast web browser engineered
  specifically for Linux Mint and Ubuntu. Built natively with GTK3 and

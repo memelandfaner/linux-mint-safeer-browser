@@ -867,10 +867,27 @@ def is_passthrough_host(url: str) -> bool:
     return False
 
 
+_extra_threat_matchers = []
+
+
+def register_threat_matcher(matcher) -> None:
+    """Adds a matcher (url -> category or None), e.g. the signed Safeer threat feed."""
+    if matcher not in _extra_threat_matchers:
+        _extra_threat_matchers.append(matcher)
+
+
 def is_threat_domain(url: str) -> bool:
     if is_passthrough_host(url):
         return False
-    return _threat_trie.is_blocked(_url_host(url))
+    if _threat_trie.is_blocked(_url_host(url)):
+        return True
+    for matcher in _extra_threat_matchers:
+        try:
+            if matcher(url):
+                return True
+        except Exception:
+            continue
+    return False
 
 
 def is_ad_domain(url: str) -> bool:
