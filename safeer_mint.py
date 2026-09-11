@@ -67,7 +67,7 @@ from core.default_browser import is_default_browser as system_is_default_browser
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
 USER_AGENT = None
-APP_VERSION = "1.0.20"
+APP_VERSION = "1.0.21"
 DOCK_WIDTH = 54
 
 
@@ -3640,7 +3640,7 @@ class SafeerMintBrowser(Gtk.Window):
                 flags=0,
                 message_type=Gtk.MessageType.WARNING,
                 buttons=Gtk.ButtonsType.NONE,
-                text="🏦 Safeer BankGuard: LAŽNA SPLETNA BANKA"
+                text="🛡️ Safeer Shield: LAŽNA SPLETNA BANKA"
             )
             dialog.format_secondary_text(
                 f"'{host}' ni prava spletna banka, predstavlja pa se kot {verdict.bank_name}.\n\n"
