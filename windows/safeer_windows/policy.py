@@ -654,7 +654,7 @@ a{{display:inline-block;margin:0 12px 12px 0;padding:10px 18px;border-radius:12p
 a.real{{background:#22c55e}} a.secondary{{background:transparent;color:#94a3b8;border:1px solid #50616b;font-weight:400}}
 </style></head>
 <body><main data-safeer-blocked="1" data-safeer-fake-bank="{html.escape(verdict.bank_id, quote=True)}">
-<h1>🏦 {html.escape(strings['fake_bank_title'])}</h1>
+<h1>🛡️ {html.escape(strings['fake_bank_title'])}</h1>
 <p>{html.escape(strings['fake_bank_text'].format(bank=verdict.bank_name))}</p><code>{html.escape(url, quote=True)}</code>
 <a href="{back_href}">{html.escape(strings['blocked_back'])}</a>
 <a class="real" href="https://{domain}/">{html.escape(strings['fake_bank_open'].format(domain=verdict.official_domain))}</a>
