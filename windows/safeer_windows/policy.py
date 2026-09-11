@@ -67,6 +67,7 @@ adblock = _load_shared_module("adblock")
 shared_config = _load_shared_module("config")
 bookmarks = _load_shared_module("bookmarks_importer")
 reader = _load_shared_module("reader")
+threat_intel = _load_shared_module("threat_intel")
 
 
 def read_version() -> str:
@@ -142,6 +143,13 @@ def profile_dir(env: Optional[Dict[str, str]] = None) -> str:
     if env.get("SAFEER_WINDOWS_DATA_DIR"):
         return os.path.join(env["SAFEER_WINDOWS_DATA_DIR"], "Profile")
     return os.path.join(_windows_folder(env, "LOCALAPPDATA", os.path.join(".local", "share", "safeer-windows")), "Profile")
+
+
+def threat_intel_dir(env: Optional[Dict[str, str]] = None) -> str:
+    env = dict(os.environ if env is None else env)
+    if env.get("SAFEER_WINDOWS_DATA_DIR"):
+        return os.path.join(env["SAFEER_WINDOWS_DATA_DIR"], "ThreatIntel")
+    return os.path.join(_windows_folder(env, "LOCALAPPDATA", os.path.join(".local", "share", "safeer-windows")), "ThreatIntel")
 
 
 class SettingsStore:

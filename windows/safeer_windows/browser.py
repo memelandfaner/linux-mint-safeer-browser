@@ -295,6 +295,12 @@ class SafeerBrowserApp(QObject):
         self.private_profile: Optional[QWebEngineProfile] = None
         self.configure_profile(self.profile)
 
+        # Signed Safeer threat feed: an extra, verified layer next to the built-in list.
+        self.threat_intel = policy.threat_intel.ThreatIntelService(policy.threat_intel_dir())
+        policy.adblock.register_threat_matcher(self.threat_intel.match)
+        if not smoke:
+            self.threat_intel.start()
+
         self.save_timer = QTimer(self)
         self.save_timer.setInterval(4000)
         self.save_timer.timeout.connect(self.flush_counters)
@@ -541,6 +547,7 @@ class SafeerBrowserApp(QObject):
 
     # -- shutdown -----------------------------------------------------------
     def shutdown(self) -> None:
+        self.threat_intel.stop()
         self.flush_counters()
         self.settings.save()
         for window in list(self.windows):

@@ -238,5 +238,52 @@ class BookmarkTests(unittest.TestCase):
         self.assertEqual(sorted(i["url"] for i in items), ["https://www.24ur.com/", "https://www.rtvslo.si/"])
 
 
+class SignedThreatFeedTests(unittest.TestCase):
+    FIXTURES = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "fixtures", "signed_feed"))
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def fetch_scenario(self, scenario):
+        def fetch(url, limit):
+            suffix = "latest" if url.endswith("/latest.json") else "bundle"
+            with open(os.path.join(self.FIXTURES, f"{scenario}-{suffix}.json"), "rb") as handle:
+                return handle.read()
+        return fetch
+
+    def test_threat_intel_directory_is_local_app_data(self):
+        env = {"LOCALAPPDATA": r"C:\Users\a\AppData\Local"}
+        self.assertTrue(policy.threat_intel_dir(env).endswith("ThreatIntel"))
+        self.assertEqual(policy.threat_intel_dir({"SAFEER_WINDOWS_DATA_DIR": self.tmp}),
+                         os.path.join(self.tmp, "ThreatIntel"))
+
+    def test_disabled_until_a_production_key_is_trusted(self):
+        service = policy.threat_intel.ThreatIntelService(self.tmp)
+        self.assertEqual(service.enabled, bool(policy.threat_intel.TRUSTED_KEYS))
+
+    def test_verified_feed_blocks_requests_and_navigation(self):
+        with open(os.path.join(self.FIXTURES, "public_key.json"), encoding="utf-8") as handle:
+            key = json.load(handle)
+        service = policy.threat_intel.ThreatIntelService(self.tmp, trusted_keys={key["key_id"]: key["public_key"]},
+                                                         base_urls=["https://intel.test"],
+                                                         fetch=self.fetch_scenario("valid-100"))
+        self.assertTrue(service.update_now())
+        policy.adblock.register_threat_matcher(service.match)
+        try:
+            self.assertEqual(policy.request_decision("https://login.phish.example/", True, "", False), "block-threat")
+            self.assertEqual(policy.request_decision("http://files.example:8080/bin.sh", False, "https://a.si/", False),
+                             "block-threat")
+            self.assertEqual(policy.request_decision("https://clean.example/", True, "", False), "allow")
+            self.assertEqual(policy.resolve_input("phish.example", "duckduckgo")[0], "blocked")
+            service.store._fetch = self.fetch_scenario("forged-103")
+            self.assertFalse(service.update_now())
+            self.assertEqual(policy.request_decision("https://phish.example/", True, "", False), "block-threat")
+        finally:
+            policy.adblock._extra_threat_matchers.remove(service.match)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -37,6 +37,8 @@ SHARED_DATA = [
     ("core/config.py", "shared/core"),
     ("core/bookmarks_importer.py", "shared/core"),
     ("core/reader.py", "shared/core"),
+    ("core/signed_feed.py", "shared/core"),
+    ("core/threat_intel.py", "shared/core"),
     ("ui/home.html", "shared/ui"),
     ("ui/home.css", "shared/ui"),
     ("ui/home.js", "shared/ui"),
@@ -75,6 +77,9 @@ def pyinstaller() -> None:
         "--distpath", DIST, "--workpath", os.path.join(BUILD, "work"), "--specpath", BUILD,
         "--paths", WINDOWS,
         "--hidden-import", "safeer_windows.smoke",
+        # Loaded dynamically by core/signed_feed.py; the pure-Python verifier is the fallback.
+        "--hidden-import", "cryptography.hazmat.primitives.asymmetric.ed25519",
+        "--hidden-import", "cryptography.exceptions",
         "--exclude-module", "tkinter",
         "--exclude-module", "PIL",  # only used by the build and CI screenshots
     ]

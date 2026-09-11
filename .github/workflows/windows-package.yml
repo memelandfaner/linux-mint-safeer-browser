@@ -9,6 +9,8 @@ on:
       - 'core/config.py'
       - 'core/bookmarks_importer.py'
       - 'core/reader.py'
+      - 'core/signed_feed.py'
+      - 'core/threat_intel.py'
       - 'ui/home.*'
       - 'assets/icon.png'
       - 'assets/safeer-mark.svg'

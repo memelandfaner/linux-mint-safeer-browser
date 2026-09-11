@@ -183,6 +183,15 @@ class SmokeRunner(QObject):
         icons = {name: not window.app.icons[name].pixmap(18, 18).isNull() for name in ("back", "reload", "home", "star", "menu", "close")}
         self.check("toolbar_icons_loaded", all(icons.values()), icons)
         self.check("home_page_windows_label", "Windows" in str(subtitle), subtitle)
+        feed = policy.threat_intel._load_feed_module()
+        public = bytes.fromhex("fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025")
+        signature = bytes.fromhex("6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac"
+                                  "18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a")
+        verifier_ok = feed.ed25519_verify(public, bytes.fromhex("af82"), signature) and \
+            not feed.ed25519_verify(public, b"tampered", signature)
+        self.check("signed_feed_verifier", verifier_ok,
+                   {"backend": "cryptography" if feed._Ed25519PublicKey is not None else "pure-python",
+                    "trusted_keys": len(browser.threat_intel.trusted_keys)})
 
         target = self.base + "/after"
         yield Js(page, "window.webkit.messageHandlers.safeer.postMessage({action: 'navigate', url: %s}); true" % json.dumps(target))
