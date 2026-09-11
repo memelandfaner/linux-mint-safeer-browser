@@ -20,9 +20,10 @@ from pathlib import Path
 
 # Public keys trusted to sign feed manifests: key_id -> base64 Ed25519 public key.
 # Without a trusted key the signed feed stays disabled and only the built-in protection is used.
-# TEST KEY: "safeer-test-2026-09" is for the test project only. Builds that trust it are not
-# published; the production key generated on the Safeer worker replaces it before any release.
-TRUSTED_KEYS: dict = {"safeer-test-2026-09": "mGtehv7JGwvJfW61dqK0JBj+4cRlioTMZb7x3uszaH4="}
+# Production key "safeer-prod-2026-09", generated on 2026-09-11 on the owner's computer; the private key
+# was never in a repository, Docker image or package. Add a new key here before rotating it on the server
+# and remove the old one only after the server no longer signs with it.
+TRUSTED_KEYS: dict = {"safeer-prod-2026-09": "Z4fKgHcD1wdrYBdvybqszN/z355SrGUREUhJyQJISpA="}
 
 BASE_URLS = ("https://intel.safeer.si",)
 SECURITY_CATEGORIES = frozenset({"botnet_c2", "malware", "phishing", "scam"})
