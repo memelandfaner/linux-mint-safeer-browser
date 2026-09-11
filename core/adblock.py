@@ -67,16 +67,45 @@ YOUTUBE_ADBLOCK_SCRIPT = """
     // watch document assigns JavaScript objects directly, without JSON.parse.
     var nativeParse = JSON.parse;
     var nativeStringify = JSON.stringify;
-    var stats = window._safeerAdStats = {cleanedResponses:0, removedFields:0, skipClicks:0};
+    var stats = window._safeerAdStats = {cleanedResponses:0, removedFields:0, skipClicks:0, idlePrompts:0};
     // playerAds includes autoplay configuration; heartbeat and integrity fields
     // belong to the media protocol. Preserve them and remove only ad slots.
     var adKeys = ['adPlacements', 'adSlots'];
-    var adKeyPattern = /adPlacements|adSlots/;
+    var playerKeyPattern = /adPlacements|adSlots|youThereRenderer/;
+    // YouTube and YouTube Music schedule the idle prompt ("Video paused. Continue watching?")
+    // from playerResponse.messages[].youThereRenderer. The renderer stays, only its timers move
+    // beyond any real session. 7 days stays below setTimeout's 2^31-1 ms limit (larger values fire at once).
+    var IDLE_LIMIT_MS = 604800000;
+    function quietIdlePrompt(data) {
+        if (!Array.isArray(data.messages)) return 0;
+        var changed = 0;
+        data.messages.forEach(function(message) {
+            var renderer = message && message.youThereRenderer;
+            if (!renderer || typeof renderer !== 'object') return;
+            var configData = renderer.configData;
+            var targets = [renderer];
+            if (configData && typeof configData === 'object') {
+                targets.push(configData);
+                if (configData.youThereData && typeof configData.youThereData === 'object') targets.push(configData.youThereData);
+            }
+            targets.forEach(function(target) {
+                [['lactThresholdMs', IDLE_LIMIT_MS], ['playbackPauseDelayMs', IDLE_LIMIT_MS], ['promptDelaySec', IDLE_LIMIT_MS / 1000]].forEach(function(field) {
+                    if (!Object.prototype.hasOwnProperty.call(target, field[0])) return;
+                    var current = Number(target[field[0]]);
+                    if (current >= field[1]) return;
+                    target[field[0]] = typeof target[field[0]] === 'string' ? String(field[1]) : field[1];
+                    changed++;
+                });
+            });
+        });
+        return changed;
+    }
+    function playerChanges() { return stats.removedFields + stats.idlePrompts; }
     function cleanPlayerText(text) {
-        if (typeof text !== 'string' || !adKeyPattern.test(text)) return text;
-        var removedBefore = stats.removedFields;
+        if (typeof text !== 'string' || !playerKeyPattern.test(text)) return text;
+        var changesBefore = playerChanges();
         var data = cleanPlayerData(nativeParse(text));
-        return stats.removedFields === removedBefore ? text : nativeStringify(data);
+        return playerChanges() === changesBefore ? text : nativeStringify(data);
     }
     function cleanPlayerData(data, depth) {
         depth = depth || 0;
@@ -88,6 +117,7 @@ YOUTUBE_ADBLOCK_SCRIPT = """
                 try { delete data[key]; removed++; } catch (_) {}
             }
         });
+        try { stats.idlePrompts += quietIdlePrompt(data); } catch (_) {}
         // Known player response envelopes; do not traverse unrelated page data.
         ['playerResponse', 'player_response', 'response'].forEach(function(key) {
             var value = data[key];
@@ -134,7 +164,7 @@ YOUTUBE_ADBLOCK_SCRIPT = """
     JSON.parse = function() {
         var data = nativeParse.apply(this, arguments);
         // Most YouTube JSON contains navigation or comments, not player ads.
-        return typeof arguments[0] !== 'string' || adKeyPattern.test(arguments[0]) ? cleanPlayerData(data) : data;
+        return typeof arguments[0] !== 'string' || playerKeyPattern.test(arguments[0]) ? cleanPlayerData(data) : data;
     };
     function isPlayerApi(value) {
         try {
@@ -1078,6 +1108,9 @@ YOUTUBE_KEEP_WATCHING_SCRIPT = r"""
     document.addEventListener('pause', function (ev) {
         var v = ev.target;
         if (!v || v.tagName !== 'VIDEO' || v.ended) return;
+        // Hover previews on the home page pause on their own; only the player's video counts.
+        var player = playerVideo();
+        if (player && v !== player) return;
         if (Date.now() - lastUserInput > 2000) {
             lastAutoPause = Date.now();
             autoPausedVideo = v;
@@ -1100,9 +1133,15 @@ YOUTUBE_KEEP_WATCHING_SCRIPT = r"""
         return s.visibility !== 'hidden' && s.display !== 'none';
     }
 
+    function playerVideo() {
+        return document.querySelector('#movie_player video, ytmusic-player video, video.html5-main-video');
+    }
+
     function mainVideo() {
+        var player = playerVideo();
+        if (player) return player;
         if (autoPausedVideo && autoPausedVideo.isConnected) return autoPausedVideo;
-        return document.querySelector('#movie_player video, ytmusic-player video, video.html5-main-video, video');
+        return document.querySelector('video');
     }
 
     function isIdlePrompt(el) {

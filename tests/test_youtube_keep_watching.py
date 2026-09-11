@@ -31,3 +31,55 @@ class YouTubeKeepWatchingTests(unittest.TestCase):
             handle.write(YOUTUBE_KEEP_WATCHING_SCRIPT)
             handle.flush()
             subprocess.run(["node", "--check", handle.name], check=True)
+
+
+def _chromium_path():
+    import os
+    path = os.environ.get("SAFEER_CHROMIUM", "")
+    return path if path and os.path.exists(path) else ""
+
+
+@unittest.skipUnless(_chromium_path(), "set SAFEER_CHROMIUM to a Chromium binary to run the browser test")
+class YouTubeKeepWatchingBrowserTests(unittest.TestCase):
+    def test_prompt_resumes_the_player_video_and_ignores_hover_previews(self):
+        from playwright.sync_api import sync_playwright
+
+        page_html = """<!doctype html><html><body>
+<div id="movie_player"><video id="main"></video></div>
+<ytd-rich-item-renderer><video id="preview"></video></ytd-rich-item-renderer>
+<script>
+window.played = [];
+for (const v of document.querySelectorAll('video')) {
+  Object.defineProperty(v, 'paused', { value: true, configurable: true });
+  v.play = function () { window.played.push(this.id); return Promise.resolve(); };
+}
+</script></body></html>"""
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(executable_path=_chromium_path(), args=["--no-sandbox"])
+            try:
+                context = browser.new_context()
+                context.route("https://www.youtube.com/**", lambda route: route.fulfill(
+                    status=200, content_type="text/html", body=page_html))
+                context.add_init_script(YOUTUBE_KEEP_WATCHING_SCRIPT)
+                page = context.new_page()
+                page.goto("https://www.youtube.com/watch?v=fixture")
+                page.wait_for_timeout(100)
+                page.evaluate("""() => {
+                    document.getElementById('main').dispatchEvent(new Event('pause'));
+                    // A hover preview that pauses by itself afterwards must not take over.
+                    document.getElementById('preview').dispatchEvent(new Event('pause'));
+                    const prompt = document.createElement('ytd-you-there-renderer');
+                    prompt.style.cssText = 'display:block;width:300px;height:80px';
+                    const button = document.createElement('button');
+                    button.textContent = 'Yes';
+                    button.onclick = () => { window.confirmed = (window.confirmed || 0) + 1; };
+                    prompt.appendChild(button);
+                    document.body.appendChild(prompt);
+                }""")
+                page.wait_for_function("window.confirmed >= 1 && window.played.length >= 1", timeout=5000)
+                page.wait_for_timeout(600)
+                played = page.evaluate("window.played")
+                self.assertIn("main", played)
+                self.assertNotIn("preview", played)
+            finally:
+                browser.close()
