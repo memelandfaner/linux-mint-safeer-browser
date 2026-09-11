@@ -3627,6 +3627,8 @@ class SafeerMintBrowser(Gtk.Window):
     def show_fake_bank_warning(self, webview, uri, verdict, after_load=False):
         """🏦 BankGuard: opozorilo pred lažno spletno banko (nazaj, prava stran banke ali nadaljevanje)."""
         if getattr(self, "_bank_warning_open", False):
+            # another warning is still open: show this one right after it instead of dropping it
+            GLib.timeout_add(400, self.show_fake_bank_warning, webview, uri, verdict, after_load)
             return False
         self._bank_warning_open = True
         response = 1

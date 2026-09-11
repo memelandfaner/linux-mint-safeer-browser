@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "description": "Real banks and payment services whose domains Safeer never blocks, and the names fake banks imitate. Sources: UJP list of banks (19 Feb 2026), the banks' own websites, NLB Group markets page. Checked 2026-09-11.",
+  "description": "Real banks and payment services whose domains Safeer never blocks, and the names fake banks imitate. Sources: UJP list of banks (19 Feb 2026), the banks' own websites, NLB Group markets page, UniCredit Group country pages. Checked 2026-09-11.",
   "banks": [
-    {"id": "nlb", "name": "NLB", "official": ["nlb.si"], "family": ["nlbgroup.com", "nlbkb.rs", "nlb-rs.ba"],
+    {"id": "nlb", "name": "NLB", "official": ["nlb.si"], "family": ["nlbgroup.com", "nlbgroup.si", "nlbkb.rs", "nlb-rs.ba", "nlb.mk", "nlb.me", "nlb-fbih.ba"],
      "names": ["nlb klik", "nova ljubljanska banka"], "tokens": ["nlb", "nlbklik"]},
     {"id": "otp", "name": "OTP banka", "official": ["otpbanka.si", "nkbm.si", "skb.si"], "family": ["otpbank.hu", "otpbanka.hr", "otpbanka.rs"],
      "names": ["otp banka", "bank@net", "nova kreditna banka maribor", "skb banka"], "tokens": ["otpbanka", "nkbm", "skbbanka"]},
     {"id": "intesa", "name": "Intesa Sanpaolo Bank", "official": ["intesasanpaolobank.si"], "family": ["intesasanpaolo.com", "bancaintesa.rs"],
      "names": ["intesa sanpaolo"], "tokens": ["intesa", "sanpaolo", "intesasanpaolo", "intesasanpaolobank"]},
-    {"id": "unicredit", "name": "UniCredit Banka Slovenija", "official": ["unicreditbank.si"], "family": ["unicredit.it", "unicreditgroup.eu"],
+    {"id": "unicredit", "name": "UniCredit Banka Slovenija", "official": ["unicreditbank.si"], "family": ["unicredit.it", "unicreditgroup.eu", "unicreditbank.hu", "unicreditbank.cz"],
      "names": ["unicredit banka", "unicredit bank"], "tokens": ["unicredit", "unicreditbank"]},
     {"id": "sparkasse", "name": "Banka Sparkasse", "official": ["sparkasse.si"], "family": [],
      "names": ["banka sparkasse", "net.stik", "m.stik"], "tokens": ["bankasparkasse"]},

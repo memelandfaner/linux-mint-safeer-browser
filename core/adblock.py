@@ -909,11 +909,22 @@ def is_real_bank_host(url_or_host: str) -> bool:
     return bool(guard and host and guard.is_trusted(host))
 
 
+def _bank_host(url_or_host: str) -> str:
+    """Host in the form BankGuard compares (lower case, no trailing dot, xn-- for Unicode names)."""
+    guard = _bank_guard()
+    host = _url_host(url_or_host) if url_or_host else ""
+    return guard._host(host) if guard and host else ""
+
+
 def allow_fake_bank_host(url_or_host: str) -> None:
     """The user chose to continue after a fake bank warning: no more warnings for this host in this session."""
-    host = _url_host(url_or_host) if url_or_host else ""
+    host = _bank_host(url_or_host)
     if host:
-        _fake_bank_allowed_hosts.add(host.rstrip("."))
+        _fake_bank_allowed_hosts.add(host)
+
+
+def is_fake_bank_host_allowed(url_or_host: str) -> bool:
+    return _bank_host(url_or_host) in _fake_bank_allowed_hosts
 
 
 def fake_bank_verdict(url: str):
@@ -921,7 +932,7 @@ def fake_bank_verdict(url: str):
     guard = _bank_guard()
     if not guard or not url or not url.lower().startswith(("http://", "https://")):
         return None
-    host = _url_host(url).rstrip(".")
+    host = _bank_host(url)
     if not host or host in _fake_bank_allowed_hosts:
         return None
     try:
@@ -935,8 +946,8 @@ def fake_bank_page_verdict(page_url: str, signals):
     guard = _bank_guard()
     if not guard or not isinstance(signals, dict) or not page_url:
         return None
-    host = _url_host(page_url).rstrip(".")
-    reported = str(signals.get("host") or "").lower().rstrip(".")
+    host = _bank_host(page_url)
+    reported = guard._host(str(signals.get("host") or ""))
     if not host or host != reported or host in _fake_bank_allowed_hosts:
         return None  # a late answer from a previous page, or allowed by the user
     try:

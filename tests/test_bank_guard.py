@@ -104,6 +104,16 @@ class CatalogueTests(unittest.TestCase):
         self.assertIsNone(adblock.fake_bank_verdict("file:///home/user/nlb-klik.html"))
         adblock.allow_fake_bank_host("https://nlb-klik-varnost.net/other")
         self.assertIsNone(adblock.fake_bank_verdict("https://nlb-klik-varnost.net/prijava"))
+        self.assertTrue(adblock.is_fake_bank_host_allowed("nlb-klik-varnost.net"))
+
+    def test_unicode_addresses_are_checked_in_their_xn_form(self):
+        # Qt prints many internationalized hosts in Unicode, the page reports the xn-- form
+        self.assertEqual(adblock.fake_bank_verdict("https://pаypаl-login.com/").reason, "homoglyph")
+        signals = {"host": "xn--pypl-login-zqic.com", "scheme": "https", "password": True, "title": "Pay"}
+        self.assertIsNone(adblock.fake_bank_page_verdict("https://pаypаl-login.com/", signals))  # no bank name on the page
+        signals["title"] = "PayPal"
+        self.assertEqual(adblock.fake_bank_page_verdict("https://pаypаl-login.com/", signals).bank_id, "paypal")
+        self.assertIsNone(adblock.fake_bank_verdict("https://ljubljanska-delavska-čitalnica.si/"))
 
     def test_page_verdict_uses_the_page_that_answered(self):
         signals = {"host": "secure-login.example", "scheme": "https", "password": True, "title": "NLB Klik - prijava"}
@@ -203,6 +213,16 @@ class BrowserGlueTests(unittest.TestCase):
             result = self.mint.SafeerMintBrowser.show_fake_bank_warning(app, webview, "https://nkbm-prijava.eu/login", verdict, after_load)
         self.assertFalse(result)  # one-shot idle callback
         return loads, backs
+
+    def test_second_warning_waits_for_the_first(self):
+        retried = []
+        app = SimpleNamespace(_bank_warning_open=True, show_fake_bank_warning=object())
+        verdict = adblock.fake_bank_verdict("https://otpbamka.si/")
+        with mock.patch.object(self.mint, "GLib", SimpleNamespace(timeout_add=lambda *args: retried.append(args))):
+            self.assertFalse(self.mint.SafeerMintBrowser.show_fake_bank_warning(app, object(), "https://otpbamka.si/", verdict, True))
+        self.assertEqual(len(retried), 1)
+        self.assertEqual(retried[0][0], 400)
+        self.assertEqual(retried[0][3:], ("https://otpbamka.si/", verdict, True))
 
     def test_warning_choices(self):
         self.assertEqual(self.warning(1, after_load=False), ([], []))
