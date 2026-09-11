@@ -1,13 +1,16 @@
+import base64
 import json
 import tempfile
 import time
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 from core import adblock
 from core.threat_intel import ThreatIntelService, _load_feed_module
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "signed_feed"
+CONFORMANCE = Path(__file__).resolve().parent / "fixtures" / "signed_feed_conformance"
 KEY = json.loads((FIXTURES / "public_key.json").read_text())
 TRUSTED = {KEY["key_id"]: KEY["public_key"]}
 
@@ -134,6 +137,45 @@ class SignedThreatFeedTests(unittest.TestCase):
             self.assertFalse(service.update_now())
         finally:
             feed._Ed25519PublicKey = original
+
+    def test_ads_and_trackers_are_not_threats(self):
+        service = self.service()
+        self.server.scenario = "valid-100"
+        service.update_now()
+        service.store.match_url = lambda url: "ads"
+        service.store.match_host = lambda host: "tracker"
+        self.assertIsNone(service.match("https://ads.example/"))
+        self.assertIsNone(service.match("tracker.example"))
+
+
+class ConformanceCorpusTests(unittest.TestCase):
+    """The same corpus is checked by the Kotlin client on Android, so all Safeer browsers agree."""
+
+    def test_verdicts_match_corpus(self):
+        feed = _load_feed_module()
+        trusted = json.loads((CONFORMANCE / "trusted_keys.json").read_text())
+        lines = (CONFORMANCE / "cases.txt").read_text().splitlines()
+        self.assertGreaterEqual(len(lines), 100)
+        for line in lines:
+            name, expect, installed, now, rules, manifest, bundle = line.split(" ")
+            with self.subTest(case=name):
+                try:
+                    parsed = feed.verify_manifest(base64.b64decode(manifest), trusted, "threats",
+                                                  installed_version=int(installed),
+                                                  now=datetime.fromtimestamp(int(now), timezone.utc))
+                    count = None
+                    if bundle != "-":
+                        count = len(feed.verify_bundle(base64.b64decode(bundle), parsed, trusted).rules)
+                    verdict = "ok"
+                except feed.RollbackError:
+                    verdict = "rollback"
+                except feed.ExpiredFeedError:
+                    verdict = "expired"
+                except feed.FeedVerificationError:
+                    verdict = "error"
+                self.assertEqual(verdict, expect)
+                if expect == "ok" and rules != "-":
+                    self.assertEqual(count, int(rules))
 
 
 if __name__ == "__main__":
