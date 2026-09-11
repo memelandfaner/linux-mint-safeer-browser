@@ -151,5 +151,55 @@ assert.strictEqual(revived.x, 2);
         subprocess.run(["node", "-e", fixture + YOUTUBE_ADBLOCK_SCRIPT[start:end] + checks], check=True)
 
 
+    def test_idle_prompt_timers_move_beyond_any_session(self):
+        start = YOUTUBE_ADBLOCK_SCRIPT.index("    // Remove ad instructions")
+        end = YOUTUBE_ADBLOCK_SCRIPT.index("    // 4. Safe YouTube", start)
+        fixture = r"""
+const assert = require('assert');
+const window = globalThis;
+const document = { addEventListener() {} };
+const location = { href: 'https://music.youtube.com/watch?v=fixture' };
+const source = {
+  videoDetails: { videoId: 'fixture' },
+  messages: [
+    { mealbarPromoRenderer: { messageTexts: ['fixture'] } },
+    { youThereRenderer: { configData: { youThereData: {
+      lactThresholdMs: '1800000', playbackPauseDelayMs: 5000, promptDelaySec: 1800, showPausedActions: [{ fixture: 1 }]
+    } } } }
+  ]
+};
+let reply = '';
+window.fetch = () => Promise.resolve(new Response(reply, { status: 200, headers: { 'content-type': 'application/json' } }));
+"""
+        checks = r"""
+const MAX_TIMER = 2147483647;
+function assertQuiet(data, label) {
+  const youThere = data.messages[1].youThereRenderer.configData.youThereData;
+  assert.strictEqual(youThere.lactThresholdMs, '604800000', label + ' lact (string kept as string)');
+  assert.strictEqual(youThere.playbackPauseDelayMs, 604800000, label + ' pause delay');
+  assert.strictEqual(youThere.promptDelaySec, 604800, label + ' prompt delay');
+  assert.ok(youThere.playbackPauseDelayMs < MAX_TIMER && youThere.promptDelaySec * 1000 < MAX_TIMER, label + ' timers stay valid');
+  assert.deepStrictEqual(youThere.showPausedActions, [{ fixture: 1 }], label + ' dialog actions untouched');
+  assert.deepStrictEqual(data.messages[0], source.messages[0], label + ' other messages untouched');
+  assert.deepStrictEqual(data.videoDetails, source.videoDetails, label + ' video untouched');
+}
+window.ytInitialPlayerResponse = structuredClone(source);
+assertQuiet(window.ytInitialPlayerResponse, 'initial object');
+assertQuiet(JSON.parse(nativeStringify({ playerResponse: source })).playerResponse, 'JSON.parse');
+const quiet = cleanPlayerText(nativeStringify(source));
+assertQuiet(nativeParse(quiet), 'text');
+assert.strictEqual(cleanPlayerText(quiet), quiet, 'already quiet text is returned unchanged');
+const noTimers = nativeStringify({ messages: [{ youThereRenderer: { title: 'fixture' } }] });
+assert.strictEqual(cleanPlayerText(noTimers), noTimers, 'renderer without timers is not rewritten');
+(async () => {
+  reply = nativeStringify(source);
+  const data = await (await fetch('https://music.youtube.com/youtubei/v1/player?prettyPrint=false')).json();
+  assertQuiet(data, 'fetch');
+  console.log('PASS: YouTube idle prompt timers moved beyond any session');
+})().catch(e => { console.error(e); process.exitCode = 1; });
+"""
+        subprocess.run(["node", "-e", fixture + YOUTUBE_ADBLOCK_SCRIPT[start:end] + checks], check=True)
+
+
 if __name__ == "__main__":
     unittest.main()
