@@ -52,6 +52,11 @@ from core.adblock import (
     strip_tracking_parameters,
     is_threat_domain,
     is_ad_domain,
+    is_real_bank_host,
+    fake_bank_verdict,
+    fake_bank_page_verdict,
+    allow_fake_bank_host,
+    bank_guard_page_script,
     FORCE_DARK_MODE_CSS,
     AUTH_SCRIPT_EXCLUSIONS,
     is_passthrough_host
@@ -2270,6 +2275,13 @@ class SafeerMintBrowser(Gtk.Window):
                             decision.ignore()
                             return True
 
+                        # 🏦 BankGuard: naslov, ki posnema banko (npr. nlb-klik-prijava.com, otpbamka.si)
+                        bank_verdict = fake_bank_verdict(uri)
+                        if bank_verdict is not None:
+                            decision.ignore()
+                            GLib.idle_add(self.show_fake_bank_warning, webview, uri, bank_verdict, False)
+                            return True
+
                         if self.is_download_url(uri):
                             self.start_direct_download(uri)
                             decision.ignore()
@@ -3612,6 +3624,88 @@ class SafeerMintBrowser(Gtk.Window):
         if wv:
             wv.load_uri(target)
 
+    def show_fake_bank_warning(self, webview, uri, verdict, after_load=False):
+        """🏦 BankGuard: opozorilo pred lažno spletno banko (nazaj, prava stran banke ali nadaljevanje)."""
+        if getattr(self, "_bank_warning_open", False):
+            return False
+        self._bank_warning_open = True
+        response = 1
+        try:
+            self.increment_shields_blocked()
+            host = urllib.parse.urlparse(uri).hostname or uri
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.WARNING,
+                buttons=Gtk.ButtonsType.NONE,
+                text="🏦 Safeer BankGuard: LAŽNA SPLETNA BANKA"
+            )
+            dialog.format_secondary_text(
+                f"'{host}' ni prava spletna banka, predstavlja pa se kot {verdict.bank_name}.\n\n"
+                "Na tej strani ne vpisujte uporabniškega imena, gesla, kode SMS ali podatkov kartice. "
+                f"Prava stran banke je {verdict.official_domain}."
+            )
+            dialog.add_button("Vseeno nadaljuj", 3)
+            dialog.add_button(f"Odpri {verdict.official_domain}", 2)
+            dialog.add_button("⬅ Nazaj na varno", 1)
+            dialog.set_default_response(1)
+            response = dialog.run()
+            dialog.destroy()
+        except Exception as exc:
+            print(f"[BankGuard] Opozorila ni bilo mogoče prikazati: {exc}")
+        finally:
+            self._bank_warning_open = False
+        if response == 3:
+            allow_fake_bank_host(uri)
+            if not after_load:
+                webview.load_uri(uri)
+        elif response == 2:
+            webview.load_uri(f"https://{verdict.official_domain}/")
+        elif after_load:
+            if webview.can_go_back():
+                webview.go_back()
+            else:
+                webview.load_uri(f"file://{os.path.join(BASE_DIR, 'ui', 'home.html')}")
+        return False
+
+    def schedule_fake_bank_check(self, webview, uri):
+        """🏦 BankGuard: po naložitvi preveri, ali se stran z obrazcem za prijavo predstavlja kot banka (lokalno)."""
+        if not uri.startswith(("https://", "http://")) or is_real_bank_host(uri):
+            return
+        script = bank_guard_page_script()
+        if not script:
+            return
+        generation = getattr(webview, "_safeer_bank_check", 0) + 1
+        webview._safeer_bank_check = generation
+
+        def run():
+            if getattr(webview, "_safeer_bank_check", 0) != generation or (webview.get_uri() or "") != uri:
+                return False
+            try:
+                webview.run_javascript_in_world(script, "safeer-bankguard", None,
+                                                self.on_fake_bank_signals, (generation, uri))
+            except Exception as exc:
+                print(f"[BankGuard] Preverjanje strani ni uspelo: {exc}")
+            return False
+
+        GLib.idle_add(run)
+        GLib.timeout_add(2500, run)  # strani, ki obrazec za prijavo narišejo pozneje
+
+    def on_fake_bank_signals(self, webview, result, user_data):
+        generation, uri = user_data
+        try:
+            js_result = webview.run_javascript_in_world_finish(result)
+            signals = json.loads(js_result.get_js_value().to_json(0) or "null")
+        except Exception:
+            return
+        if getattr(webview, "_safeer_bank_check", 0) != generation or (webview.get_uri() or "") != uri:
+            return
+        verdict = fake_bank_page_verdict(uri, signals)
+        if verdict is None:
+            return
+        webview._safeer_bank_check = generation + 1  # eno opozorilo na stran
+        self.show_fake_bank_warning(webview, uri, verdict, True)
+
     def show_threat_warning(self, domain):
         self.increment_shields_blocked()
         dialog = Gtk.MessageDialog(
@@ -4076,6 +4170,7 @@ class SafeerMintBrowser(Gtk.Window):
 
     def on_tab_load_changed(self, tab_id, webview, event):
         if event == WebKit2.LoadEvent.STARTED:
+            webview._safeer_bank_check = getattr(webview, "_safeer_bank_check", 0) + 1  # prekliči staro preverjanje
             webview._safeer_crashed = False
             for item in self.tabs:
                 if item["id"] == tab_id:
@@ -4090,6 +4185,7 @@ class SafeerMintBrowser(Gtk.Window):
         if event == WebKit2.LoadEvent.FINISHED:
             uri = webview.get_uri() or ""
             title = webview.get_title() or ""
+            self.schedule_fake_bank_check(webview, uri)
 
             for tab_item in self.tabs:
                 if tab_item["id"] == tab_id:

@@ -28,7 +28,7 @@ BASE_URLS = ("https://intel.safeer.si",)
 SECURITY_CATEGORIES = frozenset({"botnet_c2", "malware", "phishing", "scam"})
 UPDATE_INTERVAL_SECONDS = 6 * 3600
 RETRY_SECONDS = 3600
-FIRST_UPDATE_DELAY_SECONDS = 30
+FIRST_UPDATE_DELAY_SECONDS = 12  # after every start, once the first page is loading
 
 
 def _load_feed_module():
@@ -63,19 +63,21 @@ class ThreatIntelService:
         self._stop = threading.Event()
         self._thread = None
         self.last_check = 0.0
+        self.loaded = threading.Event()  # set once the stored bundle has been loaded (or found missing)
 
     @property
     def enabled(self) -> bool:
         return bool(self.trusted_keys)
 
     def start(self) -> bool:
-        """Loads the stored bundle and starts background updates. Returns False when disabled."""
+        """Starts the update agent and returns at once (False when disabled).
+
+        On its own thread the agent loads and re-verifies the bundle stored by the previous run, checks
+        for a newer one FIRST_UPDATE_DELAY_SECONDS after every start and then every few hours, so the
+        window and the first page are never kept waiting.
+        """
         if not self.enabled or self._thread is not None:
             return False
-        try:
-            self.store.load()
-        except Exception:  # noqa: BLE001 - a broken cache must never break start-up
-            pass
         self._thread = threading.Thread(target=self._run, name="safeer-threat-intel", daemon=True)
         self._thread.start()
         return True
@@ -94,6 +96,12 @@ class ThreatIntelService:
             return False
 
     def _run(self) -> None:
+        try:
+            self.store.load()
+        except Exception:  # noqa: BLE001 - a broken cache must never break start-up
+            pass
+        finally:
+            self.loaded.set()
         if self._stop.wait(self.first_delay):
             return
         while not self._stop.is_set():

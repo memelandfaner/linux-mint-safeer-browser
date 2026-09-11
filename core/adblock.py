@@ -869,6 +869,86 @@ def is_passthrough_host(url: str) -> bool:
 
 _extra_threat_matchers = []
 
+# Categories that block even on a real bank's host (a compromised server); anything else never does.
+CRITICAL_THREAT_CATEGORIES = frozenset({"botnet_c2", "malware"})
+
+_bank_guard_instance = None
+_fake_bank_allowed_hosts = set()
+
+
+def _bank_guard():
+    """The shared BankGuard (core/bank_guard.py), loaded once; None when it is unavailable."""
+    global _bank_guard_instance
+    if _bank_guard_instance is None:
+        try:
+            import importlib.util
+            import os
+            import sys
+
+            module = sys.modules.get("safeer_bank_guard")
+            if module is None:
+                path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bank_guard.py")
+                spec = importlib.util.spec_from_file_location("safeer_bank_guard", path)
+                module = importlib.util.module_from_spec(spec)
+                sys.modules["safeer_bank_guard"] = module  # dataclasses look the module up while it loads
+                try:
+                    spec.loader.exec_module(module)
+                except Exception:
+                    del sys.modules["safeer_bank_guard"]
+                    raise
+            _bank_guard_instance = module.default_guard()
+        except Exception:
+            _bank_guard_instance = False
+    return _bank_guard_instance or None
+
+
+def is_real_bank_host(url_or_host: str) -> bool:
+    """Official bank domains, bank group domains and payment/identity infrastructure (BankGuard catalogue)."""
+    guard = _bank_guard()
+    host = _url_host(url_or_host) if url_or_host else ""
+    return bool(guard and host and guard.is_trusted(host))
+
+
+def allow_fake_bank_host(url_or_host: str) -> None:
+    """The user chose to continue after a fake bank warning: no more warnings for this host in this session."""
+    host = _url_host(url_or_host) if url_or_host else ""
+    if host:
+        _fake_bank_allowed_hosts.add(host.rstrip("."))
+
+
+def fake_bank_verdict(url: str):
+    """BankGuard verdict for an address whose host name imitates a bank, or None."""
+    guard = _bank_guard()
+    if not guard or not url or not url.lower().startswith(("http://", "https://")):
+        return None
+    host = _url_host(url).rstrip(".")
+    if not host or host in _fake_bank_allowed_hosts:
+        return None
+    try:
+        return guard.host_verdict(host)
+    except Exception:
+        return None
+
+
+def fake_bank_page_verdict(page_url: str, signals):
+    """BankGuard verdict for a loaded page from the signals of bank_guard_page_script(), or None."""
+    guard = _bank_guard()
+    if not guard or not isinstance(signals, dict) or not page_url:
+        return None
+    host = _url_host(page_url).rstrip(".")
+    reported = str(signals.get("host") or "").lower().rstrip(".")
+    if not host or host != reported or host in _fake_bank_allowed_hosts:
+        return None  # a late answer from a previous page, or allowed by the user
+    try:
+        return guard.page_verdict(host, signals)
+    except Exception:
+        return None
+
+
+def bank_guard_page_script() -> str:
+    guard = _bank_guard()
+    return guard.page_script if guard else ""
+
 
 def register_threat_matcher(matcher) -> None:
     """Adds a matcher (url -> category or None), e.g. the signed Safeer threat feed."""
@@ -879,11 +959,13 @@ def register_threat_matcher(matcher) -> None:
 def is_threat_domain(url: str) -> bool:
     if is_passthrough_host(url):
         return False
-    if _threat_trie.is_blocked(_url_host(url)):
+    real_bank = is_real_bank_host(url)
+    if not real_bank and _threat_trie.is_blocked(_url_host(url)):
         return True
     for matcher in _extra_threat_matchers:
         try:
-            if matcher(url):
+            category = matcher(url)
+            if category and (not real_bank or category in CRITICAL_THREAT_CATEGORIES):
                 return True
         except Exception:
             continue
@@ -891,7 +973,7 @@ def is_threat_domain(url: str) -> bool:
 
 
 def is_ad_domain(url: str) -> bool:
-    if is_passthrough_host(url):
+    if is_passthrough_host(url) or is_real_bank_host(url):
         return False
     return _ad_trie.is_blocked(_url_host(url))
 
@@ -927,6 +1009,23 @@ AUTH_SCRIPT_EXCLUSIONS = [
     "*://*/login*", "*://*/signin*", "*://*/sign-in*", "*://*/oauth/*",
     "*://*/oauth2/*", "*://*/auth/*", "*://*/authorize*",
 ]
+
+
+def _bank_script_exclusions():
+    """Real banks and payment pages (BankGuard catalogue) run without cosmetic or anti-popup scripts."""
+    try:
+        import json
+        import os
+
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "banks.json"), encoding="utf-8") as handle:
+            data = json.load(handle)
+        domains = [d for bank in data["banks"] for d in bank["official"] + bank["family"]] + data["infrastructure"]
+        return [pattern for d in domains for pattern in (f"*://{d}/*", f"*://*.{d}/*")]
+    except Exception:
+        return []
+
+
+AUTH_SCRIPT_EXCLUSIONS += _bank_script_exclusions()
 
 # Keeps YouTube and YouTube Music playing: refreshes YouTube's activity timestamp and,
 # if the idle prompt still appears, confirms it and resumes the paused video.
