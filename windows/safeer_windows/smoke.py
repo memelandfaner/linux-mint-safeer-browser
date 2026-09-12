@@ -54,6 +54,17 @@ def arm_stack_dump(report: Optional[str], seconds: float) -> None:
         pass
 
 
+def report_crash(report: Optional[str], text: str) -> None:
+    """An uncaught exception in the windowed build ends in a native error box nobody can close."""
+    payload = {"ok": False, "failed": ["crash"], "stage": STAGE, "traceback": text, "results": list(RESULTS)}
+    try:
+        if report:
+            with open(report, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2, ensure_ascii=False, default=str)
+    except OSError:
+        pass
+
+
 def stage(name: str) -> None:
     global STAGE
     STAGE = name

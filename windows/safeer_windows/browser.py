@@ -1482,25 +1482,35 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     started = time.monotonic()
     if args.smoke_test:
-        # armed before anything that can block, so a startup hang is reported instead of timing out
-        from .smoke import arm_hard_watchdog, stage
-        arm_hard_watchdog(args.report, float(os.environ.get("SAFEER_SMOKE_TIMEOUT", "420")) + 60)
-        stage("dns")
+        return smoke_main(qt_app, settings, args, started)
     dns_status = apply_dns_mode(settings)
-    if args.smoke_test:
+    browser = SafeerBrowserApp(qt_app, settings, dns_status)
+    browser.start_instance_server()
+    browser.new_window(args.urls, restore=True)
+    code = qt_app.exec()
+    browser.shutdown()
+    return code
+
+
+def smoke_main(qt_app: QApplication, settings: policy.SettingsStore, args: argparse.Namespace, started: float) -> int:
+    """The automated run: every failure ends in the report, never in a dialog or a silent timeout."""
+    import traceback
+
+    from .smoke import SmokeRunner, arm_hard_watchdog, report_crash, stage
+
+    # armed before anything that can block, so a startup hang is reported instead of timing out
+    arm_hard_watchdog(args.report, float(os.environ.get("SAFEER_SMOKE_TIMEOUT", "420")) + 60)
+    try:
+        stage("dns")
+        dns_status = apply_dns_mode(settings)
         stage(f"browser ({dns_status})")
-    browser = SafeerBrowserApp(qt_app, settings, dns_status, smoke=args.smoke_test)
-    runner = None
-    if args.smoke_test:
-        from .smoke import SmokeRunner
+        browser = SafeerBrowserApp(qt_app, settings, dns_status, smoke=True)
         runner = SmokeRunner(browser, args, started)
         QTimer.singleShot(0, runner.start)
         stage("event loop")
-    else:
-        browser.start_instance_server()
-        browser.new_window(args.urls, restore=True)
-    code = qt_app.exec()
-    browser.shutdown()
-    if runner is not None:
+        qt_app.exec()
+        browser.shutdown()
         return runner.exit_code
-    return code
+    except BaseException:  # noqa: BLE001 - the report is the only channel out of a windowed build
+        report_crash(args.report, traceback.format_exc())
+        return 1

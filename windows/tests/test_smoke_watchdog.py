@@ -20,9 +20,20 @@ class SmokeWatchdogTests(unittest.TestCase):
         self.assertIn("os._exit(3)", block)
         self.assertLess(block.index("json.dump(payload"), block.index("os._exit(3)"))
 
+    def test_a_startup_exception_ends_in_the_report(self):
+        browser = BROWSER.read_text(encoding="utf-8")
+        block = browser[browser.index("def smoke_main("):]
+        self.assertIn("except BaseException", block)
+        self.assertIn("report_crash(args.report, traceback.format_exc())", block)
+        for inside in ("apply_dns_mode(settings)", "SafeerBrowserApp(qt_app", "qt_app.exec()"):
+            self.assertLess(block.index("try:"), block.index(inside), inside)
+        crash = self.source[self.source.index("def report_crash("):self.source.index("def stage(")]
+        self.assertIn('"failed": ["crash"]', crash)
+        self.assertIn('"traceback": text', crash)
+
     def test_the_watchdog_is_armed_before_anything_that_can_block(self):
         browser = BROWSER.read_text(encoding="utf-8")
-        start = browser.index("def main(")
+        start = browser.index("def smoke_main(")
         block = browser[start:]
         self.assertIn("arm_hard_watchdog(args.report", block)
         for later in ("apply_dns_mode(settings)", "SafeerBrowserApp(qt_app", "qt_app.exec()"):
