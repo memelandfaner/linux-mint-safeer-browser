@@ -88,3 +88,22 @@ class NoModalDuringSmokeTests(unittest.TestCase):
             self.assertIn("if self.window_ref.app.smoke:", block, name)
             self.assertIn(expected, block, name)
             self.assertLess(block.index("smoke"), block.index("super()"), name)
+
+
+class FrozenImportsTests(unittest.TestCase):
+    """The shared core files are loaded with importlib, so their imports must be named to PyInstaller."""
+
+    def test_every_import_of_the_shared_core_is_bundled(self):
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        try:
+            import build_windows
+        finally:
+            sys.path.pop(0)
+        names = build_windows.shared_imports()
+        for needed in ("urllib.request", "urllib.parse", "sqlite3", "html.parser", "hashlib", "base64", "ipaddress"):
+            self.assertIn(needed, names)
+        self.assertNotIn("__future__", names)
+        self.assertFalse([n for n in names if n.startswith("core.")], names)
+        source = (Path(__file__).resolve().parents[1] / "build_windows.py").read_text(encoding="utf-8")
+        self.assertIn('command += ["--hidden-import", name]', source)

@@ -71,6 +71,30 @@ def make_icon() -> str:
     return ICON
 
 
+def shared_imports() -> list:
+    """Top-level modules the shared core files import.
+
+    Those files ship as data and are loaded with importlib at run time, so PyInstaller never
+    analyses them; a standard-library module they need is bundled only if something else happens
+    to import it. urllib.request stopped being bundled that way and the packaged build crashed at
+    start, so every import is named explicitly.
+    """
+    import ast
+
+    names = set()
+    for source, _target in SHARED_DATA:
+        if not source.endswith(".py"):
+            continue
+        tree = ast.parse(open(os.path.join(ROOT, *source.split("/")), encoding="utf-8").read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                names.add(node.module)
+    # the shared files import each other by path, never as packages
+    return sorted(n for n in names if n != "__future__" and not n.startswith("core."))
+
+
 def pyinstaller() -> None:
     make_icon()
     shutil.rmtree(DIST, ignore_errors=True)
@@ -86,6 +110,8 @@ def pyinstaller() -> None:
         "--exclude-module", "tkinter",
         "--exclude-module", "PIL",  # only used by the build and CI screenshots
     ]
+    for name in shared_imports():
+        command += ["--hidden-import", name]
     for source, target in SHARED_DATA:
         command += ["--add-data", os.path.join(ROOT, *source.split("/")) + os.pathsep + target]
     command.append(os.path.join(WINDOWS, "launcher.py"))
