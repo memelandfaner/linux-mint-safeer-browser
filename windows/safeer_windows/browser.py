@@ -241,6 +241,25 @@ class SafeerPage(QWebEnginePage):
     def createWindow(self, window_type: QWebEnginePage.WebWindowType) -> Optional[QWebEnginePage]:
         return self.window_ref.create_page_for_window(self, window_type)
 
+    # Page dialogs block the event loop; in an automated run nobody can close them.
+    def javaScriptAlert(self, origin, message: str) -> None:
+        if self.window_ref.app.smoke:
+            print(f"[smoke] alert: {message}", flush=True)
+            return
+        super().javaScriptAlert(origin, message)
+
+    def javaScriptConfirm(self, origin, message: str) -> bool:
+        if self.window_ref.app.smoke:
+            print(f"[smoke] confirm declined: {message}", flush=True)
+            return False
+        return super().javaScriptConfirm(origin, message)
+
+    def javaScriptPrompt(self, origin, message: str, default: str):
+        if self.window_ref.app.smoke:
+            print(f"[smoke] prompt declined: {message}", flush=True)
+            return False, ""
+        return super().javaScriptPrompt(origin, message, default)
+
     def javaScriptConsoleMessage(self, level, message: str, line: int, source: str) -> None:
         if message.startswith(policy.BRIDGE_PREFIX):
             payload = policy.parse_bridge_message(message)
@@ -901,6 +920,9 @@ class BrowserWindow(QMainWindow):
                 QTimer.singleShot(0, lambda: self.close_tab(self.tabs.indexOf(view)))
 
     def confirm_external(self, url: QUrl) -> None:
+        if self.app.smoke:  # an automated run has nobody to answer a modal dialog
+            print(f"[smoke] external link declined: {url.toString()}", flush=True)
+            return
         answer = QMessageBox.question(self, policy.APP_NAME, tr(self.app, "external", url=url.toString()))
         if answer == QMessageBox.StandardButton.Yes:
             QDesktopServices.openUrl(url)
