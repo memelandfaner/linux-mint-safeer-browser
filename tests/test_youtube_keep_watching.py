@@ -15,6 +15,14 @@ class YouTubeKeepWatchingTests(unittest.TestCase):
         script = YOUTUBE_KEEP_WATCHING_SCRIPT
         self.assertIn("host === 'youtube.com'", script)
         self.assertIn("window._lact = Date.now()", script)
+        # Activity must stay current without timers (throttled in hidden/minimized windows).
+        self.assertIn("Object.defineProperty(window, '_lact'", script)
+        self.assertIn("get: function () { return Date.now(); }", script)
+        self.assertIn("'yt-popup-opened'", script)
+        # A background tab is not laid out, so the confirmation must not look at element sizes.
+        self.assertNotIn("getBoundingClientRect", script)
+        self.assertIn("ytmusic-button-renderer button", script)
+        self.assertIn("Promise.resolve().then(scan)", script)
         for renderer in ("ytmusic-you-there-renderer", "ytd-you-there-renderer", "yt-confirm-dialog-renderer"):
             self.assertIn(renderer, script)
 
@@ -65,21 +73,30 @@ for (const v of document.querySelectorAll('video')) {
                 page.goto("https://www.youtube.com/watch?v=fixture")
                 page.wait_for_timeout(100)
                 page.evaluate("""() => {
+                    window.addPrompt = (tag, css) => {
+                        const prompt = document.createElement(tag);
+                        prompt.style.cssText = css;
+                        const button = document.createElement('button');
+                        button.textContent = 'Yes';
+                        button.onclick = () => { window.confirmed = (window.confirmed || 0) + 1; };
+                        prompt.appendChild(button);
+                        document.body.appendChild(prompt);
+                        return prompt;
+                    };
                     document.getElementById('main').dispatchEvent(new Event('pause'));
                     // A hover preview that pauses by itself afterwards must not take over.
                     document.getElementById('preview').dispatchEvent(new Event('pause'));
-                    const prompt = document.createElement('ytd-you-there-renderer');
-                    prompt.style.cssText = 'display:block;width:300px;height:80px';
-                    const button = document.createElement('button');
-                    button.textContent = 'Yes';
-                    button.onclick = () => { window.confirmed = (window.confirmed || 0) + 1; };
-                    prompt.appendChild(button);
-                    document.body.appendChild(prompt);
+                    // Zero size is what a tab in the background reports; the prompt is still up.
+                    window.addPrompt('ytmusic-you-there-renderer', 'display:block;width:0;height:0');
                 }""")
                 page.wait_for_function("window.confirmed >= 1 && window.played.length >= 1", timeout=5000)
                 page.wait_for_timeout(600)
                 played = page.evaluate("window.played")
                 self.assertIn("main", played)
                 self.assertNotIn("preview", played)
+                # A prompt that is really hidden must be left alone.
+                page.evaluate("window.confirmed = 0; window.addPrompt('ytd-you-there-renderer', 'display:none')")
+                page.wait_for_timeout(1500)
+                self.assertEqual(page.evaluate("window.confirmed"), 0)
             finally:
                 browser.close()
