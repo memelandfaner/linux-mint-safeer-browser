@@ -1054,6 +1054,17 @@ def fake_bank_warning_text(verdict, lang: str = "sl") -> str:
     return lead + "\n\n" + texts["advice"]
 
 
+def real_bank_domains() -> tuple:
+    """Domains of the real banks and their payment/identity infrastructure (never touched by any filter)."""
+    guard = _bank_guard()
+    if not guard:
+        return ()
+    try:
+        return tuple(sorted(guard._trusted))
+    except Exception:
+        return ()
+
+
 def bank_guard_page_script() -> str:
     guard = _bank_guard()
     return guard.page_script if guard else ""
