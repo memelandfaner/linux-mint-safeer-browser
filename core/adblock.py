@@ -77,9 +77,11 @@ YOUTUBE_ADBLOCK_SCRIPT = """
     // beyond any real session. 7 days stays below setTimeout's 2^31-1 ms limit (larger values fire at once).
     var IDLE_LIMIT_MS = 604800000;
     function quietIdlePrompt(data) {
-        if (!Array.isArray(data.messages)) return 0;
+        var messages = Array.isArray(data.messages) ? data.messages : [];
+        if (data.youThereRenderer) messages = messages.concat([data]);
+        if (!messages.length) return 0;
         var changed = 0;
-        data.messages.forEach(function(message) {
+        messages.forEach(function(message) {
             var renderer = message && message.youThereRenderer;
             if (!renderer || typeof renderer !== 'object') return;
             var configData = renderer.configData;
@@ -127,6 +129,8 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             }
         });
         if (Array.isArray(data)) data.forEach(function(item) { cleanPlayerData(item, depth + 1); });
+        // messages carry the idle prompt configuration; they are part of the player response envelope
+        if (Array.isArray(data.messages)) data.messages.forEach(function(item) { cleanPlayerData(item, depth + 1); });
         if (removed) { stats.cleanedResponses++; stats.removedFields += removed; }
         return data;
     }
@@ -1123,14 +1127,24 @@ YOUTUBE_KEEP_WATCHING_SCRIPT = r"""
     var PROMPTS = 'ytmusic-you-there-renderer, ytd-you-there-renderer, ytm-you-there-renderer, yt-confirm-dialog-renderer';
     // In priority order: querySelector with a selector list would return the outer wrapper first.
     var BUTTONS = ['#confirm-button button', '#confirm-button tp-yt-paper-button', 'yt-button-renderer button',
-        'button', 'tp-yt-paper-button', '[role="button"]', '#confirm-button'];
+        'ytmusic-button-renderer button', 'ytmusic-button-renderer a', 'button', 'tp-yt-paper-button',
+        'a[role="button"]', '[role="button"]', '#confirm-button', 'yt-formatted-string.ytmusic-you-there-renderer'];
 
+    // A tab in the background is not laid out, so element sizes are 0 and say nothing about
+    // whether the prompt is up. Only the style of the element and its ancestors decides.
     function isShown(el) {
         if (!el || !el.isConnected) return false;
-        var r = el.getBoundingClientRect();
-        if (r.width <= 0 || r.height <= 0) return false;
-        var s = window.getComputedStyle(el);
-        return s.visibility !== 'hidden' && s.display !== 'none';
+        for (var node = el; node && node.nodeType === 1; node = node.parentElement || hostOf(node)) {
+            if (node.hasAttribute('hidden') || node.getAttribute('aria-hidden') === 'true') return false;
+            var style = window.getComputedStyle(node);
+            if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
+        }
+        return true;
+    }
+
+    function hostOf(node) {
+        var root = node.getRootNode ? node.getRootNode() : null;
+        return root && root.host ? root.host : null;
     }
 
     function playerVideo() {
