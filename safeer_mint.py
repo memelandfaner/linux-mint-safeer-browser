@@ -56,6 +56,9 @@ from core.adblock import (
     fake_bank_verdict,
     fake_bank_page_verdict,
     allow_fake_bank_host,
+    is_fake_bank_host_allowed,
+    is_local_page,
+    fake_bank_warning_text,
     bank_guard_page_script,
     FORCE_DARK_MODE_CSS,
     AUTH_SCRIPT_EXCLUSIONS,
@@ -3651,21 +3654,19 @@ class SafeerMintBrowser(Gtk.Window):
         response = 1
         try:
             self.increment_shields_blocked()
-            host = urllib.parse.urlparse(uri).hostname or uri
+            host = urllib.parse.urlparse(uri).hostname or ("lokalna datoteka" if is_local_page(uri) else uri)
+            lure = getattr(verdict, "reason", "") == "lure"
             dialog = Gtk.MessageDialog(
                 transient_for=self,
                 flags=0,
                 message_type=Gtk.MessageType.WARNING,
                 buttons=Gtk.ButtonsType.NONE,
-                text="🛡️ Safeer Shield: LAŽNA SPLETNA BANKA"
+                text="🛡️ Safeer Shield: PAST ZA PODATKE KARTICE" if lure else "🛡️ Safeer Shield: LAŽNA SPLETNA BANKA"
             )
-            dialog.format_secondary_text(
-                f"'{host}' ni prava spletna banka, predstavlja pa se kot {verdict.bank_name}.\n\n"
-                "Na tej strani ne vpisujte uporabniškega imena, gesla, kode SMS ali podatkov kartice. "
-                f"Prava stran banke je {verdict.official_domain}."
-            )
+            dialog.format_secondary_text(f"{host}\n\n" + fake_bank_warning_text(verdict, "sl"))
             dialog.add_button("Vseeno nadaljuj", 3)
-            dialog.add_button(f"Odpri {verdict.official_domain}", 2)
+            if verdict.official_domain:
+                dialog.add_button(f"Odpri {verdict.official_domain}", 2)
             dialog.add_button("⬅ Nazaj na varno", 1)
             dialog.set_default_response(1)
             response = dialog.run()
@@ -3678,7 +3679,7 @@ class SafeerMintBrowser(Gtk.Window):
             allow_fake_bank_host(uri)
             if not after_load:
                 webview.load_uri(uri)
-        elif response == 2:
+        elif response == 2 and verdict.official_domain:
             webview.load_uri(f"https://{verdict.official_domain}/")
         elif after_load:
             if webview.can_go_back():
@@ -3689,7 +3690,12 @@ class SafeerMintBrowser(Gtk.Window):
 
     def schedule_fake_bank_check(self, webview, uri):
         """🏦 BankGuard: po naložitvi preveri, ali se stran z obrazcem za prijavo predstavlja kot banka (lokalno)."""
-        if not uri.startswith(("https://", "http://")) or is_real_bank_host(uri):
+        if is_local_page(uri):
+            # an HTML file opened in the browser (an attachment saved from mail): checked by content,
+            # except the browser's own pages
+            if uri.startswith("file://" + BASE_DIR) or is_fake_bank_host_allowed(uri):
+                return
+        elif not uri.startswith(("https://", "http://")) or is_real_bank_host(uri):
             return
         script = bank_guard_page_script()
         if not script:

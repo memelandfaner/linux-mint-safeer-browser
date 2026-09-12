@@ -123,6 +123,29 @@ class CatalogueTests(unittest.TestCase):
         self.assertIsNone(adblock.fake_bank_page_verdict("https://klik.nlb.si/", dict(signals, host="klik.nlb.si")))
         self.assertIn("one-time-code", adblock.bank_guard_page_script())
 
+    def test_local_attachment_and_card_lure_pages(self):
+        # SI-CERT TZ009: the fake bank page is an HTML attachment opened from mail, so it has no host
+        local = {"host": "", "scheme": "file", "password": True, "title": "NLB Klik"}
+        verdict = adblock.fake_bank_page_verdict("file:///home/janez/Prejemi/NLB_Klik.html", local)
+        self.assertEqual((verdict.bank_id, verdict.reason), ("nlb", "local"))
+        self.assertIsNone(adblock.fake_bank_page_verdict("https://secure-login.example/", local), "scheme must match the page")
+        self.assertIsNone(adblock.fake_bank_page_verdict("file:///tmp/racun.html", dict(local, title="Moj racun")))
+        self.assertIn("priponke", adblock.fake_bank_warning_text(verdict))
+        self.assertIn("nikoli ne pokliče", adblock.fake_bank_warning_text(verdict))
+        adblock.allow_fake_bank_host("file:///home/janez/Prejemi/NLB_Klik.html")
+        self.assertTrue(adblock.is_fake_bank_host_allowed("file:///anything.html"))
+        self.assertIsNone(adblock.fake_bank_page_verdict("file:///home/janez/Prejemi/NLB_Klik.html", local))
+        # SI-CERT, May 2026: a card form dressed up as a police fine on a fresh domain
+        lure = {"host": "kazen-placilo.example", "scheme": "https", "card": True, "title": "Placilo kazni",
+                "headings": "Policija - prekrsek", "text": "Kazen 39 EUR placajte s kartico. Stevilka kartice"}
+        verdict = adblock.fake_bank_page_verdict("https://kazen-placilo.example/pay", lure)
+        self.assertEqual((verdict.bank_id, verdict.reason, verdict.official_domain), ("card", "lure", ""))
+        self.assertIn("plačilne kartice", adblock.fake_bank_warning_text(verdict))
+        self.assertIn("pretext", adblock.fake_bank_warning_text(verdict, "en"))
+        # tax number and PIN fields count as credential fields
+        taxid = {"host": "nlb-preverjanje.example", "scheme": "https", "taxid": True, "title": "NLB Klik - preverjanje"}
+        self.assertEqual(adblock.fake_bank_page_verdict("https://nlb-preverjanje.example/", taxid).reason, "page")
+
     def test_bank_pages_run_without_cosmetic_scripts(self):
         self.assertIn("*://*.nlb.si/*", adblock.AUTH_SCRIPT_EXCLUSIONS)
         self.assertIn("*://bankart.si/*", adblock.AUTH_SCRIPT_EXCLUSIONS)
@@ -242,7 +265,7 @@ class BrowserGlueTests(unittest.TestCase):
         with mock.patch.object(self.mint, "GLib", glib):
             self.mint.SafeerMintBrowser.schedule_fake_bank_check(app, webview, "https://secure-login.example/")
             self.mint.SafeerMintBrowser.schedule_fake_bank_check(app, webview, "https://klik.nlb.si/")
-            self.mint.SafeerMintBrowser.schedule_fake_bank_check(app, webview, "file:///x/ui/home.html")
+            self.mint.SafeerMintBrowser.schedule_fake_bank_check(app, webview, f"file://{self.mint.BASE_DIR}/ui/home.html")
         self.assertEqual(len(idle), 1)
         self.assertEqual(timeouts[0][0], 2500)
         self.assertFalse(idle[0]())
@@ -251,6 +274,12 @@ class BrowserGlueTests(unittest.TestCase):
         webview.get_uri = lambda: "https://elsewhere.example/"
         self.assertFalse(timeouts[0][1]())
         self.assertEqual(len(scripts), 1, "no check after the tab moved on")
+        with mock.patch.object(self.mint, "GLib", glib):
+            webview.get_uri = lambda: "file:///home/janez/Prejemi/NLB_Klik.html"
+            self.mint.SafeerMintBrowser.schedule_fake_bank_check(app, webview, "file:///home/janez/Prejemi/NLB_Klik.html")
+        self.assertEqual(len(idle), 2, "an HTML file outside the browser's own pages is checked")
+        self.assertFalse(idle[1]())
+        self.assertEqual(len(scripts), 2)
 
     def test_signals_open_the_warning_once(self):
         shown = []

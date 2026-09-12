@@ -950,14 +950,35 @@ def _bank_host(url_or_host: str) -> str:
     return guard._host(host) if guard and host else ""
 
 
+# A page opened from a file (an HTML attachment saved from mail) has no host; BankGuard checks its content.
+LOCAL_PAGE_KEY = "lokalna-datoteka"
+LOCAL_PAGE_SCHEMES = ("file", "content", "data", "blob")
+
+
+def _page_scheme(url: str) -> str:
+    try:
+        return urllib.parse.urlsplit((url or "").strip()).scheme.lower()
+    except ValueError:
+        return ""
+
+
+def is_local_page(url: str) -> bool:
+    return _page_scheme(url) in LOCAL_PAGE_SCHEMES
+
+
 def allow_fake_bank_host(url_or_host: str) -> None:
     """The user chose to continue after a fake bank warning: no more warnings for this host in this session."""
+    if is_local_page(url_or_host):
+        _fake_bank_allowed_hosts.add(LOCAL_PAGE_KEY)
+        return
     host = _bank_host(url_or_host)
     if host:
         _fake_bank_allowed_hosts.add(host)
 
 
 def is_fake_bank_host_allowed(url_or_host: str) -> bool:
+    if is_local_page(url_or_host):
+        return LOCAL_PAGE_KEY in _fake_bank_allowed_hosts
     return _bank_host(url_or_host) in _fake_bank_allowed_hosts
 
 
@@ -980,6 +1001,15 @@ def fake_bank_page_verdict(page_url: str, signals):
     guard = _bank_guard()
     if not guard or not isinstance(signals, dict) or not page_url:
         return None
+    scheme = _page_scheme(page_url)
+    if scheme in LOCAL_PAGE_SCHEMES:
+        # An HTML attachment opened from mail (SI-CERT TZ009): no host, so the schemes must agree instead.
+        if str(signals.get("scheme") or "") != scheme or LOCAL_PAGE_KEY in _fake_bank_allowed_hosts:
+            return None
+        try:
+            return guard.page_verdict("", signals)
+        except Exception:
+            return None
     host = _bank_host(page_url)
     reported = guard._host(str(signals.get("host") or ""))
     if not host or host != reported or host in _fake_bank_allowed_hosts:
@@ -988,6 +1018,40 @@ def fake_bank_page_verdict(page_url: str, signals):
         return guard.page_verdict(host, signals)
     except Exception:
         return None
+
+
+FAKE_BANK_TEXTS = {
+    "sl": {
+        "page": "Ta stran ni prava spletna banka, predstavlja pa se kot {bank}. Prava stran banke je {domain}.",
+        "host": "Ta naslov posnema banko {bank}. Prava stran banke je {domain}.",
+        "local": "Datoteka, odprta iz priponke ali prenosa, se predstavlja kot {bank}. Prava stran banke je {domain}.",
+        "lure": "Stran zahteva podatke plačilne kartice pod pretvezo »{detail}«. Policija, FURS in dostavne službe kazni "
+                "in poštnine nikoli ne pobirajo prek takih strani.",
+        "advice": "Na tej strani ne vpisujte uporabniškega imena, gesla, kode SMS, davčne številke, PIN-a ali podatkov kartice. "
+                  "Do banke vedno dostopajte z vpisom uradnega naslova ali prek uradne aplikacije. Banka vas nikoli ne pokliče, "
+                  "da bi zahtevala kodo ali PIN, in nikoli ne zahteva namestitve programov za oddaljeni dostop (AnyDesk, TeamViewer).",
+    },
+    "en": {
+        "page": "This is not a real online bank, although it presents itself as {bank}. The bank's real site is {domain}.",
+        "host": "This address imitates {bank}. The bank's real site is {domain}.",
+        "local": "A file opened from an attachment or download poses as {bank}. The bank's real site is {domain}.",
+        "lure": "The page asks for payment card details under the pretext of \u201c{detail}\u201d. The police, the tax office and "
+                "delivery services never collect fines or postage through pages like this.",
+        "advice": "Do not enter your user name, password, SMS code, tax number, PIN or card details here. Always open your bank by "
+                  "typing its official address or use its official app. Your bank never calls you to ask for a code or PIN and "
+                  "never asks you to install remote-access software (AnyDesk, TeamViewer).",
+    },
+}
+
+
+def fake_bank_warning_text(verdict, lang: str = "sl") -> str:
+    """The explanation shown on a BankGuard warning (dialog on Linux, page on Windows) for any verdict reason."""
+    texts = FAKE_BANK_TEXTS.get(lang, FAKE_BANK_TEXTS["en"])
+    reason = getattr(verdict, "reason", "")
+    key = reason if reason in ("local", "lure", "page") else "host"
+    lead = texts[key].format(bank=getattr(verdict, "bank_name", ""), domain=getattr(verdict, "official_domain", ""),
+                             detail=getattr(verdict, "detail", ""))
+    return lead + "\n\n" + texts["advice"]
 
 
 def bank_guard_page_script() -> str:

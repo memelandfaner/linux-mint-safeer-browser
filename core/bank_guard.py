@@ -2,8 +2,6 @@
 
 Shared by Safeer Browser for Linux and Windows (Android uses the Kotlin port with the same rules and
 the same test cases). Everything runs locally; no page content or address leaves the device.
-Source of truth: clients/python/safeer_bank_guard.py and clients/banks/ in safeer-threat-intel; keep the
-copies (core/bank_guard.py, core/banks.json, core/bank_guard_page.js) identical.
 
 Three checks, strongest first:
 
@@ -15,6 +13,9 @@ Three checks, strongest first:
 * page content: a page on any other host that shows a password, one-time code or card number field
   while presenting itself as a bank in its title, site name, main heading or logo (news articles
   and blog posts are skipped).
+
+Source of truth: clients/python/safeer_bank_guard.py and clients/banks/ in safeer-threat-intel; keep the
+copies (core/bank_guard.py, core/banks.json, core/bank_guard_page.js) identical.
 """
 
 from __future__ import annotations
@@ -69,6 +70,13 @@ def _phrase_in(phrase: str, text: str) -> bool:
     return re.search(r"(?<![a-z0-9])" + re.escape(phrase) + r"(?![a-z0-9])", text) is not None
 
 
+def _lure_pattern(phrase: str) -> re.Pattern:
+    """Whole words; a trailing '*' in the catalogue lets a word start with the stem (kazn*, policij*)."""
+    words = phrase.split(" ")
+    parts = [re.escape(w[:-1]) if w.endswith("*") else re.escape(w) + r"(?![a-z0-9])" for w in words]
+    return re.compile(r"(?<![a-z0-9])" + r"\s+".join(parts))
+
+
 def _damerau_one(a: str, b: str) -> bool:
     """True when a and b differ by exactly one insertion, deletion, substitution or transposition."""
     if a == b or abs(len(a) - len(b)) > 1:
@@ -94,6 +102,8 @@ class BankGuard:
         self.context = frozenset(data["context_tokens"])
         self.payment_phrases = tuple(fold(p) for p in data["payment_authentication_phrases"])
         self.page_check_skip = tuple(data.get("page_check_skip", ()))
+        self.lure_patterns = tuple(_lure_pattern(fold(p)) for p in data.get("lure_phrases", ()))
+        self.local_schemes = frozenset(data.get("local_schemes", ("file", "content", "data", "blob")))
         self.page_script = page_script if page_script is not None else _find("bank_guard_page.js").read_text("utf-8")
         self._official = {d: b for b in self.banks for d in b["official"]}
         self._trusted = frozenset(d for b in self.banks for d in b["official"] + b["family"]) | frozenset(self.infrastructure)
@@ -179,12 +189,14 @@ class BankGuard:
 
     # -- page content ---------------------------------------------------------------------------
     def page_verdict(self, host: str, signals: dict):
+        if not signals or not any(signals.get(k) for k in ("password", "otp", "card", "taxid", "pin")):
+            return None
+        scheme = str(signals.get("scheme", "https"))
         host = self._host(host or signals.get("host", ""))
-        if not signals or not (signals.get("password") or signals.get("otp") or signals.get("card")):
+        local = scheme in self.local_schemes  # an HTML attachment opened from mail: no host, no domain list can help
+        if not local and (scheme not in ("http", "https") or not host or self.is_trusted(host)):
             return None
-        if str(signals.get("scheme", "https")) not in ("http", "https") or not host or self.is_trusted(host):
-            return None
-        if _under(host, self.page_check_skip):
+        if not local and _under(host, self.page_check_skip):
             return None  # brand pages on large platforms show their own login next to a bank's name
         if signals.get("article"):
             return None  # a news article or blog post about a bank, not a login page
@@ -195,7 +207,13 @@ class BankGuard:
         for bank in self.banks:
             for name in bank["names"]:
                 if _phrase_in(fold(name), prominent):
-                    return self._verdict(bank, "page", name)
+                    return self._verdict(bank, "local" if local else "page", name)
+        # A card form dressed up as a fine, tax or parcel payment (police, FURS, delivery): no bank name needed.
+        if signals.get("card"):
+            for pattern in self.lure_patterns:
+                found = pattern.search(page_text)
+                if found:
+                    return Verdict("card", "Plačilna kartica", "", "lure", found.group(0))
         return None
 
     def check(self, host: str, signals: dict | None = None):
