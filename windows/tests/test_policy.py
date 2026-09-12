@@ -336,6 +336,30 @@ class BankGuardPolicyTests(unittest.TestCase):
         policy.adblock.allow_fake_bank_host(url)
         self.assertFalse(policy.returned_from_fake_bank_warning(after_load, url), "the user chose to continue")
 
+    def test_local_attachment_and_card_lure_warnings(self):
+        # SI-CERT TZ009: the fake bank page is an HTML attachment opened from mail (file:), no host to compare
+        local_url = "file:///C:/Users/janez/Downloads/NLB_Klik.html"
+        verdict = policy.fake_bank_page_verdict(local_url, {"host": "", "scheme": "file", "password": True, "title": "NLB Klik"})
+        self.assertEqual((verdict.bank_id, verdict.reason), ("nlb", "local"))
+        page = self.page(policy.fake_bank_page_url(local_url, verdict, after_load=True))
+        self.assertIn("priponke", page)
+        self.assertIn("nikoli ne pokliče", page)
+        self.assertIn('href="https://nlb.si/"', page)
+        continue_url = re.search(r'id="continue" href="([^"]+)"', page).group(1)
+        self.page(continue_url)
+        self.assertTrue(policy.adblock.is_fake_bank_host_allowed(local_url), "continue allows local files for the session")
+        self.assertIsNone(policy.fake_bank_page_verdict(local_url, {"host": "", "scheme": "file", "password": True, "title": "NLB Klik"}))
+        # SI-CERT, May 2026: a card form dressed up as a police fine on a fresh domain: no bank, no "real site" link
+        lure_url = "https://kazen-placilo.example/pay"
+        verdict = policy.fake_bank_page_verdict(lure_url, {"host": "kazen-placilo.example", "scheme": "https", "card": True,
+                                                           "title": "Placilo kazni", "text": "Policija: kazen 39 EUR. Stevilka kartice"})
+        self.assertEqual((verdict.bank_id, verdict.reason), ("card", "lure"))
+        page = self.page(policy.fake_bank_page_url(lure_url, verdict, after_load=True))
+        self.assertIn("Past za podatke kartice", page)
+        self.assertIn("plačilne kartice", page)
+        self.assertNotIn('class="real"', page)
+        self.assertIn('data-safeer-fake-bank="card"', page)
+
     def test_unicode_address_from_qt_is_checked(self):
         kind, target = policy.resolve_input("https://pаypаl-login.com/")
         self.assertEqual(kind, "blocked")

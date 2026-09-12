@@ -982,7 +982,11 @@ class BrowserWindow(QMainWindow):
         """🏦 BankGuard: after loading, a page with password, code or card fields that presents itself as a bank
         on a foreign host gets the fake bank warning. Runs locally in an isolated script world."""
         url = view.url().toString()
-        if not url.startswith(("https://", "http://")) or policy.adblock.is_real_bank_host(url):
+        if policy.adblock.is_local_page(url):
+            # an HTML file opened in the browser (an attachment saved from mail): checked by content
+            if policy.adblock.is_fake_bank_host_allowed(url):
+                return
+        elif not url.startswith(("https://", "http://")) or policy.adblock.is_real_bank_host(url):
             return
         script = policy.adblock.bank_guard_page_script()
         if not script:

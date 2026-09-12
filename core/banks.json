@@ -49,5 +49,8 @@
                       "tiktok.com", "reddit.com", "wikipedia.org", "www.google.com", "accounts.google.com",
                       "login.microsoftonline.com", "login.live.com", "appleid.apple.com"],
   "payment_authentication_phrases": ["3-d secure", "3d secure", "3ds", "verified by visa", "visa secure",
-                                     "mastercard identity check", "identity check", "safekey", "securecode"]
+                                     "mastercard identity check", "identity check", "safekey", "securecode"],
+  "lure_phrases": ["kazen", "kazni", "globa", "prekrs*", "policij*", "furs", "financna uprava", "dohodnin*",
+                   "carina", "carinsk*", "nedostavljen*", "neplacan*", "zapadl* placil*", "postnin*", "posiljka cak*"],
+  "local_schemes": ["file", "content", "data", "blob"]
 }

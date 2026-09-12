@@ -552,8 +552,7 @@ UI_STRINGS: Dict[str, Dict[str, str]] = {
         "blocked_back": "Nazaj na varno",
         "blocked_home": "Domača stran",
         "fake_bank_title": "Lažna spletna banka",
-        "fake_bank_text": "Ta stran ni prava spletna banka, predstavlja pa se kot {bank}. Na njej ne vpisujte uporabniškega imena, "
-                          "gesla, kode SMS ali podatkov kartice. Do banke vedno dostopajte z vpisom uradnega naslova ali prek uradne aplikacije.",
+        "fake_bank_lure_title": "Past za podatke kartice",
         "fake_bank_open": "Odpri pravo stran: {domain}",
         "fake_bank_continue": "Vseeno nadaljuj (samo za to sejo)",
     },
@@ -563,8 +562,7 @@ UI_STRINGS: Dict[str, Dict[str, str]] = {
         "blocked_back": "Go back to safety",
         "blocked_home": "Home",
         "fake_bank_title": "Fake online bank",
-        "fake_bank_text": "This is not a real online bank, although it presents itself as {bank}. Do not enter your user name, "
-                          "password, SMS code or card details here. Always open your bank by typing its official address or use its official app.",
+        "fake_bank_lure_title": "Card details trap",
         "fake_bank_open": "Open the real site: {domain}",
         "fake_bank_continue": "Continue anyway (this session only)",
     },
@@ -643,8 +641,13 @@ def fake_bank_html(query: str, lang: str) -> str:
     strings = UI_STRINGS.get(lang, UI_STRINGS["en"])
     domain = html.escape(verdict.official_domain, quote=True)
     back_href = f"javascript:history.length>{back}?history.go(-{back}):location.replace('{HOME_URL}')"
+    title = strings["fake_bank_lure_title"] if verdict.reason == "lure" else strings["fake_bank_title"]
+    text = adblock.fake_bank_warning_text(verdict, lang if lang in adblock.FAKE_BANK_TEXTS else "en")
+    paragraphs = "".join(f"<p>{html.escape(part)}</p>" for part in text.split("\n\n"))
+    real_link = (f'<a class="real" href="https://{domain}/">{html.escape(strings["fake_bank_open"].format(domain=verdict.official_domain))}</a>'
+                 if verdict.official_domain else "")
     return f"""<!DOCTYPE html>
-<html lang="{lang}"><head><meta charset="utf-8"><title>{html.escape(strings['fake_bank_title'])}</title>
+<html lang="{lang}"><head><meta charset="utf-8"><title>{html.escape(title)}</title>
 <style>
 body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#101814;color:#f1f5f9;font-family:"Segoe UI",system-ui,sans-serif}}
 main{{max-width:620px;padding:40px;border:1px solid rgba(248,113,113,.45);border-radius:20px;background:#19241e}}
@@ -654,10 +657,10 @@ a{{display:inline-block;margin:0 12px 12px 0;padding:10px 18px;border-radius:12p
 a.real{{background:#22c55e}} a.secondary{{background:transparent;color:#94a3b8;border:1px solid #50616b;font-weight:400}}
 </style></head>
 <body><main data-safeer-blocked="1" data-safeer-fake-bank="{html.escape(verdict.bank_id, quote=True)}">
-<h1>🛡️ {html.escape(strings['fake_bank_title'])}</h1>
-<p>{html.escape(strings['fake_bank_text'].format(bank=verdict.bank_name))}</p><code>{html.escape(url, quote=True)}</code>
+<h1>🛡️ {html.escape(title)}</h1>
+{paragraphs}<code>{html.escape(url, quote=True)}</code>
 <a href="{back_href}">{html.escape(strings['blocked_back'])}</a>
-<a class="real" href="https://{domain}/">{html.escape(strings['fake_bank_open'].format(domain=verdict.official_domain))}</a>
+{real_link}
 <a class="secondary" id="continue" href="{HOME_URL}fake-bank-continue?token={urllib.parse.quote(token)}">{html.escape(strings['fake_bank_continue'])}</a>
 </main></body></html>"""
 
