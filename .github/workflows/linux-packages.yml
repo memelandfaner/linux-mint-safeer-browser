@@ -30,6 +30,10 @@ jobs:
           apt-get install -y ca-certificates curl git sudo python3-gi python3-gi-cairo python3-pil gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-soup-3.0 desktop-file-utils appstream dpkg-dev libgstreamer1.0-0 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad glib-networking xvfb bubblewrap file
           [ "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.35' ]
       - uses: actions/checkout@v5
+      # The YouTube tests run the page script under Node; the plain ubuntu:22.04 image ships none.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
       - name: Verify version consistency
         run: python3 packaging/check_version.py
       - name: Unit tests

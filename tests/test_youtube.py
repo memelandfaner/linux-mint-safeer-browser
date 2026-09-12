@@ -1,8 +1,10 @@
+import shutil
 import subprocess
 import unittest
 from core.adblock import YOUTUBE_ADBLOCK_SCRIPT
 
 
+@unittest.skipUnless(shutil.which("node"), "node is required to run the page script")
 class YouTubeTests(unittest.TestCase):
     def test_short_content_is_not_an_ad_and_user_media_settings_return(self):
         start = YOUTUBE_ADBLOCK_SCRIPT.index("    function isAdActive()")
@@ -70,6 +72,7 @@ assert.strictEqual(typeof watchPlayerClass, 'function');
         subprocess.run(["node", "-e", fixture + code + checks], check=True)
 
 
+@unittest.skipUnless(shutil.which("node"), "node is required to run the page script")
 class PlayerDataTests(unittest.TestCase):
     def test_initial_objects_fetch_xhr_and_signed_media_are_preserved(self):
         start = YOUTUBE_ADBLOCK_SCRIPT.index("    // Remove ad instructions")
