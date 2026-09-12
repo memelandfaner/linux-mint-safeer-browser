@@ -11,20 +11,34 @@ class SmokeWatchdogTests(unittest.TestCase):
     def setUp(self):
         self.source = SMOKE.read_text(encoding="utf-8")
 
-    def test_thread_watchdog_is_armed_after_the_qt_one(self):
-        start = self.source.index("def start(")
-        block = self.source[start:self.source.index("def watchdog(", start)]
-        self.assertIn("QTimer.singleShot(int(limit * 1000), self.watchdog)", block)
-        self.assertIn("self.hard_watchdog(limit + 60)", block)
-
     def test_hung_run_writes_a_report_and_stops_the_process(self):
-        start = self.source.index("def hard_watchdog(")
+        start = self.source.index("def arm_hard_watchdog(")
         block = self.source[start:self.source.index("timer.start()", start)]
         self.assertIn("threading.Timer", self.source[start:])
         self.assertIn('"failed": ["hung"]', block)
-        self.assertIn("last_check", block)
+        self.assertIn('"stage": STAGE', block)
         self.assertIn("os._exit(3)", block)
-        self.assertLess(block.index("json.dump(report"), block.index("os._exit(3)"))
+        self.assertLess(block.index("json.dump(payload"), block.index("os._exit(3)"))
+
+    def test_the_watchdog_is_armed_before_anything_that_can_block(self):
+        browser = BROWSER.read_text(encoding="utf-8")
+        start = browser.index("def main(")
+        block = browser[start:]
+        self.assertIn("arm_hard_watchdog(args.report", block)
+        for later in ("apply_dns_mode(settings)", "SafeerBrowserApp(qt_app", "qt_app.exec()"):
+            self.assertLess(block.index("arm_hard_watchdog"), block.index(later), later)
+
+    def test_progress_is_written_next_to_the_report(self):
+        self.assertIn("-progress.json", self.source)
+        block = self.source[self.source.index("def stage("):self.source.index("def arm_hard_watchdog(")]
+        self.assertIn("json.dump({\"stage\": name", block)
+        self.assertIn("except OSError", block)  # a windowed build has no console to fall back on
+
+    def test_every_stage_and_check_is_logged(self):
+        self.assertIn('stage("local server")', self.source)
+        self.assertIn('stage("profile")', self.source)
+        self.assertIn('stage("scenario")', self.source)
+        self.assertIn("stage(f\"check {name}", self.source)
 
 
 if __name__ == "__main__":

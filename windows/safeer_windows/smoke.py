@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import platform
-import sys
 import threading
 import time
 import traceback
@@ -17,6 +16,55 @@ from PySide6.QtCore import QObject, QTimer
 from . import policy
 
 DOWNLOAD_SIZE = 4096
+
+# Where the run currently is. A hang can happen before the scenario (and its Qt watchdog) starts,
+# so the stage and the checks so far live in the module and a plain thread reports them.
+STAGE = "startup"
+RESULTS: List[Dict[str, Any]] = []
+PROGRESS: Optional[str] = None
+
+
+def progress_path(report: Optional[str]) -> Optional[str]:
+    """Sibling of the report; the packaged build has no console, so the file is the only record."""
+    if not report:
+        return None
+    base, _dot, _ext = report.rpartition(".json")
+    return (base or report) + "-progress.json"
+
+
+def stage(name: str) -> None:
+    global STAGE
+    STAGE = name
+    print(f"[smoke] {name}", flush=True)  # silent in the packaged build (no console)
+    if PROGRESS:
+        try:
+            with open(PROGRESS, "w", encoding="utf-8") as handle:
+                json.dump({"stage": name, "at": time.strftime("%H:%M:%S"), "checks": len(RESULTS)}, handle)
+        except OSError:
+            pass
+
+
+def arm_hard_watchdog(report: Optional[str], seconds: float) -> None:
+    """A blocked Qt event loop never reaches the scenario watchdog; this thread still reports."""
+    global PROGRESS
+    PROGRESS = progress_path(report)
+    stage("startup")
+
+    def give_up() -> None:
+        payload = {"ok": False, "failed": ["hung"], "stage": STAGE, "hung_after_seconds": seconds,
+                   "results": list(RESULTS)}
+        try:
+            if report:
+                with open(report, "w", encoding="utf-8") as handle:
+                    json.dump(payload, handle, indent=2, ensure_ascii=False, default=str)
+        except OSError:
+            pass
+        finally:
+            os._exit(3)  # the event loop is stuck: a clean quit would hang as well
+
+    timer = threading.Timer(seconds, give_up)
+    timer.daemon = True
+    timer.start()
 
 
 class Wait:
@@ -83,7 +131,7 @@ class SmokeRunner(QObject):
         self.browser = browser
         self.args = args
         self.started = started
-        self.results: List[Dict[str, Any]] = []
+        self.results: List[Dict[str, Any]] = RESULTS
         self.exit_code = 1
         self.finished = False
         self.generator: Optional[Generator] = None
@@ -94,17 +142,18 @@ class SmokeRunner(QObject):
 
     # -- driver ---------------------------------------------------------------
     def start(self) -> None:
+        stage("local server")
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
         self.server.requests = []
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
+        stage("profile")
         downloads = os.path.join(policy.data_dir(), "Downloads")
         os.makedirs(downloads, exist_ok=True)
         self.browser.download_dir = downloads
         self.browser.profile.setDownloadPath(downloads)
-        limit = float(os.environ.get("SAFEER_SMOKE_TIMEOUT", "420"))
-        QTimer.singleShot(int(limit * 1000), self.watchdog)
-        self.hard_watchdog(limit + 60)
+        stage("scenario")
+        QTimer.singleShot(int(float(os.environ.get("SAFEER_SMOKE_TIMEOUT", "420")) * 1000), self.watchdog)
         self.generator = self.scenario()
         self.advance(None)
 
@@ -112,27 +161,6 @@ class SmokeRunner(QObject):
         if not self.finished:
             self.check("watchdog", False, "scenario did not finish in time")
             self.finish()
-
-    def hard_watchdog(self, seconds: float) -> None:
-        """A blocked Qt event loop never reaches watchdog(); this thread still writes what we know."""
-        def give_up() -> None:
-            if self.finished:
-                return
-            done = [r["name"] for r in self.results]
-            report = {"ok": False, "failed": ["hung"], "hung_after_seconds": seconds,
-                      "last_check": done[-1] if done else None, "results": self.results}
-            try:
-                if self.args.report:
-                    with open(self.args.report, "w", encoding="utf-8") as handle:
-                        json.dump(report, handle, indent=2, ensure_ascii=False, default=str)
-            finally:
-                sys.stderr.write(f"smoke: hung after {seconds}s, last check {report['last_check']}\n")
-                sys.stderr.flush()
-                os._exit(3)  # the event loop is stuck: a clean quit would hang as well
-
-        timer = threading.Timer(seconds, give_up)
-        timer.daemon = True
-        timer.start()
 
     def advance(self, value: Any) -> None:
         if self.finished or self.generator is None:
@@ -192,6 +220,7 @@ class SmokeRunner(QObject):
 
     def check(self, name: str, ok: bool, detail: Any = "", required: bool = True) -> None:
         self.results.append({"name": name, "ok": bool(ok), "required": required, "detail": detail})
+        stage(f"check {name}: {'ok' if ok else 'FAILED'}")
 
     # -- scenario ---------------------------------------------------------------
     def scenario(self) -> Generator:

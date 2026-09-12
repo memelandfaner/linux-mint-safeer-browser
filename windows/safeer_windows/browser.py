@@ -1481,13 +1481,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     started = time.monotonic()
+    if args.smoke_test:
+        # armed before anything that can block, so a startup hang is reported instead of timing out
+        from .smoke import arm_hard_watchdog, stage
+        arm_hard_watchdog(args.report, float(os.environ.get("SAFEER_SMOKE_TIMEOUT", "420")) + 60)
+        stage("dns")
     dns_status = apply_dns_mode(settings)
+    if args.smoke_test:
+        stage(f"browser ({dns_status})")
     browser = SafeerBrowserApp(qt_app, settings, dns_status, smoke=args.smoke_test)
     runner = None
     if args.smoke_test:
         from .smoke import SmokeRunner
         runner = SmokeRunner(browser, args, started)
         QTimer.singleShot(0, runner.start)
+        stage("event loop")
     else:
         browser.start_instance_server()
         browser.new_window(args.urls, restore=True)
