@@ -39,7 +39,7 @@ Settings, cookies, history and sessions use XDG_CONFIG_HOME, mapped by Flatpak t
 
 ## AppImage
 
-Release build baseline: Ubuntu 22.04 x86_64 / glibc 2.35. Install the dependency set in `.github/workflows/linux-packages.yml`. The script refuses a newer build host by default. `ALLOW_NEWER_GLIBC=1` is for diagnostic builds and does not establish compatibility with older distributions.
+Release build baseline: Ubuntu 22.04 x86_64 / glibc 2.35. CI runs the `deb-appimage` job in an `ubuntu:22.04` container on a current runner (the `ubuntu-22.04` runner image is retired in April 2027); locally, use the same container or an Ubuntu 22.04 machine and install the dependency set in `.github/workflows/linux-packages.yml`. The script refuses a newer build host by default. `ALLOW_NEWER_GLIBC=1` is for diagnostic builds and does not establish compatibility with older distributions.
 
 ```sh
 bash packaging/fetch_linuxdeploy.sh

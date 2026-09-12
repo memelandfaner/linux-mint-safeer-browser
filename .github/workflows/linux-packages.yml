@@ -11,13 +11,25 @@ permissions:
   contents: read
 jobs:
   deb-appimage:
-    runs-on: ubuntu-22.04
+    # Release AppImages must be built against glibc 2.35 (Ubuntu 22.04) so they still run on
+    # Linux Mint 21 / Ubuntu 22.04. GitHub retires the ubuntu-22.04 runner image (deprecation
+    # from 2026-09-17, removal 2027-04-17), so the job runs on a current runner inside an
+    # Ubuntu 22.04 container instead. The container is privileged so WebKit's bubblewrap
+    # sandbox can start (the launch smoke tests verify that the sandbox stays enabled).
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:22.04
+      options: --privileged
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      TZ: UTC
     steps:
-      - uses: actions/checkout@v5
       - name: Install build and test dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-gi python3-gi-cairo python3-pil gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-soup-3.0 desktop-file-utils appstream dpkg-dev libgstreamer1.0-0 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad glib-networking xvfb bubblewrap curl
+          apt-get update
+          apt-get install -y ca-certificates curl git sudo python3-gi python3-gi-cairo python3-pil gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-soup-3.0 desktop-file-utils appstream dpkg-dev libgstreamer1.0-0 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad glib-networking xvfb bubblewrap file
+          [ "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.35' ]
+      - uses: actions/checkout@v5
       - name: Verify version consistency
         run: python3 packaging/check_version.py
       - name: Unit tests
