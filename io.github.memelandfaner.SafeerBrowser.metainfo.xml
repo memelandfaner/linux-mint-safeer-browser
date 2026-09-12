@@ -52,6 +52,7 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.0.22" date="2026-09-12"><description><p>Fewer ads: the full EasyList ad list is compiled into a WebKit content filter and refreshed in the background, so ad requests are stopped in the network layer without slowing pages. Fake bank pages opened from a local HTML attachment get the same warning as a look-alike address, pages asking for a card number under the guise of a fine or parcel fee are stopped as a card trap, and tax-number and PIN fields count as credentials.</p></description></release>
     <release version="1.0.21" date="2026-09-11"><description><p>Protection against web traps updated: warnings for fake online banks with a link to the real bank, real banks and payment pages work undisturbed, and threat lists are loaded and checked in the background after every start. Links for installed programs (such as the return to the Claude app after signing in) open after confirmation, and YouTube no longer pauses with "Continue watching?".</p></description></release>
     <release version="1.0.20" date="2026-09-10"><description><p>YouTube Music keeps playing in a minimized or background window: user activity stays current without timers and the idle prompt is confirmed immediately.</p></description></release>
     <release version="1.0.19" date="2026-09-10"><description><p>Hide empty ad inserts and "Please disable adblock or subscribe" placeholders on Push Square, Nintendo Life, Pure Xbox and Time Extension.</p></description></release>
