@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import faulthandler
 import json
 import os
 import platform
@@ -24,12 +25,33 @@ RESULTS: List[Dict[str, Any]] = []
 PROGRESS: Optional[str] = None
 
 
-def progress_path(report: Optional[str]) -> Optional[str]:
-    """Sibling of the report; the packaged build has no console, so the file is the only record."""
+def sibling(report: Optional[str], suffix: str) -> Optional[str]:
+    """Sibling of the report; the packaged build has no console, so files are the only record."""
     if not report:
         return None
     base, _dot, _ext = report.rpartition(".json")
-    return (base or report) + "-progress.json"
+    return (base or report) + suffix
+
+
+def progress_path(report: Optional[str]) -> Optional[str]:
+    return sibling(report, "-progress.json")
+
+
+def stacks_path(report: Optional[str]) -> Optional[str]:
+    return sibling(report, "-stacks.log")
+
+
+def arm_stack_dump(report: Optional[str], seconds: float) -> None:
+    """Python's own watchdog: it dumps the stacks even while a long native call holds the GIL,
+    which is exactly the case a plain thread cannot report."""
+    if not report:
+        return
+    try:
+        handle = open(stacks_path(report), "w", encoding="utf-8", buffering=1)
+        faulthandler.enable(file=handle)
+        faulthandler.dump_traceback_later(seconds, repeat=True, file=handle, exit=False)
+    except (OSError, RuntimeError, ValueError):
+        pass
 
 
 def stage(name: str) -> None:
@@ -49,6 +71,7 @@ def arm_hard_watchdog(report: Optional[str], seconds: float) -> None:
     global PROGRESS
     PROGRESS = progress_path(report)
     stage("startup")
+    arm_stack_dump(report, max(seconds - 90, 30))
 
     def give_up() -> None:
         payload = {"ok": False, "failed": ["hung"], "stage": STAGE, "hung_after_seconds": seconds,

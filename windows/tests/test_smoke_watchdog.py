@@ -28,6 +28,16 @@ class SmokeWatchdogTests(unittest.TestCase):
         for later in ("apply_dns_mode(settings)", "SafeerBrowserApp(qt_app", "qt_app.exec()"):
             self.assertLess(block.index("arm_hard_watchdog"), block.index(later), later)
 
+    def test_stacks_are_dumped_even_when_the_gil_is_held(self):
+        block = self.source[self.source.index("def arm_stack_dump("):self.source.index("def stage(")]
+        self.assertIn("faulthandler.dump_traceback_later", block)
+        self.assertIn("repeat=True", block)
+        self.assertIn("stacks_path(report)", block)
+        armed = self.source[self.source.index("def arm_hard_watchdog("):self.source.index("def give_up(")]
+        self.assertIn("arm_stack_dump(report", armed)
+        workflow = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / "windows-package.yml").read_text()
+        self.assertIn("build/windows/out/*.log", workflow)  # the dump has to reach the artifacts
+
     def test_progress_is_written_next_to_the_report(self):
         self.assertIn("-progress.json", self.source)
         block = self.source[self.source.index("def stage("):self.source.index("def arm_hard_watchdog(")]
