@@ -7,6 +7,7 @@ YouTube Zero-Ad & Background Audio engine, Cyber Threat Shield, and Persistent S
 
 import os
 import sys
+import hashlib
 import json
 import uuid
 import socket
@@ -59,6 +60,7 @@ from core.adblock import (
     is_fake_bank_host_allowed,
     is_local_page,
     fake_bank_warning_text,
+    real_bank_domains,
     bank_guard_page_script,
     FORCE_DARK_MODE_CSS,
     AUTH_SCRIPT_EXCLUSIONS,
@@ -67,6 +69,7 @@ from core.adblock import (
 from core.reader import READER_MODE_JS
 from core.network_errors import NetworkErrorHandler
 from core.external_apps import ExternalLinkGate, external_scheme, is_allowed, remember, site_of
+from core.filter_lists import FILTER_ID as FILTER_LIST_ID
 from core.default_browser import is_default_browser as system_is_default_browser, set_default_browser
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
@@ -148,6 +151,13 @@ class SafeerMintBrowser(Gtk.Window):
         self.closed_tabs_stack = []
         self.active_tab_id = None
         self.tab_counter = 0
+
+        # 📜 EasyList as a WebKit content filter (compiled once, shared by every tab)
+        self.content_filter = None
+        self.content_filter_store = None
+        self.filter_list_agent = None
+        self._compiled_filter_sha = ""
+        self.start_filter_lists()
         self._paned_debounce_timer = None
 
         # Downloads & History state
@@ -3923,6 +3933,80 @@ class SafeerMintBrowser(Gtk.Window):
         tab = self.get_active_tab()
         return tab["webview"] if tab else None
 
+    # ------------------------------------------------------------------ 📜 EasyList content filter
+    def start_filter_lists(self):
+        """EasyList inside WebKit's network layer: the list agent runs on its own thread, WebKit compiles the
+        rules once (cached in the filter store) and every tab shares the compiled filter."""
+        if not self.config.get("easylist_enabled", True):
+            return
+        try:
+            from core.filter_lists import FilterListAgent
+            from core.threat_intel import default_data_dir
+
+            data_dir = default_data_dir("safeer-mint").parent / "filter-lists"
+            self._filter_store_dir = data_dir / "compiled"
+            try:
+                self._compiled_filter_sha = (self._filter_store_dir / "compiled.sha256").read_text("utf-8").strip()
+            except OSError:
+                self._compiled_filter_sha = ""
+            self.filter_list_agent = FilterListAgent(
+                data_dir, on_rules=lambda json_text, source: GLib.idle_add(self.install_content_filter, json_text, source),
+                never_block_domains=real_bank_domains(),
+            )
+            self.filter_list_agent.start()
+        except Exception as exc:
+            print(f"[FilterLists] EasyList unavailable: {exc}")
+
+    def install_content_filter(self, json_text, source="download"):
+        """Main loop: compiles (or loads the cached) filter and attaches it to every tab."""
+        try:
+            self._filter_store_dir.mkdir(parents=True, exist_ok=True)
+            if self.content_filter_store is None:
+                self.content_filter_store = WebKit2.UserContentFilterStore.new(str(self._filter_store_dir))
+            sha = hashlib.sha256(json_text.encode("utf-8")).hexdigest()
+            if sha == self._compiled_filter_sha and self.content_filter is None:
+                self.content_filter_store.load(FILTER_LIST_ID, None, self._on_content_filter_ready, (sha, source, json_text))
+            elif sha != self._compiled_filter_sha:
+                data = GLib.Bytes.new(json_text.encode("utf-8"))
+                self.content_filter_store.save(FILTER_LIST_ID, data, None, self._on_content_filter_ready, (sha, source, None))
+        except Exception as exc:
+            print(f"[FilterLists] Filter could not be compiled: {exc}")
+        return False
+
+    def _on_content_filter_ready(self, store, result, user_data):
+        sha, source, fallback_json = user_data
+        try:
+            content_filter = store.load_finish(result) if fallback_json is not None else store.save_finish(result)
+        except Exception as exc:
+            if fallback_json is not None:
+                # the cached compiled filter is gone or damaged: compile again
+                self._compiled_filter_sha = ""
+                GLib.idle_add(self.install_content_filter, fallback_json, source)
+            else:
+                print(f"[FilterLists] WebKit rejected the filter: {exc}")
+            return
+        self.content_filter = content_filter
+        self._compiled_filter_sha = sha
+        try:
+            (self._filter_store_dir / "compiled.sha256").write_text(sha, "utf-8")
+        except OSError:
+            pass
+        for tab in getattr(self, "tabs", []):
+            self.apply_content_filter(tab.get("webview"))
+        rules = self.filter_list_agent.rule_count if self.filter_list_agent else 0
+        print(f"[FilterLists] EasyList active: {rules} rules ({source})")
+
+    def apply_content_filter(self, webview):
+        """Attaches the compiled EasyList filter to one web view (replacing an older one)."""
+        if webview is None or self.content_filter is None:
+            return
+        try:
+            manager = webview.get_user_content_manager()
+            manager.remove_filter_by_id(FILTER_LIST_ID)
+            manager.add_filter(self.content_filter)
+        except Exception as exc:
+            print(f"[FilterLists] Filter not applied: {exc}")
+
     def new_tab(self, url=None, switch=True, related_view=None, defer=False):
         self.tab_counter += 1
         tab_id = f"tab_{self.tab_counter}"
@@ -3942,6 +4026,7 @@ class SafeerMintBrowser(Gtk.Window):
         content_mgr = wv.get_user_content_manager()
         content_mgr.register_script_message_handler("safeer")
         content_mgr.connect("script-message-received::safeer", self.on_js_message)
+        self.apply_content_filter(wv)  # 📜 EasyList, once compiled
 
         # 1. Global Privacy Control (GPC) & Do Not Track (DNT) W3C Engine
         if self.config.get("gpc_dnt_enabled", True):

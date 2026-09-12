@@ -100,6 +100,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "sidebar_width": 680,
     "search_engine": "duckduckgo",
     "adblock_enabled": True,
+    "easylist_enabled": True,            # EasyList rules as a WebKit content filter (network layer)
     "adguard_protection_enabled": True,  # Vgrajena napredna AdGuard zaščita (anti-adblock defuser, cosmetic rules)
     "tracking_protection_enabled": True,  # Odstranjevanje sledilnih parametrov (UTM, fbclid, gclid, si, itd.)
     "gpc_dnt_enabled": True,             # W3C Global Privacy Control & Do Not Track signal
