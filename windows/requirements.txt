@@ -1,5 +1,5 @@
 # Safeer Browser for Windows - build and runtime dependencies (Python 3.12, x64)
 PySide6>=6.8.1,<6.12
 pyinstaller>=6.11,<7
-Pillow>=10.4
-cryptography>=43
+Pillow>=10.4,<12
+cryptography>=43,<47

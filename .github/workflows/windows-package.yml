@@ -63,6 +63,12 @@ jobs:
           python -c "import PySide6, PyInstaller; from PySide6.QtCore import qVersion; print('PySide6', PySide6.__version__, 'Qt', qVersion(), 'PyInstaller', PyInstaller.__version__)"
       - name: Unit tests
         run: python -m unittest discover -s windows/tests -v
+      - name: No Windows Error Reporting dialogs during unattended runs
+        # A crashed exe would otherwise sit in a WerFault window until the job times out.
+        run: |
+          New-Item -Path 'HKCU:\Software\Microsoft\Windows\Windows Error Reporting' -Force | Out-Null
+          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\Windows Error Reporting' -Name DontShowUI -Value 1 -Type DWord
+          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\Windows Error Reporting' -Name Disabled -Value 1 -Type DWord
       - name: Smoke test from source (real window, online checks)
         run: python windows/build_windows.py smoke-source --online --report build/windows/out/smoke-source.json --screenshot build/windows/out/start-page.png
       - name: Build SafeerBrowser.exe

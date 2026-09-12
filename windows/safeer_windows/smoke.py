@@ -6,6 +6,7 @@ import faulthandler
 import json
 import os
 import platform
+import sys
 import threading
 import time
 import traceback
@@ -77,10 +78,27 @@ def stage(name: str) -> None:
             pass
 
 
+def silence_windows_error_boxes() -> bool:
+    """Smoke runs are unattended: a native crash must end the process, not wait in a Windows Error
+    Reporting dialog that nobody closes. Returns True when the process error mode was changed."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+
+        SEM_FAILCRITICALERRORS, SEM_NOGPFAULTERRORBOX, SEM_NOOPENFILEERRORBOX = 0x0001, 0x0002, 0x8000
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetErrorMode(kernel32.SetErrorMode(0) | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX)
+        return True
+    except Exception:
+        return False
+
+
 def arm_hard_watchdog(report: Optional[str], seconds: float) -> None:
     """A blocked Qt event loop never reaches the scenario watchdog; this thread still reports."""
     global PROGRESS
     PROGRESS = progress_path(report)
+    silence_windows_error_boxes()
     stage("startup")
     arm_stack_dump(report, max(seconds - 90, 30))
 

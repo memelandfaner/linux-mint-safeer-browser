@@ -20,6 +20,23 @@ class SmokeWatchdogTests(unittest.TestCase):
         self.assertIn("os._exit(3)", block)
         self.assertLess(block.index("json.dump(payload"), block.index("os._exit(3)"))
 
+    def test_native_crashes_never_wait_in_an_error_dialog(self):
+        """A crashed frozen exe used to sit in a WerFault window until the job timed out."""
+        block = self.source[self.source.index("def silence_windows_error_boxes("):self.source.index("def arm_hard_watchdog(")]
+        self.assertIn("SetErrorMode", block)
+        self.assertIn("SEM_NOGPFAULTERRORBOX", block)
+        watchdog = self.source[self.source.index("def arm_hard_watchdog("):self.source.index("timer.start()")]
+        self.assertIn("silence_windows_error_boxes()", watchdog)
+        self.assertLess(watchdog.index("silence_windows_error_boxes()"), watchdog.index('stage("startup")'))
+        import sys
+
+        namespace = {}
+        exec(block, {"sys": sys, "Optional": None}, namespace)  # the function needs no Qt
+        self.assertEqual(namespace["silence_windows_error_boxes"](), sys.platform == "win32")
+        workflow = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / "windows-package.yml").read_text(encoding="utf-8")
+        self.assertIn("Windows Error Reporting' -Name DontShowUI -Value 1", workflow)
+        self.assertLess(workflow.index("DontShowUI"), workflow.index("Smoke test from source"))
+
     def test_a_startup_exception_ends_in_the_report(self):
         browser = BROWSER.read_text(encoding="utf-8")
         block = browser[browser.index("def smoke_main("):]
