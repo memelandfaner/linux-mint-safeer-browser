@@ -1183,6 +1183,43 @@ YOUTUBE_KEEP_WATCHING_SCRIPT = r"""
             if (ev.isTrusted) lastUserInput = Date.now();
         }, true);
     });
+
+    // _lact alone is not enough: YouTube's "you there?" flow (youThereManager, armed by the server
+    // for every playback with promptDelaySec) only looks at _lact behind an experiment flag. What
+    // always cancels the scheduled warning, dialog and pause is the app's own activity signal: every
+    // real key, mouse or touch event ends in ytglobal.ytUtilActivityCallback_(), which fires
+    // yt-user-activity, and the watch page then drops the flow (the autoplay pause listens to the
+    // same signal). Report activity the same way every 20 s while media plays. timeupdate drives it,
+    // so it keeps working in a background tab where timers are throttled; a keyup on the document
+    // (one of the events YouTube binds for activity) is the fallback when the callback is missing.
+    var lastPulse = 0;
+    function pulse(force) {
+        var now = Date.now();
+        if (!force && now - lastPulse < 20000) return;
+        lastPulse = now;
+        markActive();
+        var reported = false;
+        try {
+            var yt = window.ytglobal;
+            if (yt && typeof yt.ytUtilActivityCallback_ === 'function') { yt.ytUtilActivityCallback_(); reported = true; }
+        } catch (e) {}
+        if (!reported) {
+            try {
+                document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift', code: 'ShiftLeft', keyCode: 16, which: 16, bubbles: true }));
+            } catch (e) {}
+        }
+    }
+    document.addEventListener('timeupdate', function (ev) {
+        var v = ev.target;
+        if (!v || v.tagName !== 'VIDEO' || v.paused || v.ended) return;
+        var player = playerVideo();
+        if (player && v !== player) return;
+        pulse(false);
+    }, true);
+    setInterval(function () {
+        var v = mainVideo();
+        if (v && !v.paused && !v.ended) pulse(false);
+    }, 20000);
     // A pause without user input is how the idle prompt stops playback.
     document.addEventListener('pause', function (ev) {
         var v = ev.target;
@@ -1233,13 +1270,27 @@ YOUTUBE_KEEP_WATCHING_SCRIPT = r"""
         return document.querySelector('video');
     }
 
+    // "Video paused. Continue watching?" in the languages Safeer ships and the English original.
+    var IDLE_TEXT = /continue watching|still watching|still there|nadaljuj|še gled|ste še tu|weiter ?(an)?schauen|noch da|continuer|toujours l|continuare|ancora l|continuar|sigues ah/i;
+
+    function looksLikeIdlePrompt(el) {
+        // The idle dialog has a single "Yes" button; real questions (delete, sign out ...) also
+        // offer a cancel button, so they are never confirmed by mistake.
+        var buttons = el.querySelectorAll('button, tp-yt-paper-button, a[role="button"]');
+        if (buttons.length === 1 && !el.querySelector('#cancel-button')) return true;
+        return IDLE_TEXT.test(el.textContent || '');
+    }
+
     function isIdlePrompt(el) {
         if (/YOU-THERE|STILL-WATCHING/.test(el.tagName)) return true;
-        // The generic confirm dialog is also used for real questions; accept it only when
-        // YouTube paused the video by itself and the user has not just interacted.
+        // The generic confirm dialog is also used for real questions; leave it alone right after
+        // the user did something, otherwise accept it when YouTube paused the video by itself or
+        // when it plainly is the idle prompt (shown before the pause, or found long after it).
+        if (Date.now() - lastUserInput < 5000) return false;
         var v = mainVideo();
-        return !!v && v.paused && !v.ended &&
-            Date.now() - lastAutoPause < 10000 && Date.now() - lastUserInput > 5000;
+        if (!v) return false;
+        if (v.paused && !v.ended && Date.now() - lastAutoPause < 10000) return true;
+        return looksLikeIdlePrompt(el);
     }
 
     function resume() {
