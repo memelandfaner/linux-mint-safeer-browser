@@ -74,7 +74,7 @@ from core.default_browser import is_default_browser as system_is_default_browser
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
 USER_AGENT = None
-APP_VERSION = "1.0.22"
+APP_VERSION = "1.0.23"
 DOCK_WIDTH = 54
 
 
