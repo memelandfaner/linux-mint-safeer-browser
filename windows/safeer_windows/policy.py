@@ -467,7 +467,8 @@ def script_specs(settings: SettingsStore) -> List[Dict[str, Any]]:
             [f"*://{d}/*" for site in HOOKSHOT_SITES for d in (site, "*." + site)], None, True, False)
     if settings.get("adblock_enabled") and settings.get("adguard_protection_enabled"):
         add("safeer-adguard", adblock.ADGUARD_PROTECTION_SCRIPT, None,
-            auth + ["*://*.google.com/*", "*://*.google.si/*", "*://*.banka.si/*"], True, True)
+            auth + ["*://*.google.com/*", "*://*.google.si/*", "*://*.banka.si/*",
+                    "*://*.facebook.com/*", "*://*.messenger.com/*", "*://*.instagram.com/*"], True, True)
     if settings.get("adblock_enabled"):
         add("safeer-cosmetic", adblock.GENERIC_COSMETIC_SCRIPT, None,
             auth + ["*://*.google.com/*", "*://*.google.si/*", "*://*.facebook.com/*", "*://*.messenger.com/*", "*://*.banka.si/*"],
