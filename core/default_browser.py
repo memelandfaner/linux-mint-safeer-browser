@@ -96,7 +96,9 @@ def desktop_entry_text(existing, app_dir):
             present = key.get_string('Desktop Entry', name)
         except GLib.Error:
             present = None
-        if not present or (name == 'Exec' and not _starts_this_install(present, app_dir)):
+        # Exec is ours to own: anything but the canonical command (a removed or foreign launcher,
+        # or a needlessly quoted path that xdg-utils cannot resolve) is replaced.
+        if not present or (name == 'Exec' and present != value):
             key.set_string('Desktop Entry', name, value)
     try:
         types = list(key.get_string_list('Desktop Entry', 'MimeType'))
@@ -113,8 +115,8 @@ def desktop_entry_text(existing, app_dir):
             action_exec = key.get_string(group, 'Exec')
         except GLib.Error:
             action_exec = None
-        if action_exec and _exec_program(action_exec) is None:  # e.g. a launcher that was uninstalled
-            key.set_string(group, 'Exec', command)
+        if action_exec and (_exec_program(action_exec) is None or action_exec.startswith('"')):
+            key.set_string(group, 'Exec', command)  # uninstalled launcher, or quoting xdg-utils cannot read
     return key.to_data()[0]
 
 
