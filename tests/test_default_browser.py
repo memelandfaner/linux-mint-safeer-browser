@@ -65,3 +65,52 @@ assert set(WEB_TYPES).issubset(app.get_supported_types())
 print('Native defaults verified; unrelated PDF preference preserved')
 '''
             subprocess.run(['/usr/bin/python3','-c',script],env=env,check=True,capture_output=True,text=True)
+
+
+class StaleEntryTests(unittest.TestCase):
+    """Matej, 2026-09-13: the per-user safeer-browser.desktop still pointed at the removed
+    ~/.local/bin/safeer-browser; GLib refused to load it, the click raised TypeError and the
+    question bar never went away."""
+
+    def test_exec_of_a_removed_launcher_is_replaced_and_the_entry_loads(self):
+        with tempfile.TemporaryDirectory(prefix='safeer-stale-') as temp:
+            app_dir=Path(temp)/'lib'/'safeer-browser';app_dir.mkdir(parents=True)
+            (app_dir/'safeer_mint.py').write_text('#')
+            stale=('[Desktop Entry]\nType=Application\nName=Safeer Browser\nExec=/nonexistent/safeer-browser %U\n'
+                   'Actions=NewWindow;\n\n[Desktop Action NewWindow]\nName=New Window\nExec=/nonexistent/safeer-browser\n')
+            repaired=default.desktop_entry_text(stale,str(app_dir))
+            key=GLib.KeyFile();key.load_from_data(repaired,len(repaired.encode()),GLib.KeyFileFlags.NONE)
+            self.assertIn('safeer_mint.py',key.get_string('Desktop Entry','Exec'))
+            self.assertTrue(key.get_string('Desktop Entry','Exec').endswith(' %U'))
+            self.assertIn('safeer_mint.py',key.get_string('Desktop Action NewWindow','Exec'))
+            path=Path(temp)/'safeer-browser.desktop';path.write_text(repaired)
+            self.assertIsNotNone(default.Gio.DesktopAppInfo.new_from_filename(str(path)))
+
+    def test_packaged_launcher_is_preferred_and_a_foreign_checkout_is_replaced(self):
+        with tempfile.TemporaryDirectory(prefix='safeer-pkg-') as temp:
+            root=Path(temp);(root/'bin').mkdir();(root/'lib'/'safeer-browser').mkdir(parents=True)
+            launcher=root/'bin'/'safeer';launcher.write_text('#!/bin/sh\n');launcher.chmod(0o755)
+            (root/'lib'/'safeer-browser'/'safeer_mint.py').write_text('#')
+            other=root/'other'/'safeer_mint.py';other.parent.mkdir();other.write_text('#')
+            self.assertEqual(default.launcher_command(root/'lib'/'safeer-browser'),f'"{launcher}"')
+            self.assertTrue(default._starts_this_install(f'"{launcher}" %U',root/'lib'/'safeer-browser'))
+            self.assertTrue(default._starts_this_install(f'/usr/bin/python3 "{root}/lib/safeer-browser/safeer_mint.py" %U',root/'lib'/'safeer-browser'))
+            self.assertFalse(default._starts_this_install(f'/usr/bin/python3 "{other}" %U',root/'lib'/'safeer-browser'))
+            text=default.desktop_entry_text(f'[Desktop Entry]\nType=Application\nName=Safeer\nExec=/usr/bin/python3 "{other}" %U\n',root/'lib'/'safeer-browser')
+            self.assertIn(f'Exec="{launcher}" %U',text)
+
+    def test_stale_user_entry_is_retired_when_a_packaged_entry_exists(self):
+        with tempfile.TemporaryDirectory(prefix='safeer-retire-') as temp:
+            root=Path(temp);user=root/'data'/'applications';system=root/'system'/'applications'
+            user.mkdir(parents=True);system.mkdir(parents=True)
+            (root/'bin').mkdir();(root/'lib'/'safeer-browser').mkdir(parents=True)
+            launcher=root/'bin'/'safeer';launcher.write_text('#!/bin/sh\n');launcher.chmod(0o755)
+            (root/'lib'/'safeer-browser'/'safeer_mint.py').write_text('#')
+            (system/default.DESKTOP_ID).write_text(f'[Desktop Entry]\nType=Application\nName=Safeer Browser\nExec={launcher} %U\n')
+            (user/default.DESKTOP_ID).write_text('[Desktop Entry]\nType=Application\nName=Safeer Browser\nExec=/nonexistent/safeer-browser %U\n')
+            with patch.object(default.GLib,'get_user_data_dir',return_value=str(root/'data')), \
+                 patch.object(default.GLib,'get_system_data_dirs',return_value=[str(root/'system')]):
+                chosen=default.ensure_desktop_entry(root/'lib'/'safeer-browser')
+            self.assertEqual(chosen,system/default.DESKTOP_ID)
+            self.assertFalse((user/default.DESKTOP_ID).exists())
+            self.assertTrue((user/'safeer-browser.desktop.safeer-backup').exists())

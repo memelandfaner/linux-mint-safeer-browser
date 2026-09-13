@@ -3402,7 +3402,10 @@ class SafeerMintBrowser(Gtk.Window):
 
     def set_as_default_browser(self, show_dialog=True):
         """Set and verify the actual per-user default using the desktop's native API."""
-        success, errors = set_default_browser(BASE_DIR)
+        try:
+            success, errors = set_default_browser(BASE_DIR)
+        except Exception as exc:  # the click must never take the window down
+            success, errors = False, [repr(exc)]
         if not success:
             print("[DefaultBrowser] " + "; ".join(errors))
 
@@ -3447,14 +3450,11 @@ class SafeerMintBrowser(Gtk.Window):
         btn_never = self.default_infobar.add_button("Ne sprašuj več", Gtk.ResponseType.CLOSE)
 
         def on_infobar_response(ib, response_id):
+            ib.hide()  # first: whatever happens next, the question is answered
             if response_id == Gtk.ResponseType.YES:
                 self.set_as_default_browser(show_dialog=True)
-                ib.hide()
             elif response_id == Gtk.ResponseType.CLOSE:
                 self.config.set("check_default_browser", False)
-                ib.hide()
-            else:
-                ib.hide()
 
         self.default_infobar.connect("response", on_infobar_response)
         self.main_vbox.pack_start(self.default_infobar, False, False, 0)
