@@ -350,7 +350,52 @@ YOUTUBE_ADBLOCK_SCRIPT = """
 })();
 """
 
-ADGUARD_PROTECTION_SCRIPT = """
+
+# Shared pacing for the periodic page scripts below. A scan runs when the page is visible, in an idle
+# slot, and the next run is scheduled from how long the last one took (a heavy page gets scanned less
+# often, a light page at the base interval). DOM changes pull the next run forward once per base
+# interval. The background-tab optimizer marks hidden tabs, so they get no scans at all.
+PAGE_TASK_SCHEDULER_JS = """
+if (!window.__safeerSchedule) {
+    window.__safeerSchedule = function (fn, baseMs, maxMs) {
+        var interval = baseMs, timer = null, mutationSeen = false;
+        var now = function () { return (window.performance && performance.now) ? performance.now() : Date.now(); };
+        maxMs = maxMs || baseMs * 16;
+        function arm(ms) {
+            if (timer !== null) return;
+            timer = setTimeout(function () {
+                timer = null;
+                if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 2000 }); else run();
+            }, ms);
+        }
+        function run() {
+            if (document.hidden) { arm(interval); return; }
+            var t0 = now();
+            try { fn(); } catch (e) {}
+            var took = now() - t0;
+            // Keep each script under about two percent of the page's time.
+            interval = Math.min(maxMs, Math.max(baseMs, Math.round(took * 50)));
+            arm(interval);
+        }
+        try {
+            new MutationObserver(function () {
+                if (mutationSeen) return;
+                mutationSeen = true;
+                setTimeout(function () {
+                    mutationSeen = false;
+                    if (timer !== null && interval > baseMs) { clearTimeout(timer); timer = null; arm(baseMs); }
+                }, baseMs);
+            }).observe(document.documentElement, { childList: true, subtree: true });
+        } catch (e) {}
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden && timer !== null) { clearTimeout(timer); timer = null; arm(300); }
+        });
+        arm(baseMs);
+    };
+}
+"""
+
+ADGUARD_PROTECTION_SCRIPT = PAGE_TASK_SCHEDULER_JS + """
 /* 🛡️ Safeer Linux Mint - AdGuard Advanced Protection & Anti-Adblock Defuser Engine */
 (function() {
     var host = location.hostname.toLowerCase();
@@ -479,11 +524,11 @@ ADGUARD_PROTECTION_SCRIPT = """
         runAdguardProtection();
     }
     window.addEventListener('load', runAdguardProtection);
-    setInterval(runAdguardProtection, 2500);
+    window.__safeerSchedule(runAdguardProtection, 2500);
 })();
 """
 
-GENERIC_COSMETIC_SCRIPT = """
+GENERIC_COSMETIC_SCRIPT = PAGE_TASK_SCHEDULER_JS + """
 /* 🛡️ Safeer Linux Mint - Universal Ad & Tracker Shield */
 (function() {
     var host = location.hostname.toLowerCase();
@@ -517,7 +562,7 @@ GENERIC_COSMETIC_SCRIPT = """
     }
 
     if (document.body) cleanGenericAds();
-    setInterval(cleanGenericAds, 3000);
+    window.__safeerSchedule(cleanGenericAds, 3000);
 })();
 """
 
@@ -551,44 +596,62 @@ GPC_AND_DNT_SCRIPT = """
 })();
 """
 
-ANTI_CLICKJACKING_SCRIPT = """
+ANTI_CLICKJACKING_SCRIPT = PAGE_TASK_SCHEDULER_JS + """
 /* 🛡️ Safeer Anti-Clickjacking & Invisible Overlay Shield */
 (function() {
     var host = location.hostname.toLowerCase();
     if (host === 'youtube.com' || host.endsWith('.youtube.com')) return;
+
+    // An overlay that covers the page is, by definition, the element on top at the middle of the
+    // viewport and near its corners. Asking the browser for those few elements costs the same on a
+    // ten-node page and on a social feed with a hundred thousand nodes; walking every div did not.
+    function candidatesAt(x, y, seen, out) {
+        var stack;
+        try { stack = document.elementsFromPoint(x, y); } catch (e) { return; }
+        for (var i = 0; i < stack.length && i < 4; i++) {
+            var node = stack[i];
+            if (!node || seen.indexOf(node) !== -1) continue;
+            seen.push(node);
+            if (node.tagName === 'DIV' || node.tagName === 'A' || node.tagName === 'SPAN') out.push(node);
+        }
+    }
+
+    function isInvisibleOverlay(node, w, h) {
+        if (node.tagName === 'VIDEO' || node.closest('#player, .html5-video-player, #movie_player, .video-stream, [class*="player"]')) return false;
+        // Authentication challenges often contain an iframe with no innerText.
+        if (node.matches('[role="dialog"], [aria-modal="true"]') ||
+            node.querySelector('iframe, form, input, button, select, textarea, [role="dialog"], [role="button"], [role="checkbox"], [contenteditable]')) return false;
+        var style = window.getComputedStyle(node);
+        if (style.position !== 'fixed' && style.position !== 'absolute') return false;
+        var z = parseInt(style.zIndex, 10);
+        if (!(z > 999)) return false;
+        var rect = node.getBoundingClientRect();
+        if (rect.width < w * 0.85 || rect.height < h * 0.85) return false;
+        var text = (node.innerText || '').trim();
+        var isAdLike = node.tagName === 'A' || style.opacity < 0.15 ||
+                       style.backgroundColor.indexOf('rgba(0, 0, 0, 0)') !== -1 ||
+                       style.backgroundColor === 'transparent';
+        return text.length === 0 && isAdLike;
+    }
+
     function neutralizeClickjackingOverlays() {
         try {
-            var allDivs = document.querySelectorAll('div, a, span');
             var w = window.innerWidth || document.documentElement.clientWidth;
             var h = window.innerHeight || document.documentElement.clientHeight;
-            for (var k = 0; k < allDivs.length; k++) {
-                var node = allDivs[k];
-                if (node.tagName === 'VIDEO' || node.closest('#player, .html5-video-player, #movie_player, .video-stream, [class*="player"]')) continue;
-                // Authentication challenges often contain an iframe with no innerText.
-                if (node.matches('[role="dialog"], [aria-modal="true"]') ||
-                    node.querySelector('iframe, form, input, button, select, textarea, [role="dialog"], [role="button"], [role="checkbox"], [contenteditable]')) continue;
-                var style = window.getComputedStyle(node);
-                if (style.position === 'fixed' || style.position === 'absolute') {
-                    var z = parseInt(style.zIndex, 10);
-                    if (z > 999) {
-                        var rect = node.getBoundingClientRect();
-                        if (rect.width >= w * 0.85 && rect.height >= h * 0.85) {
-                            var text = (node.innerText || '').trim();
-                            var isAdLike = node.tagName === 'A' || style.opacity < 0.15 || 
-                                           style.backgroundColor.indexOf('rgba(0, 0, 0, 0)') !== -1 ||
-                                           style.backgroundColor === 'transparent';
-                            if (text.length === 0 && isAdLike) {
-                                node.remove();
-                            }
-                        }
-                    }
-                }
+            if (!w || !h) return;
+            var seen = [], candidates = [];
+            candidatesAt(w / 2, h / 2, seen, candidates);
+            candidatesAt(w * 0.1, h * 0.1, seen, candidates);
+            candidatesAt(w * 0.9, h * 0.9, seen, candidates);
+            for (var k = 0; k < candidates.length; k++) {
+                var node = candidates[k];
+                if (isInvisibleOverlay(node, w, h)) node.remove();
             }
         } catch(e) {}
     }
 
     if (document.body) neutralizeClickjackingOverlays();
-    setInterval(neutralizeClickjackingOverlays, 4000);
+    window.__safeerSchedule(neutralizeClickjackingOverlays, 4000);
 })();
 """
 
