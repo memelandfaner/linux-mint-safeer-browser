@@ -70,3 +70,36 @@ class LogFileTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TabLoadIntegrationTests(unittest.TestCase):
+    """Source-level checks of how the browser wires the monitor (GTK cannot be imported here)."""
+
+    def test_monitor_runs_from_the_main_loop_and_tabs_get_an_indicator(self):
+        source = _source()
+        self.assertIn("GLib.timeout_add_seconds(2, self._monitor_tabs)", source)
+        self.assertIn('"load_btn": btn_load', source)
+        self.assertIn("get_web_process_identifier()", source)
+
+    def test_sleeping_tab_is_not_reported_as_a_crash_and_reloads_on_selection(self):
+        source = _source()
+        handler = source[source.index("def on_web_process_terminated"):source.index("def on_web_process_terminated") + 400]
+        self.assertIn('tab.get("sleeping")', handler)
+        sleep = source[source.index("def sleep_tab"):source.index("def show_tab_load_menu")]
+        self.assertIn('tab["deferred"] = True', sleep)
+        self.assertIn("terminate_web_process()", sleep)
+        started = source[source.index("def on_tab_load_changed"):source.index("def on_tab_title_changed")]
+        self.assertIn('item["sleeping"] = False', started)
+
+    def test_only_background_tabs_without_sound_are_put_to_sleep_and_it_can_be_switched_off(self):
+        source = _source()
+        tick = source[source.index("def _monitor_tabs"):source.index("def sleep_tab")]
+        self.assertIn('sample.verdict == "hog" and not sample.active and not sample.audio', tick)
+        self.assertIn('self.config.get("sleep_heavy_background_tabs", True)', tick)
+        from core import config
+        self.assertTrue(config.DEFAULT_SETTINGS.get("sleep_heavy_background_tabs"))
+
+    def test_closing_a_tab_forgets_it_in_the_monitor(self):
+        source = _source()
+        close = source[source.index("def close_tab"):source.index("def close_tab") + 1800]
+        self.assertIn("self.tab_monitor.forget(tab_id)", close)

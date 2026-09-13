@@ -71,6 +71,8 @@ from core.network_errors import NetworkErrorHandler
 from core.external_apps import ExternalLinkGate, external_scheme, is_allowed, remember, site_of
 from core.filter_lists import FILTER_ID as FILTER_LIST_ID
 from core.default_browser import is_default_browser as system_is_default_browser, set_default_browser
+from core.tab_monitor import TabMonitor, describe as describe_load
+from core import processes_page
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
 USER_AGENT = None
@@ -84,6 +86,8 @@ def is_safe_web_url(url: str) -> bool:
         return False
     u = url.strip()
     if u in ("safeer://home", "about:blank", "about:srcdoc"):
+        return True
+    if u == "safeer://procesi" or u.startswith("safeer://procesi?"):
         return True
     if u.startswith("file://") and "/ui/" in u:
         return True
@@ -459,6 +463,7 @@ class SafeerMintBrowser(Gtk.Window):
 
             self.web_context = WebKit2.WebContext.new_with_website_data_manager(self.website_data_manager)
             self.web_context.set_sandbox_enabled(True)
+            self.register_internal_pages(self.web_context)
 
             # Reuse scripts, images and styles between real websites and song changes.
             # DOCUMENT_BROWSER is intended for a series of local documents.
@@ -476,6 +481,7 @@ class SafeerMintBrowser(Gtk.Window):
             print(f"[Storage] Opozorilo pri nastavitvi shrambe: {e}")
             self.web_context = WebKit2.WebContext.get_default()
             self.web_context.set_sandbox_enabled(True)
+            self.register_internal_pages(self.web_context)
             try:
                 self.web_context.set_cache_model(WebKit2.CacheModel.WEB_BROWSER)
             except Exception:
@@ -569,6 +575,12 @@ class SafeerMintBrowser(Gtk.Window):
 
         # Connect paned divider moved signal to remember custom width
         self.content_paned.connect("notify::position", self.on_paned_moved)
+
+        # Per-tab resource accounting: a two-second look at /proc for every tab's web process.
+        # Heavy tabs get a small indicator; a heavy background tab without sound is put to sleep.
+        self.tab_monitor = TabMonitor(cpu_budget=0.7, show_after=15.0, patience=60.0,
+                                      memory_budget_mb=max(512, web_process_memory_limit_mb() // 2))
+        GLib.timeout_add_seconds(2, self._monitor_tabs)
 
         # Create first initial tab
         self.new_tab(url=initial_url or "safeer://home", switch=True)
@@ -800,6 +812,19 @@ class SafeerMintBrowser(Gtk.Window):
         }}
         .tab-audio-btn:hover {{
             background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+        }}
+        .tab-load-btn {{
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            padding: 2px 4px;
+            font-size: 12px;
+            color: #fb923c;
+            transition: all 100ms ease;
+        }}
+        .tab-load-btn:hover {{
+            background: rgba(251, 146, 60, 0.2);
             color: #ffffff;
         }}
 
@@ -3622,6 +3647,9 @@ class SafeerMintBrowser(Gtk.Window):
         if text == "safeer://home" or text == "about:blank":
             self.load_homepage()
             return
+        if text in ("safeer://procesi", "procesi", "safeer://processes"):
+            self.load_url("safeer://procesi")
+            return
 
         if is_threat_domain(text):
             self.config.increment_threats_blocked(1)
@@ -4198,6 +4226,14 @@ class SafeerMintBrowser(Gtk.Window):
         wv.connect("notify::is-playing-audio", on_audio_state_notify)
         wv.connect("notify::is-muted", on_audio_state_notify)
 
+        # Load indicator (🔥): shown while the tab's web process stays over its CPU/memory budget.
+        btn_load = Gtk.Button(label="🔥")
+        btn_load.get_style_context().add_class("tab-load-btn")
+        btn_load.set_no_show_all(True)
+        btn_load.hide()
+        btn_load.connect("clicked", lambda b, tid=tab_id: self.show_tab_load_menu(tid, b))
+        tab_box.pack_start(btn_load, False, False, 2)
+
         btn_close = Gtk.Button(label="✕")
         btn_close.get_style_context().add_class("tab-close-btn")
         btn_close.set_tooltip_text("Zapri zavihek (Ctrl + W)")
@@ -4242,7 +4278,9 @@ class SafeerMintBrowser(Gtk.Window):
             "tab_box": tab_box,
             "event_box": tab_event_box,
             "title_label": tab_title,
-            "icon_label": tab_icon
+            "icon_label": tab_icon,
+            "load_btn": btn_load,
+            "sleeping": False
         }
         self.tabs.append(tab_data)
 
@@ -4294,6 +4332,10 @@ class SafeerMintBrowser(Gtk.Window):
 
         idx = self.tabs.index(tab_to_close)
         self.tabs.remove(tab_to_close)
+        try:
+            self.tab_monitor.forget(tab_id)
+        except AttributeError:
+            pass
 
         self.tabs_box.remove(tab_to_close["event_box"])
         if tab_to_close.get("crash_notice") is not None:
@@ -4399,6 +4441,9 @@ class SafeerMintBrowser(Gtk.Window):
             for item in self.tabs:
                 if item["id"] == tab_id:
                     item["crashed"] = False
+                    if item.get("sleeping"):
+                        item["sleeping"] = False
+                        item["title_label"].set_tooltip_text(None)
                     notice = item.pop("crash_notice", None)
                     if notice is not None:
                         self.webview_stack.remove(notice)
@@ -4498,9 +4543,155 @@ class SafeerMintBrowser(Gtk.Window):
         home_path = os.path.join(BASE_DIR, "ui", "home.html")
         return f"file://{home_path}"
 
+    # -------------------------------------------------------------
+    # Internal pages on the safeer:// scheme (safeer://procesi)
+    # -------------------------------------------------------------
+    def register_internal_pages(self, context):
+        try:
+            context.register_uri_scheme("safeer", self.on_internal_page_request)
+        except Exception as exc:
+            print(f"[Internal] Sheme safeer:// ni bilo mogoče registrirati: {exc}")
+
+    def on_internal_page_request(self, request):
+        uri = request.get_uri() or ""
+        try:
+            action, tab_id = processes_page.parse_action(uri)
+            if action == "spi" and tab_id:
+                self.sleep_tab(tab_id, "safeer://procesi")
+            elif action == "zapri" and tab_id:
+                GLib.idle_add(self.close_tab, tab_id)
+            if uri.startswith("safeer://procesi"):
+                html_text = self.render_processes_page()
+            else:
+                html_text = "<!doctype html><meta charset='utf-8'><title>Safeer</title><p>Safeer</p>"
+            data = html_text.encode("utf-8")
+            stream = Gio.MemoryInputStream.new_from_data(data, None)
+            request.finish(stream, len(data), "text/html")
+        except Exception as exc:
+            print(f"[Internal] Napaka pri {uri[:40]}: {exc}")
+            try:
+                request.finish_error(GLib.Error(str(exc)))
+            except Exception:
+                pass
+
+    def render_processes_page(self):
+        samples = self.tab_monitor.snapshot()
+        rows = []
+        for tab in self.tabs:
+            sample = samples.get(tab["id"])
+            wv = tab.get("webview")
+            audio = False
+            try:
+                audio = bool(wv.get_property("is-playing-audio")) if wv is not None else False
+            except Exception:
+                audio = False
+            rows.append({
+                "id": tab["id"],
+                "title": tab.get("title") or tab.get("uri") or "",
+                "cpu": sample.cpu if sample else 0.0,
+                "rss_mb": sample.rss_mb if sample else 0,
+                "threads": sample.threads if sample else 0,
+                "active": tab["id"] == self.active_tab_id,
+                "audio": audio,
+                "sleeping": bool(tab.get("sleeping")),
+                "verdict": sample.verdict if sample else "calm",
+            })
+        return processes_page.render(rows, get_current_language(), web_process_memory_limit_mb(), self.tab_monitor.cpu_budget)
+
+    # -------------------------------------------------------------
+    # Per-tab load: indicator, sleep, menu
+    # -------------------------------------------------------------
+    def _monitor_tabs(self):
+        """Two-second sample of every tab's web process; called from the main loop."""
+        rows = []
+        for tab in self.tabs:
+            wv = tab.get("webview")
+            pid, audio = 0, False
+            if wv is not None and not tab.get("crashed") and not tab.get("deferred") and not tab.get("sleeping"):
+                try:
+                    pid = wv.get_web_process_identifier()
+                except Exception:
+                    pid = 0
+                try:
+                    audio = bool(wv.get_property("is-playing-audio"))
+                except Exception:
+                    audio = False
+            rows.append((tab["id"], pid, tab["id"] == self.active_tab_id, audio))
+        try:
+            samples = self.tab_monitor.sample(rows)
+        except Exception as exc:
+            print(f"[Tabs] Nadzor zavihkov: {exc}")
+            return True
+        for tab in list(self.tabs):
+            sample = samples.get(tab["id"])
+            btn = tab.get("load_btn")
+            if sample is None or btn is None or tab.get("sleeping"):
+                continue
+            if sample.verdict == "calm":
+                if btn.get_visible():
+                    btn.hide()
+                continue
+            btn.set_tooltip_text(f"{t('tab_load_heavy')}: {describe_load(sample, get_current_language())}")
+            if not btn.get_visible():
+                btn.show()
+                print(f"[Tabs] Zavihek nad proračunom: {describe_load(sample)}")
+            if (sample.verdict == "hog" and not sample.active and not sample.audio
+                    and self.config.get("sleep_heavy_background_tabs", True)):
+                self.sleep_tab(tab["id"], describe_load(sample))
+        return True
+
+    def sleep_tab(self, tab_id, reason=""):
+        """Stop a tab's web process but keep the tab; selecting it loads the page again."""
+        tab = next((item for item in self.tabs if item["id"] == tab_id), None)
+        if tab is None or tab.get("sleeping") or tab.get("crashed"):
+            return False
+        wv = tab["webview"]
+        current = wv.get_uri() or tab.get("uri") or "safeer://home"
+        if current.startswith("file://") and "ui/home.html" in current:
+            current = "safeer://home"
+        tab["uri"] = current
+        tab["sleeping"] = True
+        tab["deferred"] = True  # switch_to_tab() loads the page again
+        try:
+            wv.terminate_web_process()
+        except Exception as exc:
+            print(f"[Tabs] Zavihka ni bilo mogoče uspavati: {exc}")
+        self.tab_monitor.forget(tab_id)
+        btn = tab.get("load_btn")
+        if btn is not None:
+            btn.hide()
+        tab["icon_label"].set_text("💤")
+        tab["title_label"].set_tooltip_text(t("tab_sleeping"))
+        print(f"[Tabs] Zavihek uspavan ({reason})", flush=True)
+        if self.active_tab_id == tab_id:
+            self.switch_to_tab(tab_id)
+        return True
+
+    def show_tab_load_menu(self, tab_id, button):
+        tab = next((item for item in self.tabs if item["id"] == tab_id), None)
+        if tab is None:
+            return
+        sample = self.tab_monitor.snapshot().get(tab_id)
+        menu = Gtk.Menu()
+        head = Gtk.MenuItem(label=f"{t('tab_load_heavy')}\n{describe_load(sample, get_current_language()) if sample else ''}")
+        head.set_sensitive(False)
+        menu.append(head)
+        menu.append(Gtk.SeparatorMenuItem())
+        item_sleep = Gtk.MenuItem(label=t("tab_sleep"))
+        item_sleep.connect("activate", lambda _i: self.sleep_tab(tab_id, "na zahtevo"))
+        menu.append(item_sleep)
+        item_reload = Gtk.MenuItem(label=t("tab_reload"))
+        item_reload.connect("activate", lambda _i: tab["webview"].reload())
+        menu.append(item_reload)
+        item_close = Gtk.MenuItem(label=t("tab_close"))
+        item_close.connect("activate", lambda _i: self.close_tab(tab_id))
+        menu.append(item_close)
+        menu.show_all()
+        menu.popup_at_widget(button, Gdk.Gravity.SOUTH, Gdk.Gravity.NORTH, None)
+
     def on_web_process_terminated(self, tab_id, webview, reason):
         tab = next((item for item in self.tabs if item["id"] == tab_id), None)
-        if tab is None or tab.get("crash_notice") is not None:
+        if tab is None or tab.get("crash_notice") is not None or tab.get("sleeping"):
             return
         tab["crashed"] = True
         webview._safeer_crashed = True
