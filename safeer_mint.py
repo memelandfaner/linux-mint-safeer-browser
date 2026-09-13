@@ -4074,7 +4074,9 @@ class SafeerMintBrowser(Gtk.Window):
                 WebKit2.UserContentInjectedFrames.ALL_FRAMES,
                 WebKit2.UserScriptInjectionTime.START,
                 None,
-                AUTH_SCRIPT_EXCLUSIONS + ["*://*.google.com/*", "*://*.google.si/*", "*://*.banka.si/*"]
+                # Social feeds have no anti-adblock walls; their huge DOMs make every scan cost real CPU.
+                AUTH_SCRIPT_EXCLUSIONS + ["*://*.google.com/*", "*://*.google.si/*", "*://*.banka.si/*",
+                                          "*://*.facebook.com/*", "*://*.messenger.com/*", "*://*.instagram.com/*"]
             )
             content_mgr.add_script(adg_script)
 
