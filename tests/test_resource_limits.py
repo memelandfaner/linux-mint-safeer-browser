@@ -81,7 +81,7 @@ class TabLoadIntegrationTests(unittest.TestCase):
         source = _source()
         self.assertIn("GLib.timeout_add_seconds(2, self._monitor_tabs)", source)
         self.assertIn('"load_btn": btn_load', source)
-        self.assertIn("get_web_process_identifier()", source)
+        self.assertIn('tab.get("load_started_at")', source)
 
     def test_sleeping_tab_is_not_reported_as_a_crash_and_reloads_on_selection(self):
         source = _source()

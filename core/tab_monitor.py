@@ -1,8 +1,11 @@
 """Per-tab resource accounting from /proc.
 
-Every tab has its own web process, and its PID is known to the browser. Reading that
-process's `stat` and `status` costs microseconds, so a two-second sample of all tabs is
-free; from it each tab gets a CPU share (of one core) and a resident size in MB.
+Every tab has its own web process. WebKitGTK does not tell the embedder which PID serves
+which WebKitWebView, but the processes are our own descendants (UI process -> bwrap ->
+WebKitWebProcess) and a tab gets its process the moment it first loads, so the monitor pairs
+newly appeared processes with the tabs that started loading since the last sample (oldest
+first). Reading a process's `stat` and `statm` costs microseconds, so a two-second sample of
+all tabs is free; from it each tab gets a CPU share (of one core) and a resident size in MB.
 
 The monitor does not act on its own. It hands the browser a verdict per tab:
 
@@ -46,6 +49,37 @@ class _ProcessReading:
     at: float
 
 
+WEB_PROCESS_COMM = b"WebKitWebProces"  # /proc/<pid>/comm is cut at 15 characters
+
+
+def web_processes_under(root_pid, proc="/proc"):
+    """PIDs of the WebKitWebProcess descendants of root_pid (bwrap and xdg-dbus-proxy sit in between)."""
+    found = []
+    stack = [int(root_pid)]
+    seen = set()
+    while stack:
+        pid = stack.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        try:
+            with open(f"{proc}/{pid}/task/{pid}/children", "rb") as handle:
+                kids = [int(x) for x in handle.read().split()]
+        except (OSError, ValueError):
+            continue
+        for kid in kids:
+            try:
+                with open(f"{proc}/{kid}/comm", "rb") as handle:
+                    comm = handle.read().strip()
+            except OSError:
+                continue
+            if comm == WEB_PROCESS_COMM:
+                found.append(kid)
+            else:
+                stack.append(kid)
+    return found
+
+
 @dataclass
 class TabMonitor:
     cpu_budget: float = 0.5          # share of one core a tab may use for long
@@ -53,8 +87,10 @@ class TabMonitor:
     show_after: float = 10.0         # seconds over budget before the tab is marked hot
     patience: float = 60.0           # seconds over budget before a background tab is a hog
     proc: str = "/proc"
+    root_pid: int = 0                # the UI process; 0 = this process
     _last: dict = field(default_factory=dict)      # pid -> _ProcessReading
     _state: dict = field(default_factory=dict)     # tab_id -> TabSample
+    _pid_of: dict = field(default_factory=dict)    # tab_id -> pid (attributed)
 
     # ---- reading /proc -------------------------------------------------
     def _read_stat(self, pid):
@@ -79,15 +115,40 @@ class TabMonitor:
         except (OSError, IndexError, ValueError):
             return 0
 
+    # ---- pairing tabs with processes ------------------------------------
+    def pid_of(self, tab_id):
+        return self._pid_of.get(tab_id, 0)
+
+    def attribute(self, wanting, live_pids):
+        """Pair tabs that want a process (list of (tab_id, since), oldest first) with processes
+        that appeared since the last sample. Drops pairings whose process is gone."""
+        live = set(live_pids)
+        for tab_id, pid in list(self._pid_of.items()):
+            if pid not in live:
+                del self._pid_of[tab_id]
+        known = set(self._pid_of.values())
+        fresh = sorted(pid for pid in live if pid not in known)
+        matched = {}
+        for (tab_id, _since), pid in zip(sorted(wanting, key=lambda item: item[1]), fresh):
+            self._pid_of[tab_id] = pid
+            matched[tab_id] = pid
+        return matched
+
     # ---- sampling --------------------------------------------------------
     def sample(self, tabs, now=None):
-        """`tabs`: iterable of (tab_id, pid, active, audio). Returns {tab_id: TabSample}."""
+        """`tabs`: iterable of (tab_id, wants_since, active, audio) where wants_since is the
+        monotonic time the tab started loading without a known process (None = has one or
+        needs none). Returns {tab_id: TabSample}."""
         now = time.monotonic() if now is None else now
+        tabs = list(tabs)
+        live = web_processes_under(self.root_pid or os.getpid(), self.proc)
+        self.attribute([(tab_id, since) for tab_id, since, _a, _s in tabs if since is not None], live)
         seen_pids = set()
         result = {}
-        for tab_id, pid, active, audio in tabs:
+        for tab_id, _since, active, audio in tabs:
             previous = self._state.get(tab_id)
-            sample = TabSample(tab_id=tab_id, pid=int(pid or 0), active=bool(active), audio=bool(audio))
+            pid = self._pid_of.get(tab_id, 0)
+            sample = TabSample(tab_id=tab_id, pid=pid, active=bool(active), audio=bool(audio))
             if previous is not None:
                 sample.over_since = previous.over_since
             if sample.pid > 0:
@@ -121,6 +182,7 @@ class TabMonitor:
 
     def forget(self, tab_id):
         self._state.pop(tab_id, None)
+        self._pid_of.pop(tab_id, None)
 
     def snapshot(self):
         return dict(self._state)

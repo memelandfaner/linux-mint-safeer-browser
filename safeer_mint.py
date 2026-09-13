@@ -12,6 +12,7 @@ import json
 import uuid
 import socket
 import threading
+import time
 import subprocess
 import warnings
 import urllib.parse
@@ -4281,7 +4282,8 @@ class SafeerMintBrowser(Gtk.Window):
             "title_label": tab_title,
             "icon_label": tab_icon,
             "load_btn": btn_load,
-            "sleeping": False
+            "sleeping": False,
+            "load_started_at": time.monotonic()
         }
         self.tabs.append(tab_data)
 
@@ -4442,6 +4444,7 @@ class SafeerMintBrowser(Gtk.Window):
             for item in self.tabs:
                 if item["id"] == tab_id:
                     item["crashed"] = False
+                    item["load_started_at"] = time.monotonic()
                     if item.get("sleeping"):
                         item["sleeping"] = False
                         item["title_label"].set_tooltip_text(None)
@@ -4607,23 +4610,23 @@ class SafeerMintBrowser(Gtk.Window):
         rows = []
         for tab in self.tabs:
             wv = tab.get("webview")
-            pid, audio = 0, False
+            wants, audio = None, False
             if wv is not None and not tab.get("crashed") and not tab.get("deferred") and not tab.get("sleeping"):
-                try:
-                    pid = wv.get_web_process_identifier()
-                except Exception:
-                    pid = 0
+                # A tab that has loaded something and has no known process yet asks for one;
+                # the monitor pairs it with the web process that appeared since the last sample.
+                if not self.tab_monitor.pid_of(tab["id"]):
+                    wants = tab.get("load_started_at") or 0.0
                 try:
                     audio = bool(wv.get_property("is-playing-audio"))
                 except Exception:
                     audio = False
-            rows.append((tab["id"], pid, tab["id"] == self.active_tab_id, audio))
+            rows.append((tab["id"], wants, tab["id"] == self.active_tab_id, audio))
         try:
             samples = self.tab_monitor.sample(rows)
         except Exception as exc:
             print(f"[Tabs] Nadzor zavihkov: {exc}")
             return True
-        if not getattr(self, "_monitor_announced", False) and any(pid for _tid, pid, _a, _s in rows):
+        if not getattr(self, "_monitor_announced", False) and any(s.pid for s in samples.values()):
             self._monitor_announced = True
             print(f"[Tabs] Nadzor zavihkov aktiven ({len(rows)} zavihkov, meja {self.tab_monitor.memory_budget_mb} MB / {int(self.tab_monitor.cpu_budget * 100)} % CPU)")
         for tab in list(self.tabs):
@@ -4700,6 +4703,7 @@ class SafeerMintBrowser(Gtk.Window):
         tab["crashed"] = True
         webview._safeer_crashed = True
         webview._safeer_network_errors.cancel_pending()
+        self.tab_monitor.forget(tab_id)
         # Log only the reason: URLs may contain login tokens or private queries.
         print(f"[Safeer] Web process stopped: {reason.value_nick}; awaiting manual reload", flush=True)
         notice = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
