@@ -77,7 +77,7 @@ from core import processes_page
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
 USER_AGENT = None
-APP_VERSION = "1.0.25"
+APP_VERSION = "1.0.26"
 DOCK_WIDTH = 54
 
 

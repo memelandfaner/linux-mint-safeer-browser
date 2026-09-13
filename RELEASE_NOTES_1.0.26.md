@@ -1,0 +1,10 @@
+# Safeer Linux 1.0.26
+
+Copying a link out of the address bar now works the way it should:
+
+- The address bar shows a clean address without `https://`, but the real address was only put back once the bar got focus — that is, after the desktop had already handled the click. The text under the pointer grew by eight characters mid-click, so the cursor landed somewhere other than where you aimed, and an automatic "select all" fired in the middle of a mouse drag and moved the selection anchor. Selecting part of an address was unreliable and copying often produced the wrong text. The full address is now in place before the cursor moves, and everything is selected only on a click without dragging or when the bar is focused from the keyboard (Ctrl+L, F6) — a drag selection is left exactly as you made it.
+- Copying the whole address now puts a real, complete link on the clipboard (with `https://`), so it can be pasted as a link. Selecting only part of it still copies exactly what is selected.
+- Right-clicking the address bar or a bookmark in the bookmarks toolbar offers **Copy link**.
+- Text you had typed into the address bar is no longer overwritten when you return to the window.
+
+Slovensko: Kopiranje povezav iz naslovne vrstice zdaj deluje. Vrstica prikazuje očiščen naslov brez `https://`, polni naslov pa je vstavila šele ob fokusu — torej potem, ko je namizje že obdelalo klik: besedilo pod kazalcem se je sredi klika podaljšalo za osem znakov, samodejno označevanje vsega pa je steklo sredi vlečenja z miško in prestavilo sidro označbe. Označiti del naslova je bilo nezanesljivo, kopiralo se je napačno besedilo. Polni naslov je odslej na mestu, preden se kazalec premakne; vse se označi samo ob kliku brez vlečenja ali ob fokusu s tipkovnico (Ctrl+L, F6), tvoja označba pri vlečenju pa ostane nedotaknjena. Kopiranje celotnega naslova da na odložišče pravo, celotno povezavo (s `https://`), kopiranje dela pa natanko to, kar je označeno. Desni klik v naslovni vrstici in na zaznamku ponuja **Kopiraj povezavo**. Natipkano besedilo se ob vrnitvi v okno ne izgubi več.
