@@ -22,6 +22,9 @@ bash "$DIR/packaging/build_app_stage.sh"
 rm -rf "$BUILD_ROOT"
 mkdir -p "$BUILD_ROOT/DEBIAN"
 cp -a "$DIR/build/stage/usr" "$BUILD_ROOT/"
+# The system package knows where it lives: an absolute Exec cannot be shadowed by a stale
+# "safeer" earlier in the user's PATH (e.g. an old ~/.local/bin symlink to a source checkout).
+sed -i 's|^Exec=safeer|Exec=/usr/bin/safeer|' "$BUILD_ROOT/usr/share/applications/safeer-browser.desktop"
 
 # 6. Create DEBIAN/control
 echo "📝 Generiranje DEBIAN/control..."

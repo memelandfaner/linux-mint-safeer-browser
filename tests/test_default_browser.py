@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from gi.repository import GLib
 from core import default_browser as default
 
+ROOT=Path(__file__).resolve().parents[1]
+
 
 class DefaultBrowserTests(unittest.TestCase):
     def test_misplaced_mime_type_is_repaired_without_changing_actions(self):
@@ -114,3 +116,17 @@ class StaleEntryTests(unittest.TestCase):
             self.assertEqual(chosen,system/default.DESKTOP_ID)
             self.assertFalse((user/default.DESKTOP_ID).exists())
             self.assertTrue((user/'safeer-browser.desktop.safeer-backup').exists())
+
+    def test_exec_arguments_are_quoted_only_when_the_spec_requires_it(self):
+        # xdg-utils take the first word of Exec literally, so a plain path must stay unquoted.
+        self.assertEqual(default._exec_argument('/usr/bin/safeer'),'/usr/bin/safeer')
+        self.assertEqual(default._exec_argument('/home/x/Neimenovana mapa/safeer_mint.py'),'"/home/x/Neimenovana mapa/safeer_mint.py"')
+        self.assertEqual(default._exec_argument('/tmp/50%/a'),'"/tmp/50%%/a"')
+        with tempfile.TemporaryDirectory(prefix='safeer-plain-') as temp:
+            root=Path(temp);(root/'bin').mkdir();(root/'lib'/'safeer-browser').mkdir(parents=True)
+            launcher=root/'bin'/'safeer';launcher.write_text('#!/bin/sh\n');launcher.chmod(0o755)
+            self.assertEqual(default.launcher_command(root/'lib'/'safeer-browser'),str(launcher))
+
+    def test_deb_desktop_entry_uses_an_absolute_launcher(self):
+        text=(ROOT/'build_deb.sh').read_text()
+        self.assertIn("s|^Exec=safeer|Exec=/usr/bin/safeer|",text)

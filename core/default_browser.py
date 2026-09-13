@@ -9,8 +9,19 @@ WEB_TYPES = ('x-scheme-handler/http', 'x-scheme-handler/https',
              'text/html', 'application/xhtml+xml')
 
 
+_EXEC_RESERVED = set(' \t"\'\\><~|&;$*?#()`%')
+
+
 def _exec_argument(value):
-    value = str(value).replace('%', '%%')
+    """Quote an Exec argument only when the Desktop Entry spec requires it.
+
+    xdg-utils (xdg-open, xdg-mime, xdg-settings) take the first word of Exec literally, quotes
+    included, to find the program - a quoted "/usr/bin/safeer" is "not found" there and the
+    entry is skipped in favour of the next browser. Plain paths therefore stay unquoted."""
+    value = str(value)
+    if not any(char in _EXEC_RESERVED for char in value):
+        return value
+    value = value.replace('%', '%%')
     for char in ('\\', '"', '`', '$'):
         value = value.replace(char, '\\' + char)
     return '"' + value + '"'
