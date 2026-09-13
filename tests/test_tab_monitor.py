@@ -106,6 +106,19 @@ class TabMonitorTests(unittest.TestCase):
         self.assertEqual(self.monitor.pid_of("t_old"), 0)
         self.assertEqual(self.monitor.pid_of("t_new"), 601)
 
+    def test_processes_alive_at_start_and_auxiliary_views_are_never_paired(self):
+        _write_proc(self.root, 700, ticks=0)  # e.g. the keyboard panel, created before the monitor
+        monitor = TabMonitor(proc=self.root, root_pid=1000)
+        _write_proc(self.root, 701, ticks=0)  # the first tab
+        monitor.sample([("t1", 1.0, True, False)], now=2.0)
+        self.assertEqual(monitor.pid_of("t1"), 701)
+        with monitor.auxiliary():
+            _write_proc(self.root, 702, ticks=0)  # sidebar loads while a new tab is waiting
+        _write_proc(self.root, 703, ticks=0)
+        monitor.sample([("t1", None, True, False), ("t2", 3.0, False, False)], now=4.0)
+        self.assertEqual(monitor.pid_of("t2"), 703)
+        self.assertEqual(monitor._ignored, {700, 702})
+
     def test_real_process_tree_of_this_process(self):
         from core.tab_monitor import web_processes_under
         self.assertEqual(web_processes_under(os.getpid()), [])

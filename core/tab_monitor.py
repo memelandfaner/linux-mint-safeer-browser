@@ -18,6 +18,7 @@ sound), and the active tab is never put to sleep - only shown.
 
 No GTK here: the browser calls `sample()` from its main loop and reads plain data back.
 """
+import contextlib
 import os
 import time
 from dataclasses import dataclass, field
@@ -91,6 +92,21 @@ class TabMonitor:
     _last: dict = field(default_factory=dict)      # pid -> _ProcessReading
     _state: dict = field(default_factory=dict)     # tab_id -> TabSample
     _pid_of: dict = field(default_factory=dict)    # tab_id -> pid (attributed)
+    _ignored: set = field(default_factory=set)     # auxiliary web views (sidebar, keyboard): never paired with a tab
+
+    def __post_init__(self):
+        # Whatever already runs when the monitor starts belongs to auxiliary views, not to tabs.
+        self._ignored = set(web_processes_under(self.root_pid or os.getpid(), self.proc))
+
+    @contextlib.contextmanager
+    def auxiliary(self):
+        """Wrap the creation/first load of a helper WebView so its process is never paired with a tab."""
+        root = self.root_pid or os.getpid()
+        before = set(web_processes_under(root, self.proc))
+        try:
+            yield
+        finally:
+            self._ignored |= set(web_processes_under(root, self.proc)) - before
 
     # ---- reading /proc -------------------------------------------------
     def _read_stat(self, pid):
@@ -123,10 +139,11 @@ class TabMonitor:
         """Pair tabs that want a process (list of (tab_id, since), oldest first) with processes
         that appeared since the last sample. Drops pairings whose process is gone."""
         live = set(live_pids)
+        self._ignored &= live
         for tab_id, pid in list(self._pid_of.items()):
             if pid not in live:
                 del self._pid_of[tab_id]
-        known = set(self._pid_of.values())
+        known = set(self._pid_of.values()) | self._ignored
         fresh = sorted(pid for pid in live if pid not in known)
         matched = {}
         for (tab_id, _since), pid in zip(sorted(wanting, key=lambda item: item[1]), fresh):

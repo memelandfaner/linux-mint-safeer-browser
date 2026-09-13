@@ -2156,7 +2156,8 @@ class SafeerMintBrowser(Gtk.Window):
             cur_uri = self.sidebar_webview.get_uri() or ""
             target_url = service.get("url", "")
             if target_url and (cur_uri != target_url and not cur_uri.startswith(target_url)):
-                self.sidebar_webview.load_uri(target_url)
+                with self.tab_monitor.auxiliary():
+                    self.sidebar_webview.load_uri(target_url)
 
             # Show drawer and expand divider to comfortable desktop width
             self.sidebar_drawer.show()
