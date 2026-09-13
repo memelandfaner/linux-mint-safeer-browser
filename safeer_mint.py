@@ -459,7 +459,7 @@ class SafeerMintBrowser(Gtk.Window):
                 mps.set_conservative_threshold(0.5)   # release caches, run GC
                 mps.set_poll_interval(2)
                 WebKit2.WebsiteDataManager.set_memory_pressure_settings(mps)
-                print(f"[Memory] Meja na zavihek: {limit_mb} MB (opozorilo pri {limit_mb // 2} MB)")
+                print(f"[Memory] Meja na zavihek: {limit_mb} MB (sproščanje predpomnilnikov pri {limit_mb // 2} MB)")
             except Exception as e:
                 print(f"[Memory] Opozorilo pri MemoryPressureSettings: {e}")
 
@@ -580,8 +580,9 @@ class SafeerMintBrowser(Gtk.Window):
 
         # Per-tab resource accounting: a two-second look at /proc for every tab's web process.
         # Heavy tabs get a small indicator; a heavy background tab without sound is put to sleep.
+        # The indicator's memory budget is informational (about 1 GB); the hard limit above is far higher.
         self.tab_monitor = TabMonitor(cpu_budget=0.7, show_after=15.0, patience=60.0,
-                                      memory_budget_mb=max(512, web_process_memory_limit_mb() // 2))
+                                      memory_budget_mb=max(512, min(1024, web_process_memory_limit_mb() // 4)))
         GLib.timeout_add_seconds(2, self._monitor_tabs)
 
         # Create first initial tab
@@ -6428,18 +6429,18 @@ class SafeerMintBrowser(Gtk.Window):
 
 
 def web_process_memory_limit_mb(total_mb=None):
-    """Per-tab memory limit: a quarter of RAM, between 768 MB and 2 GB.
+    """Per-tab memory limit: half of RAM, at least 1 GB.
 
-    12 GB -> 2048 MB, 8 GB -> 2048 MB, 4 GB -> 1024 MB, 2 GB -> 768 MB. Large enough for any
-    real page (a social feed sits around 1 GB), small enough that one tab cannot take the desktop
-    down with it.
+    12 GB -> 6144 MB, 8 GB -> 4096 MB, 4 GB -> 2048 MB. High on purpose (Matej, 2026-09-13): no
+    normal page must ever be stopped by it; it only keeps one runaway tab from taking the whole
+    computer with it. Caches are released at half of it and everything recreatable at three quarters.
     """
     if total_mb is None:
         try:
             total_mb = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 * 1024)
         except (ValueError, OSError, AttributeError):
             total_mb = 8192
-    return int(max(768, min(2048, total_mb // 4)))
+    return int(max(1024, total_mb // 2))
 
 
 def start_threat_intel():

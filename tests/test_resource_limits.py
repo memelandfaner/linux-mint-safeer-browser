@@ -23,13 +23,13 @@ class MemoryLimitTests(unittest.TestCase):
         exec(source[start:end], namespace)  # noqa: S102 - our own source
         return namespace["web_process_memory_limit_mb"]
 
-    def test_limit_is_a_quarter_of_ram_within_bounds(self):
+    def test_limit_is_half_of_ram_and_at_least_one_gb(self):
         limit = self._limit()
-        self.assertEqual(limit(12 * 1024), 2048)
-        self.assertEqual(limit(8 * 1024), 2048)
-        self.assertEqual(limit(4 * 1024), 1024)
-        self.assertEqual(limit(2 * 1024), 768)
-        self.assertEqual(limit(64 * 1024), 2048)
+        self.assertEqual(limit(12 * 1024), 6144)
+        self.assertEqual(limit(8 * 1024), 4096)
+        self.assertEqual(limit(4 * 1024), 2048)
+        self.assertEqual(limit(1024), 1024)
+        self.assertEqual(limit(64 * 1024), 32768)
 
     def test_memory_pressure_settings_get_an_explicit_limit(self):
         source = _source()
