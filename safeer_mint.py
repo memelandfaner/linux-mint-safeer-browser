@@ -452,9 +452,10 @@ class SafeerMintBrowser(Gtk.Window):
                 limit_mb = web_process_memory_limit_mb()
                 mps = WebKit2.MemoryPressureSettings()
                 mps.set_memory_limit(limit_mb)
-                mps.set_conservative_threshold(0.5)   # release caches, run GC
-                mps.set_strict_threshold(0.75)        # drop everything that can be recreated
+                # WebKit checks conservative < strict on every call, so strict is raised first.
                 mps.set_kill_threshold(1.0)           # stop the tab; the user reloads it
+                mps.set_strict_threshold(0.75)        # drop everything that can be recreated
+                mps.set_conservative_threshold(0.5)   # release caches, run GC
                 mps.set_poll_interval(2)
                 WebKit2.WebsiteDataManager.set_memory_pressure_settings(mps)
                 print(f"[Memory] Meja na zavihek: {limit_mb} MB (opozorilo pri {limit_mb // 2} MB)")
@@ -4622,6 +4623,9 @@ class SafeerMintBrowser(Gtk.Window):
         except Exception as exc:
             print(f"[Tabs] Nadzor zavihkov: {exc}")
             return True
+        if not getattr(self, "_monitor_announced", False) and any(pid for _tid, pid, _a, _s in rows):
+            self._monitor_announced = True
+            print(f"[Tabs] Nadzor zavihkov aktiven ({len(rows)} zavihkov, meja {self.tab_monitor.memory_budget_mb} MB / {int(self.tab_monitor.cpu_budget * 100)} % CPU)")
         for tab in list(self.tabs):
             sample = samples.get(tab["id"])
             btn = tab.get("load_btn")

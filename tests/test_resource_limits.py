@@ -36,6 +36,8 @@ class MemoryLimitTests(unittest.TestCase):
         block = source[source.index("mps = WebKit2.MemoryPressureSettings()"):source.index("set_memory_pressure_settings(mps)")]
         self.assertIn("mps.set_memory_limit(limit_mb)", block)
         self.assertIn("set_kill_threshold(1.0)", block)
+        # WebKit asserts conservative < strict on each setter call: strict must be raised first.
+        self.assertLess(block.index("set_strict_threshold(0.75)"), block.index("set_conservative_threshold(0.5)"))
         self.assertIn("exceeded-memory-limit", source)
 
 
