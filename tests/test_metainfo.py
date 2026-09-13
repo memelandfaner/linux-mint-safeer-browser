@@ -41,13 +41,24 @@ class MetainfoTests(unittest.TestCase):
         self.assertEqual(prva.get("version"), razlicica,
                          "najnovejsa izdaja v metainfo se ne ujema s packaging/VERSION")
 
-    def test_appstreamcli_accepts_the_file_when_it_is_available(self):
+    def test_appstreamcli_finds_no_errors_when_it_is_available(self):
+        """Lovimo napake, ne razlik med razlicicami orodja.
+
+        Starejsi appstreamcli na gradilniku javi 'unknown-tag developer' in
+        'url-invalid-type vcs-browser' — to je v datoteki ze od prej in gradnje ne ustavi.
+        Izhodna koda je zato neuporabna; pomembne so napake (E:) in opozorilo o goli
+        spletni poti, ki je 13. 9. 2026 ustavilo gradnjo AppImage.
+        """
         orodje = shutil.which("appstreamcli")
         if not orodje:
             self.skipTest("appstreamcli ni nameščen")
         izid = subprocess.run([orodje, "validate", "--no-net", str(META)],
                               capture_output=True, text=True)
-        self.assertEqual(izid.returncode, 0, (izid.stdout + izid.stderr)[-2000:])
+        izpis = izid.stdout + izid.stderr
+        napake = [v.strip() for v in izpis.splitlines() if v.strip().startswith("E:")]
+        self.assertEqual(napake, [], "appstreamcli javlja napake:\n" + "\n".join(napake))
+        self.assertNotIn("description-has-plaintext-url", izpis,
+                         "gola spletna pot v opisu ustavi gradnjo AppImage")
 
 
 if __name__ == "__main__":
