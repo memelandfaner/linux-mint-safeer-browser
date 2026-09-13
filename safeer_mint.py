@@ -441,13 +441,19 @@ class SafeerMintBrowser(Gtk.Window):
                 websql_directory=os.path.join(data_dir, "websql")
             )
             # Pametno upravljanje pomnilnika: redno čiščenje odvečnih medpomnilnikov in JS Garbage Collection
+            # One page must not be able to push the whole computer into swap. The thresholds are
+            # fractions of a per-web-process limit; without an explicit limit WebKit measures them
+            # against all of RAM, so a single tab could grow past 10 GB before anything happened.
             try:
+                limit_mb = web_process_memory_limit_mb()
                 mps = WebKit2.MemoryPressureSettings()
-                mps.set_conservative_threshold(0.35)  # Sproži GC in sprosti slike pri 35% RAM-a
-                mps.set_strict_threshold(0.55)        # Agresivno sprosti nepotrebne medpomnilnike pri 55% RAM-a
-                mps.set_kill_threshold(0.95)
+                mps.set_memory_limit(limit_mb)
+                mps.set_conservative_threshold(0.5)   # release caches, run GC
+                mps.set_strict_threshold(0.75)        # drop everything that can be recreated
+                mps.set_kill_threshold(1.0)           # stop the tab; the user reloads it
                 mps.set_poll_interval(2)
                 WebKit2.WebsiteDataManager.set_memory_pressure_settings(mps)
+                print(f"[Memory] Meja na zavihek: {limit_mb} MB (opozorilo pri {limit_mb // 2} MB)")
             except Exception as e:
                 print(f"[Memory] Opozorilo pri MemoryPressureSettings: {e}")
 
@@ -4504,9 +4510,18 @@ class SafeerMintBrowser(Gtk.Window):
         notice = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         notice.set_halign(Gtk.Align.CENTER)
         notice.set_valign(Gtk.Align.CENTER)
-        title = Gtk.Label(label="Zavihek se je ustavil / Tab stopped")
+        nick = getattr(reason, "value_nick", str(reason))
+        if nick == "exceeded-memory-limit":
+            title_text = "Stran je porabila preveč pomnilnika / Page used too much memory"
+            message_text = ("Safeer jo je ustavil, da računalnik ostane odziven.\n"
+                            "Safeer stopped it so the computer stays responsive.")
+        else:
+            title_text = "Zavihek se je ustavil / Tab stopped"
+            message_text = "Zaprite nepotrebne zavihke in poskusite znova.\nClose unused tabs, then try again."
+        title = Gtk.Label(label=title_text)
         notice.pack_start(title, False, False, 0)
-        message = Gtk.Label(label="Zaprite nepotrebne zavihke in poskusite znova.\nClose unused tabs, then try again.")
+        message = Gtk.Label(label=message_text)
+        message.set_justify(Gtk.Justification.CENTER)
         notice.pack_start(message, False, False, 0)
         retry = Gtk.Button(label="Ponovno naloži / Reload")
         def reload_tab(_button):
@@ -6206,6 +6221,21 @@ class SafeerMintBrowser(Gtk.Window):
         self.set_title(f"{t('app_title')} — Linux Mint Edition")
 
 
+def web_process_memory_limit_mb(total_mb=None):
+    """Per-tab memory limit: a quarter of RAM, between 768 MB and 2 GB.
+
+    12 GB -> 2048 MB, 8 GB -> 2048 MB, 4 GB -> 1024 MB, 2 GB -> 768 MB. Large enough for any
+    real page (a social feed sits around 1 GB), small enough that one tab cannot take the desktop
+    down with it.
+    """
+    if total_mb is None:
+        try:
+            total_mb = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 * 1024)
+        except (ValueError, OSError, AttributeError):
+            total_mb = 8192
+    return int(max(768, min(2048, total_mb // 4)))
+
+
 def start_threat_intel():
     """Starts the signed Safeer threat feed as an extra layer; the built-in list works without it."""
     try:
@@ -6256,6 +6286,8 @@ def main():
             except Exception:
                 pass
 
+    from core import log as safeer_log
+    safeer_log.install(CONFIG_DIR, APP_VERSION)
     start_threat_intel()
     app = SafeerMintBrowser(initial_url=target_url)
     app.connect("destroy", Gtk.main_quit)
