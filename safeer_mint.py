@@ -103,6 +103,24 @@ def is_safe_web_url(url: str) -> bool:
 
 
 
+def link_for_clipboard(entry_text, bounds, full_uri, cleaned_uri):
+    """Ali naj ob kopiranju iz naslovne vrstice na odlozisce damo polni naslov?
+
+    Da samo takrat, kadar je oznacen CEL prikazani naslov in je ta res nas okrnjeni
+    prikaz trenutne strani. Kadar je oznacen le del ali je uporabnik besedilo spremenil,
+    se ne vtikamo - kopira se natanko to, kar je oznacil.
+    """
+    if not full_uri or not entry_text:
+        return False
+    if entry_text == full_uri:
+        return False                      # ze je polni naslov, popravek ni potreben
+    if entry_text != cleaned_uri:
+        return False                      # uporabnikovo besedilo
+    if not bounds or len(bounds) != 2:
+        return False
+    return bounds[0] == 0 and bounds[1] == len(entry_text)
+
+
 class SafeerMintBrowser(Gtk.Window):
     def __init__(self, initial_url=None):
         install_main_thread_gc()
@@ -1601,6 +1619,10 @@ class SafeerMintBrowser(Gtk.Window):
                     item_newtab.connect("activate", lambda m, u=portal.get("url", ""): self.new_tab(url=u, switch=True))
                     menu.append(item_newtab)
 
+                    item_copy = Gtk.MenuItem(label=f"🔗 {t('copy_link', 'Kopiraj povezavo')}")
+                    item_copy.connect("activate", lambda m, u=portal.get("url", ""): self.copy_to_clipboard(u))
+                    menu.append(item_copy)
+
                     menu.append(Gtk.SeparatorMenuItem())
 
                     item_edit = Gtk.MenuItem(label=f"✏️ {t('edit', 'Uredi')}...")
@@ -1890,6 +1912,15 @@ class SafeerMintBrowser(Gtk.Window):
         self.url_entry.connect("activate", self.on_url_activate)
         self.url_entry.connect("focus-in-event", self.on_url_focus_in)
         self.url_entry.connect("focus-out-event", self.on_url_focus_out)
+        self._url_select_all_pending = False
+        self._url_press_x = 0.0
+        self.url_entry.connect("button-press-event", self.on_url_button_press)
+        self.url_entry.connect("button-release-event", self.on_url_button_release)
+        # connect_after: privzeto ravnanje najprej postavi izbrano besedilo na odlozisce,
+        # mi pa ga nato popravimo v pravi, celoten naslov.
+        self.url_entry.connect_after("copy-clipboard", self.on_url_copy_clipboard)
+        self.url_entry.connect_after("cut-clipboard", self.on_url_copy_clipboard)
+        self.url_entry.connect("populate-popup", self.on_url_populate_popup)
         self.url_box.pack_start(self.url_entry, True, True, 0)
 
         # Reader Mode Button (📖)
@@ -3925,6 +3956,25 @@ class SafeerMintBrowser(Gtk.Window):
         except Exception:
             pass
 
+    def current_page_uri(self):
+        """Pravi naslov strani v dejavnem zavihku (prazen niz, kadar ga ni)."""
+        try:
+            wv = self.get_active_webview()
+            return wv.get_uri() if wv else ""
+        except Exception:
+            return ""
+
+    def copy_to_clipboard(self, text):
+        """Besedilo na odlozisce; uporablja ga 'Kopiraj povezavo' in popravek za Ctrl+C."""
+        if not text:
+            return False
+        try:
+            Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
+            return True
+        except Exception as exc:
+            print(f"[Odlozisce] kopiranje ni uspelo: {exc}")
+            return False
+
     def format_clean_url(self, uri):
         """Pretvori tehnični URL v čist, velik in jasno viden naslov kot v Mozilli Firefox."""
         if not uri or "ui/home.html" in uri:
@@ -3939,14 +3989,81 @@ class SafeerMintBrowser(Gtk.Window):
             pass
         return uri
 
-    def on_url_focus_in(self, entry, event):
-        """Ob kliku v URL vrstico prikaži polni naslov in označi vse besedilo za urejanje."""
-        wv = self.get_active_webview()
-        cur_uri = wv.get_uri() if wv else ""
-        if "ui/home.html" not in cur_uri and cur_uri:
-            entry.set_text(cur_uri)
-            GLib.idle_add(entry.select_region, 0, -1)
+    def restore_full_url(self, entry):
+        """Okrnjen prikaz (brez https://) zamenja s pravim naslovom.
+
+        Zamenjamo samo takrat, kadar v vrstici res stoji naš okrnjeni prikaz — nikoli
+        besedila, ki ga je uporabnik natipkal.
+        """
+        cur_uri = self.current_page_uri()
+        if not cur_uri or "ui/home.html" in cur_uri:
+            return False
+        text = entry.get_text()
+        if text == cur_uri:
+            return True
+        if text and text != self.format_clean_url(cur_uri):
+            return False        # uporabnikovo besedilo pustimo pri miru
+        entry.set_text(cur_uri)
+        entry.set_position(-1)
+        return True
+
+    def on_url_button_press(self, entry, event):
+        """Polni naslov vstavimo PREJ, kot GTK postavi kazalec.
+
+        Sicer se besedilo pod kazalcem sredi klika podaljša za »https://« in klik pristane
+        osem znakov stran od mesta, kamor je uporabnik meril.
+        """
+        self._url_press_x = getattr(event, "x", 0.0)
+        self._url_select_all_pending = (
+            getattr(event, "button", 0) == 1
+            and event.type == Gdk.EventType.BUTTON_PRESS
+            and not entry.has_focus()
+        )
+        self.restore_full_url(entry)
         return False
+
+    def on_url_button_release(self, entry, event):
+        """Klik brez vlečenja označi cel naslov (kot v Firefoxu); vlečenje pustimo pri miru."""
+        if self._url_select_all_pending and abs(getattr(event, "x", 0.0) - self._url_press_x) < 4.0:
+            entry.select_region(0, -1)
+        self._url_select_all_pending = False
+        return False
+
+    def on_url_focus_in(self, entry, event):
+        """Ob fokusu pokaži polni naslov; s tipkovnico (Ctrl+L, F6) ga tudi označi."""
+        self.restore_full_url(entry)
+        if not self._url_select_all_pending:
+            entry.select_region(0, -1)
+        return False
+
+    def on_url_copy_clipboard(self, entry):
+        """Ko je označen cel naslov, na odložišče damo pravi, celoten URL.
+
+        Prikazani naslov je namenoma brez »https://«, tak pa pri lepljenju ni povezava.
+        Teče za privzetim GTK ravnanjem (connect_after), zato odložišče samo popravimo.
+        """
+        try:
+            full = self.current_page_uri()
+            text = entry.get_text()
+            bounds = entry.get_selection_bounds()
+            if link_for_clipboard(text, bounds, full, self.format_clean_url(full) if full else ""):
+                self.copy_to_clipboard(full)
+        except Exception as exc:
+            print(f"[Odlozisce] popravek kopiranja ni uspel: {exc}")
+
+    def on_url_populate_popup(self, entry, menu):
+        """V desni klik naslovne vrstice dodamo »Kopiraj povezavo«."""
+        try:
+            full = self.current_page_uri()
+            if not full or not isinstance(menu, Gtk.Menu):
+                return
+            item = Gtk.MenuItem(label=f"🔗 {t('copy_link', 'Kopiraj povezavo')}")
+            item.connect("activate", lambda m, u=full: self.copy_to_clipboard(u))
+            menu.prepend(Gtk.SeparatorMenuItem())
+            menu.prepend(item)
+            menu.show_all()
+        except Exception as exc:
+            print(f"[Odlozisce] menija ni bilo mogoce dopolniti: {exc}")
 
     def on_url_focus_out(self, entry, event):
         """Ko uporabnik klikne ven, vrni jasen, čist in berljiv naslov kot v Firefoxu."""
