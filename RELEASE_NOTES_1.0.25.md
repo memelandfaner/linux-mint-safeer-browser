@@ -1,0 +1,10 @@
+# Safeer Linux 1.0.25
+
+"Set as default browser" works again, on every install:
+
+- A leftover launcher entry from an older Safeer install (for example a source checkout that was later removed) made the button fail: the desktop refuses to load an entry whose program no longer exists, and the browser turned that refusal into an unhandled error, so nothing happened and the question bar stayed on screen. Safeer now repairs such an entry — its command always points at the copy of Safeer that is actually running — and retires a leftover per-user entry (kept as a backup) when the installed package already provides one.
+- Even after a successful registration, `xdg-open` (used by most other applications to open links) could still hand links to another browser, because the command in the entry was quoted and those tools take it literally. Paths are now quoted only where the specification requires it, so the desktop, `xdg-open` and `xdg-settings` all agree.
+- The packaged entry names the launcher by its full path, so an older `safeer` command earlier in the user's PATH can no longer start a different copy.
+- Whatever happens, the click can no longer take the window down: the question bar is dismissed first and any failure is shown as a readable message and written to `~/.config/safeer-mint/safeer.log`.
+
+Slovensko: Gumb »Nastavi kot privzetega« spet deluje povsod. Ostanek zaganjalnika iz starejše namestitve Safeerja je povzročil, da namizje vnosa sploh ni moglo naložiti, brskalnik pa te zavrnitve ni obravnaval — gumb ni naredil nič, vrstica z vprašanjem pa je ostala. Safeer tak vnos zdaj popravi (ukaz vedno kaže na različico, ki v resnici teče) in odstrani odvečni uporabniški vnos, če ga paket že ponuja (shrani varnostno kopijo). Poleg tega so poti v vnosu zdaj citirane samo tam, kjer standard to zahteva, zato `xdg-open` (prek njega povezave odpira večina drugih programov) ne pošilja povezav več drugemu brskalniku. Klik na gumb ne more več podreti okna: vrstica se skrije takoj, morebitna napaka pa je berljivo izpisana in zapisana v dnevnik.
