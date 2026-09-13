@@ -4642,9 +4642,15 @@ class SafeerMintBrowser(Gtk.Window):
             if not btn.get_visible():
                 btn.show()
                 print(f"[Tabs] Zavihek nad proračunom: {describe_load(sample)}")
+            if sample.verdict == "hog" and not tab.get("hog_logged"):
+                tab["hog_logged"] = True
+                why = "aktiven" if sample.active else ("predvaja zvok" if sample.audio else "v ozadju")
+                print(f"[Tabs] Zavihek dolgo nad proračunom ({why}): {describe_load(sample)}")
             if (sample.verdict == "hog" and not sample.active and not sample.audio
                     and self.config.get("sleep_heavy_background_tabs", True)):
                 self.sleep_tab(tab["id"], describe_load(sample))
+            elif sample.verdict == "calm":
+                tab["hog_logged"] = False
         return True
 
     def sleep_tab(self, tab_id, reason=""):
