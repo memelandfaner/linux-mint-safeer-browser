@@ -94,12 +94,13 @@ class StaleEntryTests(unittest.TestCase):
             launcher=root/'bin'/'safeer';launcher.write_text('#!/bin/sh\n');launcher.chmod(0o755)
             (root/'lib'/'safeer-browser'/'safeer_mint.py').write_text('#')
             other=root/'other'/'safeer_mint.py';other.parent.mkdir();other.write_text('#')
-            self.assertEqual(default.launcher_command(root/'lib'/'safeer-browser'),f'"{launcher}"')
+            self.assertEqual(default.launcher_command(root/'lib'/'safeer-browser'),str(launcher))
+            self.assertTrue(default._starts_this_install(f'{launcher} %U',root/'lib'/'safeer-browser'))
             self.assertTrue(default._starts_this_install(f'"{launcher}" %U',root/'lib'/'safeer-browser'))
             self.assertTrue(default._starts_this_install(f'/usr/bin/python3 "{root}/lib/safeer-browser/safeer_mint.py" %U',root/'lib'/'safeer-browser'))
             self.assertFalse(default._starts_this_install(f'/usr/bin/python3 "{other}" %U',root/'lib'/'safeer-browser'))
             text=default.desktop_entry_text(f'[Desktop Entry]\nType=Application\nName=Safeer\nExec=/usr/bin/python3 "{other}" %U\n',root/'lib'/'safeer-browser')
-            self.assertIn(f'Exec="{launcher}" %U',text)
+            self.assertIn(f'Exec={launcher} %U',text)
 
     def test_stale_user_entry_is_retired_when_a_packaged_entry_exists(self):
         with tempfile.TemporaryDirectory(prefix='safeer-retire-') as temp:
