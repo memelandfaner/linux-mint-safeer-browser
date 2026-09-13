@@ -21,6 +21,18 @@ APP_DIR="$(cd "$BIN_DIR/../lib/safeer-browser" && pwd)" || {
     exit 1
 }
 
+# Keep the rest of the desktop responsive when a page misbehaves: run the browser (and every
+# web process it spawns) in its own user cgroup scope. MemoryHigh makes the kernel reclaim from
+# Safeer first instead of pushing the whole session into swap; CPUWeight ranks it slightly below
+# other applications. No privileges needed; silently skipped where there is no user manager
+# (Flatpak, containers, plain X sessions without systemd --user). SAFEER_NO_SCOPE=1 disables it.
+if [ -z "${SAFEER_NO_SCOPE:-}" ] && command -v systemd-run >/dev/null 2>&1 \
+   && systemd-run --user --scope --quiet --collect -p MemoryHigh=60% -- true >/dev/null 2>&1; then
+    export SAFEER_NO_SCOPE=1
+    exec systemd-run --user --scope --quiet --collect --unit="safeer-browser-$$" \
+        -p MemoryHigh=60% -p CPUWeight=80 -- "$BIN_DIR/$(basename "$PRG")" "$@"
+fi
+
 # Gladko predvajanje zvoka brez prekinitev (PipeWire / PulseAudio 120ms buffer)
 export PULSE_LATENCY_MSEC=120
 export GST_PULSE_BUFFER_MS=120

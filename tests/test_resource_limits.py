@@ -103,3 +103,14 @@ class TabLoadIntegrationTests(unittest.TestCase):
         source = _source()
         close = source[source.index("def close_tab"):source.index("def close_tab") + 1800]
         self.assertIn("self.tab_monitor.forget(tab_id)", close)
+
+
+class LauncherScopeTests(unittest.TestCase):
+    def test_launcher_runs_the_browser_in_a_user_scope_when_available(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "packaging", "safeer-launcher"), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("systemd-run --user --scope", text)
+        self.assertIn("MemoryHigh=60%", text)
+        self.assertIn("SAFEER_NO_SCOPE", text)          # opt-out and recursion guard
+        self.assertIn("-- true >/dev/null 2>&1; then", text)  # probed first, silently skipped elsewhere
