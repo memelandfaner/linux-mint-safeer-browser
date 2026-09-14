@@ -1977,6 +1977,17 @@ class SafeerMintBrowser(Gtk.Window):
         self.btn_customizer.connect("clicked", lambda b: self.open_customizer_dialog())
         self.nav_bar.pack_start(self.btn_customizer, False, False, 0)
 
+        # Safeer Link (🔗) — naprave, pošiljanje na TV in sinhronizacija.
+        # Gumb je viden vedno. Prej se je pokazal šele, ko se je Hub oglasil, zato je
+        # funkcijo videl samo tisti, ki jo je že imel — kdor je ni imel, zanjo ni mogel
+        # izvedeti. Ko Huba ni, klik odpre zaslon, ki pove, kaj Safeer Link je.
+        self.btn_link = Gtk.Button(label="🔗")
+        self.btn_link.get_style_context().add_class("ff-nav-btn")
+        self.btn_link.set_tooltip_text("Safeer Link — poveži televizor in telefon")
+        self.btn_link.connect("clicked", lambda b: self.open_safeer_link())
+        self.nav_bar.pack_start(self.btn_link, False, False, 0)
+        GLib.idle_add(self._safeer_link_preveri_hub)
+
         self.top_bar.pack_start(self.nav_bar, False, False, 0)
 
         # 3. Tier 3: Bookmarks Toolbar (Vrstica priljubljenih strani)
@@ -1986,6 +1997,118 @@ class SafeerMintBrowser(Gtk.Window):
         self.populate_bookmarks_bar()
         if not self.config.get("show_bookmarks_bar", True):
             self.bookmarks_bar.hide()
+
+    # ------------------------------------------------------------------
+    # Safeer Link
+    # ------------------------------------------------------------------
+
+    def _carovnik_uvoz_iz_datoteke(self, starsevsko, oznaka_stanja):
+        """Uvoz zaznamkov iz izvozene datoteke HTML, kar 1-klik v carovniku.
+
+        Kdor prehaja z Windowsov, ima zaznamke prav v taki datoteki; do zdaj mu
+        carovnik ni ponudil nicesar, kar bi lahko kliknil.
+        """
+        izbirnik = Gtk.FileChooserDialog(
+            title="Izberite datoteko z zaznamki (HTML)",
+            parent=starsevsko,
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        izbirnik.add_buttons("Prekliči", Gtk.ResponseType.CANCEL,
+                             "Uvozi", Gtk.ResponseType.ACCEPT)
+        filter_html = Gtk.FileFilter()
+        filter_html.set_name("Zaznamki (HTML)")
+        filter_html.add_pattern("*.html")
+        filter_html.add_pattern("*.htm")
+        izbirnik.add_filter(filter_html)
+        filter_vse = Gtk.FileFilter()
+        filter_vse.set_name("Vse datoteke")
+        filter_vse.add_pattern("*")
+        izbirnik.add_filter(filter_vse)
+        try:
+            izbirnik.set_current_folder(os.path.expanduser("~"))
+        except Exception:
+            pass
+
+        odziv = izbirnik.run()
+        pot = izbirnik.get_filename() if odziv == Gtk.ResponseType.ACCEPT else None
+        izbirnik.destroy()
+        if not pot:
+            return
+
+        try:
+            dodanih = self.config.import_bookmarks_from_html(pot)
+        except Exception as e:
+            oznaka_stanja.set_text(f"Uvoz ni uspel: {e}")
+            return
+
+        if dodanih:
+            oznaka_stanja.set_text(f"✓ Uvoženih {dodanih} zaznamkov.")
+            try:
+                self.broadcast_portals_update()
+            except Exception:
+                pass
+        else:
+            oznaka_stanja.set_text(
+                "V datoteki ni bilo novih zaznamkov (morda so že uvoženi).")
+
+
+    def _safeer_link_preveri_hub(self):
+        """Tiho preveri, ali je v omrežju Safeer Hub, in prilagodi namig gumba.
+
+        Gumb je viden v vsakem primeru; preverba samo pove, ali je kaj za povezati.
+        """
+        def v_ozadju():
+            naslov = None
+            try:
+                from core import link_hub
+                nastavitve = link_hub.Nastavitve()
+                znani = str(nastavitve.get("hub_url", "") or "")
+                naslov = link_hub.poisci_hub(znani)
+                if naslov and (not znani or link_hub.naslov_je_isti(znani, naslov)
+                               or not nastavitve.get("control_token")):
+                    nastavitve.set("hub_url", naslov)
+            except Exception:
+                naslov = None
+
+            namig = ("Safeer Link — poveži televizor in telefon" if naslov
+                     else "Safeer Link — kaj je to in kako ga vklopiš")
+
+            def posodobi():
+                try:
+                    self.btn_link.set_tooltip_text(namig)
+                except Exception:
+                    pass
+                return False
+
+            GLib.idle_add(posodobi)
+        threading.Thread(target=v_ozadju, daemon=True).start()
+        return False
+
+    def open_safeer_link(self):
+        """Odpre Safeer Link v svojem oknu."""
+        try:
+            from core.safeer_link import SafeerLink
+        except Exception as e:
+            print(f"[SafeerLink] Modula ni bilo mogoče naložiti: {e}")
+            return
+
+        def trenutna_stran():
+            wv = self.get_active_webview()
+            return {
+                "url": (wv.get_uri() if wv else "") or "",
+                "naslov": (wv.get_title() if wv else "") or "",
+            }
+
+        if getattr(self, "_safeer_link", None) is None:
+            self._safeer_link = SafeerLink(
+                self, self.config, trenutna_stran,
+                lambda naslov: self.new_tab(naslov),
+                BASE_DIR,
+            )
+        else:
+            # Naslov strani se je medtem lahko spremenil.
+            self._safeer_link.trenutna_stran = trenutna_stran
+        self._safeer_link.pokazi()
 
     def show_shield_status_dialog(self):
         """Prikaže podrobno varnostno poročilo ščita."""
@@ -3574,6 +3697,16 @@ class SafeerMintBrowser(Gtk.Window):
             detected_names.append("Firefox")
         if "chrome" in detected or "chromium" in detected or "brave" in detected:
             detected_names.append("Chrome/Brave")
+        if "edge" in detected:
+            detected_names.append("Edge")
+        if "windows" in detected:
+            # Priklopljena Windows particija: povejmo cigavi zaznamki so, da uporabnik ve,
+            # da gre za njegove stare priljubljene strani.
+            imena_win = sorted({p.get("name", "") for p in detected.get("windows", []) if p.get("name")})
+            if imena_win:
+                detected_names.append("Windows (" + ", ".join(imena_win[:2]) + ")")
+            else:
+                detected_names.append("Windows")
 
         import_chk = None
         if detected_names:
@@ -3582,10 +3715,27 @@ class SafeerMintBrowser(Gtk.Window):
             import_chk.set_active(True)
             box_bm.pack_start(import_chk, False, False, 0)
         else:
-            lbl_no_bm = Gtk.Label(label="Zaznamke lahko kadarkoli uvozite v orodni vrstici (zvezdica ⭐ ali Ctrl+B).")
+            lbl_no_bm = Gtk.Label(label="Na tem računalniku nismo našli drugega brskalnika.")
             lbl_no_bm.set_xalign(0)
             lbl_no_bm.get_style_context().add_class("dim-label")
             box_bm.pack_start(lbl_no_bm, False, False, 0)
+
+        # Datoteka je edina pot za tistega, ki pride z Windowsov ali iz oblaka, zato
+        # gumb ponudimo vedno -- ne samo takrat, ko ni najdeno nic.
+        lbl_uvoz_stanje = Gtk.Label(label="")
+        lbl_uvoz_stanje.set_xalign(0)
+        lbl_uvoz_stanje.get_style_context().add_class("dim-label")
+
+        btn_uvoz_dat = Gtk.Button(label="📥 Uvozi iz datoteke (HTML) …")
+        btn_uvoz_dat.set_halign(Gtk.Align.START)
+        btn_uvoz_dat.set_tooltip_text(
+            "V starem brskalniku izberite Zaznamki → Izvozi zaznamke v datoteko HTML. "
+            "Datoteko prenesite sem (USB ključ, oblak) in jo izberite tukaj.")
+        btn_uvoz_dat.connect(
+            "clicked",
+            lambda b: self._carovnik_uvoz_iz_datoteke(dialog, lbl_uvoz_stanje))
+        box_bm.pack_start(btn_uvoz_dat, False, False, 0)
+        box_bm.pack_start(lbl_uvoz_stanje, False, False, 0)
         content.pack_start(box_bm, False, False, 0)
 
         # 3. Default Browser Option

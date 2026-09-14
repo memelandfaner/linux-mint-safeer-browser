@@ -126,15 +126,15 @@ class CatalogueTests(unittest.TestCase):
     def test_local_attachment_and_card_lure_pages(self):
         # SI-CERT TZ009: the fake bank page is an HTML attachment opened from mail, so it has no host
         local = {"host": "", "scheme": "file", "password": True, "title": "NLB Klik"}
-        verdict = adblock.fake_bank_page_verdict("file:///home/janez/Prejemi/NLB_Klik.html", local)
+        verdict = adblock.fake_bank_page_verdict("file:///home/uporabnik/Prejemi/NLB_Klik.html", local)
         self.assertEqual((verdict.bank_id, verdict.reason), ("nlb", "local"))
         self.assertIsNone(adblock.fake_bank_page_verdict("https://secure-login.example/", local), "scheme must match the page")
         self.assertIsNone(adblock.fake_bank_page_verdict("file:///tmp/racun.html", dict(local, title="Moj racun")))
         self.assertIn("priponke", adblock.fake_bank_warning_text(verdict))
         self.assertIn("nikoli ne pokliče", adblock.fake_bank_warning_text(verdict))
-        adblock.allow_fake_bank_host("file:///home/janez/Prejemi/NLB_Klik.html")
+        adblock.allow_fake_bank_host("file:///home/uporabnik/Prejemi/NLB_Klik.html")
         self.assertTrue(adblock.is_fake_bank_host_allowed("file:///anything.html"))
-        self.assertIsNone(adblock.fake_bank_page_verdict("file:///home/janez/Prejemi/NLB_Klik.html", local))
+        self.assertIsNone(adblock.fake_bank_page_verdict("file:///home/uporabnik/Prejemi/NLB_Klik.html", local))
         # SI-CERT, May 2026: a card form dressed up as a police fine on a fresh domain
         lure = {"host": "kazen-placilo.example", "scheme": "https", "card": True, "title": "Placilo kazni",
                 "headings": "Policija - prekrsek", "text": "Kazen 39 EUR placajte s kartico. Stevilka kartice"}
@@ -275,8 +275,8 @@ class BrowserGlueTests(unittest.TestCase):
         self.assertFalse(timeouts[0][1]())
         self.assertEqual(len(scripts), 1, "no check after the tab moved on")
         with mock.patch.object(self.mint, "GLib", glib):
-            webview.get_uri = lambda: "file:///home/janez/Prejemi/NLB_Klik.html"
-            self.mint.SafeerMintBrowser.schedule_fake_bank_check(app, webview, "file:///home/janez/Prejemi/NLB_Klik.html")
+            webview.get_uri = lambda: "file:///home/uporabnik/Prejemi/NLB_Klik.html"
+            self.mint.SafeerMintBrowser.schedule_fake_bank_check(app, webview, "file:///home/uporabnik/Prejemi/NLB_Klik.html")
         self.assertEqual(len(idle), 2, "an HTML file outside the browser's own pages is checked")
         self.assertFalse(idle[1]())
         self.assertEqual(len(scripts), 2)
