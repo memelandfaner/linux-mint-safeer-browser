@@ -286,6 +286,52 @@ class ConfigManager:
             return True
         return False
 
+    # --- Shramba vrednosti uporabniških skript (GM_getValue / GM_setValue) ---
+    # Vsaka skripta ima svoj predal; ena skripta ne vidi vrednosti druge.
+
+    NAJVEC_KLJUCEV = 200
+    NAJVEC_BAJTOV = 64 * 1024
+
+    def get_script_values(self, script_id: str) -> Dict[str, Any]:
+        """Vrne shranjene vrednosti ene uporabniške skripte."""
+        return dict(self.settings.get("user_script_values", {}).get(script_id, {}))
+
+    def set_script_value(self, script_id: str, key: str, value: Any) -> bool:
+        """
+        Shrani eno vrednost uporabniške skripte.
+        Vrednost pride iz spletne strani, zato je omejena po dolžini in številu.
+        """
+        if not script_id or not isinstance(key, str) or not key or len(key) > 200:
+            return False
+        try:
+            if len(json.dumps(value, ensure_ascii=False)) > self.NAJVEC_BAJTOV:
+                return False
+        except (TypeError, ValueError):
+            return False
+        vse = self.settings.setdefault("user_script_values", {})
+        predal = vse.setdefault(script_id, {})
+        if key not in predal and len(predal) >= self.NAJVEC_KLJUCEV:
+            return False
+        predal[key] = value
+        self.save_settings()
+        return True
+
+    def delete_script_value(self, script_id: str, key: str) -> bool:
+        """Izbriše eno vrednost uporabniške skripte."""
+        predal = self.settings.get("user_script_values", {}).get(script_id)
+        if not predal or key not in predal:
+            return False
+        del predal[key]
+        self.save_settings()
+        return True
+
+    def clear_script_values(self, script_id: str) -> None:
+        """Pozabi vse vrednosti ene skripte (ob njenem izbrisu)."""
+        vse = self.settings.get("user_script_values", {})
+        if script_id in vse:
+            del vse[script_id]
+            self.save_settings()
+
     def get_user_scripts(self):
         """Vrne seznam vseh uporabniških skript."""
         return self.settings.get("user_scripts", [])
@@ -331,6 +377,7 @@ class ConfigManager:
         new_scripts = [s for s in scripts if s["id"] != script_id]
         if len(new_scripts) != len(scripts):
             self.save_user_scripts(new_scripts)
+            self.clear_script_values(script_id)
             return True
         return False
 

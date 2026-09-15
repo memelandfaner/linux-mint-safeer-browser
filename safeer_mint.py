@@ -74,6 +74,7 @@ from core.filter_lists import FILTER_ID as FILTER_LIST_ID
 from core.default_browser import is_default_browser as system_is_default_browser, set_default_browser
 from core.tab_monitor import TabMonitor, describe as describe_load
 from core import processes_page
+from core import userscripts as uporabniske_skripte
 
 # Use WebKitGTK's maintained browser identity consistently across redirects.
 USER_AGENT = None
@@ -4476,24 +4477,8 @@ class SafeerMintBrowser(Gtk.Window):
         )
         content_mgr.add_script(throttler_script)
 
-        # Custom User Scripts Injection (motor uporabniških skript)
-        user_scripts = self.config.get_user_scripts()
-        for s in user_scripts:
-            if s.get("enabled", True) and s.get("code"):
-                try:
-                    pattern = s.get("pattern", "*").strip()
-                    whitelist = None if pattern in ("*", "") else [pattern if pattern.startswith("*://") or pattern.startswith("http") else f"*://*.{pattern}/*"]
-                    run_time = WebKit2.UserScriptInjectionTime.START if s.get("run_at") == "start" else WebKit2.UserScriptInjectionTime.END
-                    us = WebKit2.UserScript(
-                        s["code"],
-                        WebKit2.UserContentInjectedFrames.ALL_FRAMES,
-                        run_time,
-                        whitelist,
-                        None
-                    )
-                    content_mgr.add_script(us)
-                except Exception as e:
-                    print(f"[UserScript] Opozorilo pri nalaganju skripte '{s.get('name')}': {e}")
+        # Uporabniške skripte (.user.js) -- glava, dovoljenja in ločen svet
+        self.vgradi_uporabniske_skripte(content_mgr)
 
         # Force Dark Mode if enabled
         if self.config.get("force_dark_mode", True):
@@ -6174,12 +6159,21 @@ class SafeerMintBrowser(Gtk.Window):
         tv = Gtk.TextView()
         tv.get_style_context().add_class("code-editor")
         buf = tv.get_buffer()
-        default_code = script.get("code", "") if is_edit else """// Safeer Uporabniška Skripta
-(function() {
-    console.log("Safeer skripta teče na:", window.location.href);
-    // Tukaj dodajte svojo JavaScript kodo:
-    
-})();"""
+        default_code = script.get("code", "") if is_edit else """// ==UserScript==
+// @name         Moja nova skripta
+// @version      1.0
+// @description  Kaj skripta naredi
+// @match        https://example.com/*
+// @run-at       document-end
+// @grant        GM_addStyle
+// ==/UserScript==
+
+// Safeer podpira: GM_addStyle, GM_getValue, GM_setValue, GM_deleteValue,
+// GM_listValues, GM_log in GM_info. Kar ni na tem seznamu, še ni na voljo.
+
+GM_addStyle('body { }');
+console.log("Safeer skripta teče na:", window.location.href);
+"""
         buf.set_text(default_code)
         scroll.add(tv)
         content.pack_start(scroll, True, True, 0)
@@ -6193,22 +6187,36 @@ class SafeerMintBrowser(Gtk.Window):
             start, end = buf.get_bounds()
             s_code = buf.get_text(start, end, True)
 
+            # Glava ==UserScript== pove vec kot polji nad urejevalnikom:
+            # ce je v kodi, obvelja ona (ime, @match, @run-at, @grant).
+            glava = uporabniske_skripte.razclenii_glavo(s_code)
+            manjka = uporabniske_skripte.manjkajoca_dovoljenja(glava)
+            if glava.get("ima_glavo") and glava.get("name") and s_name in (
+                    "Moja nova skripta", "Brez imena", ""):
+                s_name = glava["name"]
+            lahko_tece = not manjka
+
             if is_edit:
                 self.config.update_user_script(
                     script["id"],
                     name=s_name,
                     pattern=s_pat,
                     code=s_code,
-                    enabled=script.get("enabled", True),
+                    enabled=script.get("enabled", True) and lahko_tece,
                     run_at=s_run
                 )
             else:
-                self.config.add_user_script(
+                nov_id = self.config.add_user_script(
                     name=s_name,
                     pattern=s_pat,
                     code=s_code,
                     run_at=s_run
                 )
+                if not lahko_tece:
+                    self.config.toggle_user_script(nov_id)
+
+            if manjka:
+                self.opozori_manjkajoca_dovoljenja(s_name, manjka)
         dialog.destroy()
 
     def broadcast_portals_update(self):
@@ -6642,6 +6650,125 @@ class SafeerMintBrowser(Gtk.Window):
     #: Dejanja, ki spremenijo vmesnik ali berejo uporabnikove datoteke. Sme jih
     #: sprozíti samo nasa lastna stran (domaca stran, notranje strani v ui/).
     ZAUPNA_DEJANJA = ("navigate", "set_default_browser", "open_sidebar", "set_language")
+
+    SVET_SKRIPT = "safeer-userscripts"
+    MOST_SKRIPT = "safeer_gm"
+
+    def vgradi_uporabniske_skripte(self, content_mgr):
+        """
+        Vbrizga uporabnikove skripte (.user.js) v ločen svet JavaScripta.
+
+        Ločen svet pomeni, da spletna stran ne vidi ne skripte ne mostu do
+        brskalnika; skripta pa ne vidi naših notranjih strani, ker so te v
+        prepovedanem seznamu.
+        """
+        try:
+            content_mgr.register_script_message_handler_in_world(
+                self.MOST_SKRIPT, self.SVET_SKRIPT)
+            content_mgr.connect(
+                "script-message-received::" + self.MOST_SKRIPT,
+                self.on_gm_message)
+        except Exception as e:
+            print(f"[UserScript] Mosta za shrambo ni bilo mogoce registrirati: {e}")
+
+        for s in self.config.get_user_scripts():
+            if not s.get("enabled", True) or not s.get("code"):
+                continue
+            ime = s.get("name") or s.get("id") or "brez imena"
+            try:
+                pripravljeno = uporabniske_skripte.pripravi(
+                    s,
+                    self.config.get_script_values(s.get("id", "")),
+                    BASE_DIR,
+                    self.MOST_SKRIPT,
+                )
+            except Exception as e:
+                print(f"[UserScript] '{ime}': napaka pri branju glave: {e}")
+                continue
+
+            if pripravljeno["napaka"] == "manjkajoca_dovoljenja":
+                print(f"[UserScript] '{ime}' se ne izvede: Safeer se nima "
+                      f"{', '.join(pripravljeno['manjka'])}.")
+                continue
+            if pripravljeno["napaka"]:
+                print(f"[UserScript] '{ime}' se ne izvede: ni veljavnega vzorca @match.")
+                continue
+
+            try:
+                cas = (WebKit2.UserScriptInjectionTime.START
+                       if pripravljeno["run_at"] == "document-start"
+                       else WebKit2.UserScriptInjectionTime.END)
+                okvirji = (WebKit2.UserContentInjectedFrames.ALL_FRAMES
+                           if pripravljeno["vsi_okvirji"]
+                           else WebKit2.UserContentInjectedFrames.TOP_FRAME)
+                us = WebKit2.UserScript.new_for_world(
+                    pripravljeno["vir"],
+                    okvirji,
+                    cas,
+                    self.SVET_SKRIPT,
+                    pripravljeno["dovoljeni"],
+                    pripravljeno["prepovedani"],
+                )
+                content_mgr.add_script(us)
+            except Exception as e:
+                print(f"[UserScript] '{ime}': napaka pri vbrizgu: {e}")
+
+    def opozori_manjkajoca_dovoljenja(self, ime, manjka):
+        """
+        Pove naravnost, katerih funkcij Safeer se nima.
+
+        Raje izklopljena skripta s pojasnilom kot vklopljena, ki se ustavi
+        pri prvem klicu funkcije, ki je ni.
+        """
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            flags=0,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.OK,
+            text=f"Skripta »{ime}« potrebuje funkcije, ki jih Safeer še nima"
+        )
+        dialog.format_secondary_text(
+            "Manjka: " + ", ".join(manjka) + ".\n\n"
+            "Skripta je shranjena, a izklopljena -- sicer bi se izvedla samo do "
+            "prvega klica te funkcije in bi bilo videti, kot da ne dela nic. "
+            "Ko bo funkcija na voljo, jo boste lahko vklopili."
+        )
+        dialog.run()
+        dialog.destroy()
+
+    def on_gm_message(self, content_mgr, js_result):
+        """
+        Shramba uporabniške skripte (GM_setValue, GM_deleteValue).
+
+        Sporočilo pride iz skripte, ta pa teče na tuji strani, zato mu ne
+        verjamemo: pišemo lahko samo v predal skripte, ki res obstaja in je
+        vklopljena, in samo vrednosti, ki jih config dovoli po velikosti.
+        """
+        try:
+            sporocilo = js_result.get_js_value().to_string()
+            podatki = json.loads(sporocilo)
+            if not isinstance(podatki, dict):
+                return
+            script_id = podatki.get("id")
+            op = podatki.get("op")
+            tovor = podatki.get("payload") or {}
+            if not isinstance(script_id, str) or not isinstance(tovor, dict):
+                return
+
+            znane = {s.get("id") for s in self.config.get_user_scripts()
+                     if s.get("enabled", True)}
+            if script_id not in znane:
+                return
+
+            kljuc = tovor.get("key")
+            if not isinstance(kljuc, str) or not kljuc:
+                return
+            if op == "set":
+                self.config.set_script_value(script_id, kljuc, tovor.get("value"))
+            elif op == "delete":
+                self.config.delete_script_value(script_id, kljuc)
+        except Exception as e:
+            print(f"[UserScript] Sporocila shrambe ni bilo mogoce obdelati: {e}")
 
     def on_js_message(self, content_mgr, js_result, posiljatelj=None):
         try:
