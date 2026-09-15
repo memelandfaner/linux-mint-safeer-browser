@@ -17,7 +17,7 @@
     <p>Key Highlights:</p>
     <ul>
       <li>YouTube playback and configurable ad filtering.</li>
-      <li>Local reverse domain trie threat shield blocking botnets, ransomware, and phishing (abuse.ch).</li>
+      <li>Local reverse domain trie threat shield blocking botnets, ransomware and phishing, from signed lists (sources include abuse.ch, Phishing Army and SI-CERT).</li>
       <li>Instant 1-click bookmarks import directly from Firefox and Chrome profiles.</li>
       <li>Onboarding wizard with DuckDuckGo default search and optional default browser setting.</li>
       <li>Bookmarks toolbar and muscle-memory keyboard shortcuts (Ctrl+Shift+T, Ctrl+Tab, Ctrl+K).</li>

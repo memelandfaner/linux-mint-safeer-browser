@@ -8,7 +8,7 @@ Install build dependencies: Python 3, Pillow, dpkg-dev, desktop-file-utils and a
 
 ```sh
 bash build_deb.sh
-sudo apt install ./safeer-browser_1.0.16_all.deb
+sudo apt install ./safeer-browser_1.0.26_all.deb
 ```
 
 The existing source tarball is retained. Builds no longer copy into neighbouring website repositories. Native package upgrades continue using the existing `~/.config/safeer-mint` profile unless XDG_CONFIG_HOME is explicitly set. Existing alternatives registration and removal scripts are retained.
@@ -20,7 +20,7 @@ flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flath
 flatpak install --user flathub org.gnome.Platform//50 org.gnome.Sdk//50
 # Also install your distribution's flatpak-builder and AppStream compose tools.
 bash packaging/build_flatpak.sh
-flatpak install --user dist/Safeer-Browser-1.0.16-x86_64.flatpak
+flatpak install --user dist/Safeer-Browser-1.0.26-x86_64.flatpak
 flatpak run io.github.memelandfaner.SafeerBrowser
 ```
 
@@ -44,8 +44,8 @@ Release build baseline: Ubuntu 22.04 x86_64 / glibc 2.35. CI runs the `deb-appim
 ```sh
 bash packaging/fetch_linuxdeploy.sh
 LINUXDEPLOY="$PWD/build/tools/linuxdeploy.AppImage" bash packaging/build_appimage.sh
-chmod +x dist/Safeer-Browser-1.0.16-x86_64.AppImage
-./dist/Safeer-Browser-1.0.16-x86_64.AppImage
+chmod +x dist/Safeer-Browser-1.0.26-x86_64.AppImage
+./dist/Safeer-Browser-1.0.26-x86_64.AppImage
 ```
 
 linuxdeploy is pinned to a versioned release and checked against SHA256. The AppDir includes Python, GI modules/typelibs, GTK, WebKit subprocesses, GStreamer and GIO TLS resources. linuxdeploy resolves ELF dependencies and applies its system-library exclusions. glibc, the ELF loader and GPU drivers must remain host-provided. WebKit process sandboxing is not disabled. Host bubblewrap/user-namespace support may be required by the distro WebKit build. A build must fail acceptance rather than use an insecure fallback.

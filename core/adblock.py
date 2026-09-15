@@ -2,7 +2,7 @@
 """
 Safeer Browser Ad-Blocker & Cyber Shield for Linux Mint
 Complete YouTube ad patch, JSON/XHR strip, fast-forward ad stripper,
-ambient blur removal, background audio engine, and abuse.ch botnet shield.
+ambient blur removal, background audio engine, and the signed threat shield.
 """
 
 import urllib.parse
@@ -175,7 +175,7 @@ YOUTUBE_ADBLOCK_SCRIPT = """
             var url = new URL(value, location.href);
             var host = url.hostname;
             if (!(host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtubei.googleapis.com')) return false;
-            return /^\/youtubei\/v[0-9]+\/(player|next|reel\/player)(?:\/|$)/.test(url.pathname);
+            return /^\\/youtubei\\/v[0-9]+\\/(player|next|reel\\/player)(?:\\/|$)/.test(url.pathname);
         } catch (_) { return false; }
     }
     if (window.fetch) {
@@ -788,8 +788,8 @@ def strip_tracking_parameters(url: str) -> str:
         return url
 
 
-ABUSE_CH_BLOCKED_DOMAINS = {
-    # 1. abuse.ch Feodo Tracker (Botnet C2 strežniki - Dridex, Emotet, QakBot, TrickBot)
+ZASILNI_VZORCI_ZLONAMERNIH_DOMEN = {
+    # 1. Vzorci imen, kot jih uporabljajo nadzorni strezniki botnetov (Dridex, Emotet, QakBot)
     "c2-tracker.net",
     "botnet-master.org",
     "dridex-panel.cc",
@@ -816,7 +816,7 @@ ABUSE_CH_BLOCKED_DOMAINS = {
     "formbook-panel.cc",
     "xworm-controller.top",
     "lumma-stealer-delivery.top",
-    # 2. abuse.ch URLhaus & ThreatFox (Zlonamerna koda / Malware distribution & IOC)
+    # 2. Vzorci imen za razdeljevanje zlonamerne kode
     "malware-drop.com",
     "payload-delivery.cc",
     "evil-apk-download.net",
@@ -912,7 +912,7 @@ class ReverseDomainTrie:
 
 
 _threat_trie = ReverseDomainTrie()
-for _domain in ABUSE_CH_BLOCKED_DOMAINS:
+for _domain in ZASILNI_VZORCI_ZLONAMERNIH_DOMEN:
     _threat_trie.insert(_domain)
 
 

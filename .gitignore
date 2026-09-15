@@ -17,3 +17,6 @@ dist/
 .flatpak-builder/
 *.flatpak
 *.AppImage
+
+# Vsaka izdaja objavi svoj SHA256SUMS kot prilogo; kopija v repozitoriju bi bila stara.
+/SHA256SUMS
