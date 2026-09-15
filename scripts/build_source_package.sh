@@ -66,7 +66,7 @@ safeer-browser (${FULL_VER}) ${DIST}; urgency=medium
   * AppStream metainfo for Linux Mint Software Manager (mintinstall).
   * Onboarding setup wizard, bookmarks toolbar, and DuckDuckGo default.
 
- -- Safeer Sovereign Security Team <support@safeer.org>  $(date -R)
+ -- Safeer <memelandfaner@users.noreply.github.com>  $(date -R)
 CL_EOF
 
     # Poveži .orig.tar.gz v nadrejeno mapo delovnega imenika (za dpkg-source)

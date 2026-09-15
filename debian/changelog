@@ -3,35 +3,35 @@ safeer-browser (1.0.13-0ubuntu1~noble1) noble; urgency=medium
   * Reuse browser resources and reduce redundant YouTube script work.
   * Add five-song startup and uninterrupted-playback regression runner.
 
- -- Safeer Team <support@safeer.org>  Mon, 07 Sep 2026 05:25:00 +0200
+ -- Safeer <memelandfaner@users.noreply.github.com>  Mon, 07 Sep 2026 05:25:00 +0200
 
 safeer-browser (1.0.12-0ubuntu1~noble1) noble; urgency=medium
 
   * Clean initial and asynchronous YouTube ad payloads before playback.
   * Add bounded search recovery and readable connection/certificate error pages.
 
- -- Safeer Browser Team <safeer@users.noreply.github.com>  Sun, 06 Sep 2026 22:00:00 +0200
+ -- Safeer <memelandfaner@users.noreply.github.com>  Sun, 06 Sep 2026 22:00:00 +0200
 
 safeer-browser (1.0.11-0ubuntu1~noble1) noble; urgency=medium
 
   * Use native GIO registration for default browser instead of timed shell commands.
   * Repair misplaced desktop MIME metadata and verify all web associations.
 
- -- Safeer Sovereign Security Team <support@safeer.org>  Sun, 06 Sep 2026 22:05:00 +0200
+ -- Safeer <memelandfaner@users.noreply.github.com>  Sun, 06 Sep 2026 22:05:00 +0200
 
 safeer-browser (1.0.10-0ubuntu1~noble1) noble; urgency=medium
 
   * Preserve login popups, opener callbacks, POST forms and signed links.
   * Protect identity and verification UI from cosmetic removal.
 
- -- Safeer Sovereign Security Team <support@safeer.org>  Sun, 06 Sep 2026 21:50:00 +0200
+ -- Safeer <memelandfaner@users.noreply.github.com>  Sun, 06 Sep 2026 21:50:00 +0200
 
 safeer-browser (1.0.9-0ubuntu1~noble1) noble; urgency=high
 
   * Restore sidebar button creation for profiles with enabled integrations.
   * Add GTK regression coverage for saved integrations and dock rebuilding.
 
- -- Safeer Sovereign Security Team <support@safeer.org>  Sun, 06 Sep 2026 21:30:00 +0200
+ -- Safeer <memelandfaner@users.noreply.github.com>  Sun, 06 Sep 2026 21:30:00 +0200
 
 safeer-browser (1.0.8-0ubuntu1~noble1) noble; urgency=medium
 
@@ -39,7 +39,7 @@ safeer-browser (1.0.8-0ubuntu1~noble1) noble; urgency=medium
   * Separate ad blocking from malware warnings.
   * Remove aggressive media seeking and playback overrides.
 
- -- Safeer Sovereign Security Team <support@safeer.org>  Sun, 06 Sep 2026 21:15:00 +0200
+ -- Safeer <memelandfaner@users.noreply.github.com>  Sun, 06 Sep 2026 21:15:00 +0200
 
 safeer-browser (1.0.7-0ubuntu1~noble1) noble; urgency=medium
 
@@ -51,4 +51,4 @@ safeer-browser (1.0.7-0ubuntu1~noble1) noble; urgency=medium
   * Registered in Debian alternatives system (priority 40).
   * Implemented DoH DNS proxy and strict 3rd-party cookie blocking.
 
- -- Safeer Sovereign Security Team <support@safeer.org>  Sun, 06 Sep 2026 16:50:00 +0200
+ -- Safeer <memelandfaner@users.noreply.github.com>  Sun, 06 Sep 2026 16:50:00 +0200

@@ -35,7 +35,7 @@ Section: web
 Priority: optional
 Architecture: ${ARCH}
 Depends: python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, gir1.2-webkit2-4.1, gir1.2-soup-3.0, gir1.2-glib-2.0
-Maintainer: Safeer Sovereign Security Team <support@safeer.org>
+Maintainer: Safeer <memelandfaner@users.noreply.github.com>
 Homepage: https://github.com/memelandfaner/linux-mint-safeer-browser
 Description: Sovereign, ultra-fast, and private web browser for Linux Mint & Ubuntu
  Safeer Browser is an open-source, ultra-fast web browser engineered

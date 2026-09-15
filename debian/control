@@ -1,7 +1,7 @@
 Source: safeer-browser
 Section: web
 Priority: optional
-Maintainer: Safeer Sovereign Security Team <support@safeer.org>
+Maintainer: Safeer <memelandfaner@users.noreply.github.com>
 Build-Depends: debhelper-compat (= 13), python3, python3-pil
 Standards-Version: 4.6.2
 Homepage: https://github.com/memelandfaner/linux-mint-safeer-browser
