@@ -1,10 +1,23 @@
 import concurrent.futures
+import contextlib
 import socket
 import threading
 import time
 import unittest
 from unittest.mock import patch
 from core.doh_proxy import DoHResolver, LocalDoHProxy
+
+@contextlib.contextmanager
+def brez_omejitve_cilja():
+    """
+    Ta dva preizkusa merita vodovod posrednika (tunel, telo zahtevka, glave),
+    zato cilj postavita na 127.0.0.1. Posrednik sicer povezav na lokalne naslove
+    ne vzpostavi - to varovalko preverja tests/test_doh_meje.py - zato jo tu
+    zavestno odklopimo, da lahko preizkusimo prenos podatkov.
+    """
+    with patch('core.doh_proxy.je_javni_naslov',return_value=True), \
+         patch('core.doh_proxy.je_dovoljena_vrata',return_value=True):
+        yield
 
 class NetworkTests(unittest.TestCase):
     def test_failed_dns_is_coalesced_cached_and_never_plaintext(self):
@@ -53,11 +66,22 @@ class NetworkTests(unittest.TestCase):
                 while len(body)<len(payload): body+=c.recv(65536)
                 self.assertEqual(body,payload)
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=24) as pool: list(pool.map(check,range(40)))
-            c=socket.create_connection(('127.0.0.1',port),timeout=4)
-            c.sendall(('CONNECT 127.0.0.1:%d HTTP/1.1\r\n\r\n'%server.getsockname()[1]).encode())
-            self.assertIn(b'200',c.recv(1024)); proxy.stop(); self.assertEqual(c.recv(1024),b''); c.close()
+            with brez_omejitve_cilja():
+                with concurrent.futures.ThreadPoolExecutor(max_workers=24) as pool: list(pool.map(check,range(40)))
+                c=socket.create_connection(('127.0.0.1',port),timeout=4)
+                c.sendall(('CONNECT 127.0.0.1:%d HTTP/1.1\r\n\r\n'%server.getsockname()[1]).encode())
+                self.assertIn(b'200',c.recv(1024)); proxy.stop(); self.assertEqual(c.recv(1024),b''); c.close()
         finally: proxy.stop(); stopped.set(); server.close()
+
+    def test_connect_na_lokalni_naslov_je_privzeto_zavrnjen(self):
+        # Brez odklopa varovalke mora isti tunel pasti: to je privzeto vedenje.
+        server=socket.socket(); server.bind(('127.0.0.1',0)); server.listen(4)
+        proxy=LocalDoHProxy(DoHResolver()); port=proxy.start()
+        try:
+            with socket.create_connection(('127.0.0.1',port),timeout=4) as c:
+                c.sendall(('CONNECT 127.0.0.1:%d HTTP/1.1\r\nHost: local\r\n\r\n'%server.getsockname()[1]).encode())
+                self.assertIn(b'403',c.recv(1024))
+        finally: proxy.stop(); server.close()
 
     def test_http_post_retains_body_and_removes_proxy_credentials(self):
         server=socket.socket();server.bind(('127.0.0.1',0));server.listen(1)
@@ -71,9 +95,10 @@ class NetworkTests(unittest.TestCase):
         t=threading.Thread(target=read,daemon=True);t.start()
         proxy=LocalDoHProxy(DoHResolver()); port=proxy.start()
         try:
-            with socket.create_connection(('127.0.0.1',port),timeout=4) as c:
-                c.sendall(('POST http://127.0.0.1:%d/path?q=1 HTTP/1.1\r\nHost: local\r\nContent-Length: 5\r\nProxy-Authorization: secret\r\n\r\nhello'%server.getsockname()[1]).encode())
-                self.assertIn(b'200',c.recv(4096))
+            with brez_omejitve_cilja():
+                with socket.create_connection(('127.0.0.1',port),timeout=4) as c:
+                    c.sendall(('POST http://127.0.0.1:%d/path?q=1 HTTP/1.1\r\nHost: local\r\nContent-Length: 5\r\nProxy-Authorization: secret\r\n\r\nhello'%server.getsockname()[1]).encode())
+                    self.assertIn(b'200',c.recv(4096))
             t.join(3);self.assertTrue(received[0].startswith(b'POST /path?q=1 HTTP/1.1'))
             self.assertNotIn(b'secret',received[0]);self.assertTrue(received[0].endswith(b'hello'))
         finally: proxy.stop();server.close()

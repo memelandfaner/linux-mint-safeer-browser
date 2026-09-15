@@ -3,6 +3,8 @@
 Safeer Browser for Linux Mint - DNS-over-HTTPS (DoH) & Encrypted Proxy Engine
 Encrypted DNS with HTTP/2 support and bounded local HTTP/CONNECT tunneling.
 Public target lookups fail closed; resolver endpoint bootstrap uses the system DNS.
+The local proxy only ever connects outwards to public addresses on browser ports:
+loopback, private, link-local (including cloud metadata) and reserved ranges are refused.
 """
 
 import socket
@@ -40,6 +42,56 @@ DOH_PROVIDERS = {
         "fallback_ip": "8.8.8.8"
     }
 }
+
+# Vrata, na katera lokalni posrednik sploh sme vzpostaviti povezavo.
+# Brskalnik potrebuje samo HTTP(S); vse drugo (SSH, SMTP, baze) je zavrnjeno.
+DOVOLJENA_VRATA = frozenset({80, 443, 8080, 8443})
+
+# Obsegi, ki niso javni internet in jih posrednik nikoli ne sme doseči.
+# ipaddress.is_private pokriva 10/8, 172.16/12, 192.168/16, 100.64/10 (CGNAT),
+# 0.0.0.0/8 in podobno; povratne, povezavno-lokalne (tudi 169.254.169.254),
+# večvrstne in rezervirane naslove pokrijemo posebej.
+_CGNAT = ipaddress.ip_network("100.64.0.0/10")
+
+
+def je_javni_naslov(naslov: str) -> bool:
+    """
+    True samo za naslove na javnem internetu.
+    Zavrne povratne, zasebne, povezavno-lokalne (metapodatki oblaka),
+    CGNAT, večvrstne, rezervirane in nedoločene naslove.
+    """
+    if not naslov:
+        return False
+    try:
+        ip = ipaddress.ip_address(naslov.strip().strip("[]"))
+    except ValueError:
+        return False
+
+    # IPv6, ki v resnici nosi IPv4 naslov, presodimo po tem IPv4 naslovu.
+    if ip.version == 6:
+        mapped = getattr(ip, "ipv4_mapped", None)
+        if mapped is not None:
+            ip = mapped
+        else:
+            sixtofour = getattr(ip, "sixtofour", None)
+            if sixtofour is not None:
+                ip = sixtofour
+
+    if (ip.is_loopback or ip.is_private or ip.is_link_local
+            or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+        return False
+    if ip.version == 4 and ip in _CGNAT:
+        return False
+    return True
+
+
+def je_dovoljena_vrata(vrata: int) -> bool:
+    """True samo za vrata, prek katerih brskalnik dejansko govori HTTP(S)."""
+    try:
+        v = int(vrata)
+    except (TypeError, ValueError):
+        return False
+    return v in DOVOLJENA_VRATA
 
 
 class DoHResolver:
@@ -233,6 +285,8 @@ class LocalDoHProxy:
     Visoko-zmogljiv lokalni posredniški strežnik (Loopback CONNECT Proxy).
     Prestreza omrežne zahteve brskalnika WebKit2 ter razrešuje vsa imena gostiteljev
     prek DoH brez puščanja DNS podatkov lokalnemu ponudniku interneta.
+    Posreduje samo na javne naslove in na vrata 80/443/8080/8443; povezav v lokalno
+    omrežje, na povratni naslov ali na metapodatkovne naslove oblaka ne vzpostavi.
     """
 
     def __init__(self, resolver: DoHResolver, bind_host: str = "127.0.0.1", port: int = 0):
@@ -299,6 +353,45 @@ class LocalDoHProxy:
                 if not self.is_running:
                     break
 
+    @staticmethod
+    def _zavrni(client_sock: socket.socket, sporocilo: bytes):
+        """Odgovori s 403 in zapre povezavo (cilj je zunaj dovoljenega obsega)."""
+        try:
+            client_sock.sendall(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n" + sporocilo)
+        except Exception:
+            pass
+        try:
+            client_sock.close()
+        except Exception:
+            pass
+
+    def _pripravi_cilj(self, client_sock: socket.socket, host: str, port: int) -> Optional[str]:
+        """
+        Razreši ime prek DoH in preveri, ali je cilj sploh dovoljen.
+        Vrne IP niz ali None, če je bila povezava zavrnjena (odgovor je že poslan).
+        """
+        if not je_dovoljena_vrata(port):
+            self._zavrni(client_sock, b"Safeer: ta vrata niso dovoljena.")
+            return None
+
+        resolved_ip = self.resolver.resolve(host)
+        if not resolved_ip:
+            try:
+                client_sock.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\nSafeer DoH: Razresevanje domene ni uspelo.")
+            except Exception:
+                pass
+            try:
+                client_sock.close()
+            except Exception:
+                pass
+            return None
+
+        if not je_javni_naslov(resolved_ip):
+            self._zavrni(client_sock, b"Safeer: povezava v lokalno omrezje je zavrnjena.")
+            return None
+
+        return resolved_ip
+
     def _handle_client(self, client_sock: socket.socket):
         remote_sock = None
         try:
@@ -333,10 +426,8 @@ class LocalDoHProxy:
                     host = target
                     port = 443
 
-                resolved_ip = self.resolver.resolve(host)
+                resolved_ip = self._pripravi_cilj(client_sock, host, port)
                 if not resolved_ip:
-                    client_sock.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\nSafeer DoH: Razresevanje domene ni uspelo.")
-                    client_sock.close()
                     return
 
                 remote_sock = socket.create_connection((resolved_ip, port), timeout=10.0)
@@ -362,12 +453,13 @@ class LocalDoHProxy:
                 # Obicajni HTTP Proxy zahtevek
                 parsed = urllib.parse.urlparse(target)
                 host = parsed.hostname or ""
-                port = parsed.port or 80
+                try:
+                    port = parsed.port or 80
+                except ValueError:
+                    port = 0
 
-                resolved_ip = self.resolver.resolve(host)
+                resolved_ip = self._pripravi_cilj(client_sock, host, port)
                 if not resolved_ip:
-                    client_sock.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\nSafeer DoH: Razresevanje domene ni uspelo.")
-                    client_sock.close()
                     return
 
                 remote_sock = socket.create_connection((resolved_ip, port), timeout=10.0)
