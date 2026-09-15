@@ -28,26 +28,44 @@
 
   var BESEDILA = {
     sl: {
+      napHubNiZnan: "Huba še ne poznam. Najprej ga poišči.",
+      napIskanje: "Iskanja ni bilo mogoče zagnati.",
+      napSeznanitev: "Seznanitve ni bilo mogoče začeti.",
+      napPovezava: "Povezava ni uspela. Preveri, ali je Hub prižgan.",
+      napStranNiPrimerna: "Te strani ni mogoče poslati.",
+      napSamoHttp: "Poslati je mogoče samo naslove http in https.",
+      napPosiljanje: "Pošiljanje ni uspelo. Poskusi znova.",
+      napUkaz: "Ukaz ni uspel.",
+      napZaznamki: "Zaznamkov ni bilo mogoče poslati.",
+      napSyncStart: "Sinhronizacije ni bilo mogoče začeti.",
+      napSyncNastavi: "Sinhronizacije ni bilo mogoče nastaviti.",
+      napZdruzevanje: "Združevanja zaznamkov ni bilo mogoče končati.",
+      napHubNeTece: "Hub ne teče.",
+      napHubNiZagnan: "Huba ni bilo mogoče zagnati.",
+      napHubNiUstavljen: "Huba ni bilo mogoče ustaviti.",
+      napPrijavaPotekla: "Prijave ni več ali pa je potekla.",
+      napTvJeZaslon: "Televizor je zaslon in ne pošilja.",
+      napTvNeUpravlja: "Televizor ne upravlja drugih zaslonov.",
+      napSyncTvNiNaVoljo: "Sinhronizacija zaznamkov na televizorju še ni na voljo.",
       preverjam: "Preverjam …",
       zapri: "Zapri",
       povezano: "Povezano z domačim Safeer Linkom",
       cakaNaPotrditev: "Čaka na tvojo potrditev",
       niVklopljen: "Ni povezano",
       brezHubaNaslov: "Safeer Link še ni vklopljen",
-      brezHubaOpis: "Safeer Link pošlje odprto stran na televizor in poveže tvoje naprave doma — brez oblaka in brez računa. Za to potrebuješ Safeer Control, ki teče na računalniku ali Raspberry Pi-ju in je domače središče vseh naprav.",
+      brezHubaOpis: "Safeer Link pošlje odprto stran na televizor in poveže tvoje naprave doma — brez oblaka in brez računa. Za to mora ena naprava v hiši prevzeti vlogo središča; ostale se povežejo nanjo.",
       brezHubaPomirilo: "Brskalnik deluje povsem normalno tudi brez njega. Ničesar ne izgubiš, če to okno zapreš.",
       poisci: "Poišči v mojem omrežju",
-      kakoDobim: "Kako dobim Safeer Control",
+      kakoDobim: "Kako to vklopim",
       iscem: "Iščem …",
-      niNajden: "V tem omrežju ga nisem našel. Preveri, ali Safeer Control teče, in poskusi znova.",
+      niNajden: "V tem omrežju ga nisem našel. Preveri, ali Safeer Link teče na kateri od tvojih naprav, in poskusi znova.",
       povežiNaslov: "Poveži to napravo",
       hubNajdenNa: "Safeer Link je na naslovu",
       zakajPotrditi: "Da ti sme pošiljati in sinhronizirati, ga moraš enkrat potrditi.",
-      potrdiKodo: "V Safeer Controlu (zavihek Naprave) potrdi to kodo:",
+      potrdiKodo: "Kodo potrdi na napravi, kjer teče Safeer Link:",
       kodaVelja: "Koda velja 5 minut.",
       poveziSSafeerLink: "Poveži s Safeer Link",
-      odpriKonzolo: "Odpri konzolo",
-      cakamNaPotrditev: "Čakam na potrditev v Safeer Controlu …",
+      cakamNaPotrditev: "Čakam na potrditev …",
       niPotrjeno: "Koda ni bila potrjena. Poskusi znova.",
       posljiStran: "Pošlji to stran",
       odprtoVBrskalniku: "Odprto v brskalniku",
@@ -104,26 +122,44 @@
       preverjamNaslov: "Povezujem se na nov naslov …"
     },
     en: {
+      napHubNiZnan: "The hub is not known yet. Find it first.",
+      napIskanje: "The search could not be started.",
+      napSeznanitev: "Pairing could not be started.",
+      napPovezava: "The connection failed. Check that the hub is on.",
+      napStranNiPrimerna: "This page cannot be sent.",
+      napSamoHttp: "Only http and https addresses can be sent.",
+      napPosiljanje: "Sending failed. Try again.",
+      napUkaz: "The command failed.",
+      napZaznamki: "The bookmarks could not be sent.",
+      napSyncStart: "Sync could not be started.",
+      napSyncNastavi: "Sync could not be set up.",
+      napZdruzevanje: "Merging the bookmarks could not be finished.",
+      napHubNeTece: "The hub is not running.",
+      napHubNiZagnan: "The hub could not be started.",
+      napHubNiUstavljen: "The hub could not be stopped.",
+      napPrijavaPotekla: "The request is gone or has expired.",
+      napTvJeZaslon: "The television is a screen; it does not send.",
+      napTvNeUpravlja: "The television does not control other screens.",
+      napSyncTvNiNaVoljo: "Bookmark sync is not available on the television yet.",
       preverjam: "Checking …",
       zapri: "Close",
       povezano: "Connected to your home Safeer Link",
       cakaNaPotrditev: "Waiting for your approval",
       niVklopljen: "Not connected",
       brezHubaNaslov: "Safeer Link is not set up yet",
-      brezHubaOpis: "Safeer Link sends the open page to your television and connects the devices in your home — no cloud, no account. It needs Safeer Control, which runs on a computer or a Raspberry Pi and is the home hub for all your devices.",
+      brezHubaOpis: "Safeer Link sends the open page to your television and connects the devices in your home — no cloud, no account. One device in the house takes the role of the hub; the others connect to it.",
       brezHubaPomirilo: "The browser works exactly as before without it. You lose nothing by closing this window.",
       poisci: "Look on my network",
-      kakoDobim: "How do I get Safeer Control",
+      kakoDobim: "How do I turn this on",
       iscem: "Looking …",
-      niNajden: "I could not find it on this network. Check that Safeer Control is running and try again.",
+      niNajden: "I could not find it on this network. Check that Safeer Link is running on one of your devices and try again.",
       povežiNaslov: "Connect this device",
       hubNajdenNa: "Safeer Link is at",
       zakajPotrditi: "To let it send and sync to you, approve it once.",
-      potrdiKodo: "In Safeer Control (Devices tab) approve this code:",
+      potrdiKodo: "Approve this code on the device running Safeer Link:",
       kodaVelja: "The code is valid for 5 minutes.",
       poveziSSafeerLink: "Connect to Safeer Link",
-      odpriKonzolo: "Open the console",
-      cakamNaPotrditev: "Waiting for approval in Safeer Control …",
+      cakamNaPotrditev: "Waiting for approval …",
       niPotrjeno: "The code was not approved. Please try again.",
       posljiStran: "Send this page",
       odprtoVBrskalniku: "Open in the browser",
@@ -179,6 +215,32 @@
       daPovezi: "Yes, connect",
       preverjamNaslov: "Connecting to the new address …"
     }
+  };
+
+  /**
+   * Stabilne kode napak iz mostu. Most poslje kodo in besedilo; stran pokaze prevod
+   * kode, besedilo pa uporabi le, ce kode ne pozna (starejsi most, nova koda).
+   */
+  var NAPAKE = {
+    hub_ni_znan: "napHubNiZnan",
+    iskanje_ni_steklo: "napIskanje",
+    seznanitev_ni_stekla: "napSeznanitev",
+    povezava_ni_uspela: "napPovezava",
+    stran_ni_primerna: "napStranNiPrimerna",
+    samo_http: "napSamoHttp",
+    posiljanje_ni_uspelo: "napPosiljanje",
+    ukaz_ni_uspel: "napUkaz",
+    zaznamki_niso_poslani: "napZaznamki",
+    sync_ni_stekla: "napSyncStart",
+    sync_ni_nastavljena: "napSyncNastavi",
+    zdruzevanje_ni_koncano: "napZdruzevanje",
+    hub_ne_tece: "napHubNeTece",
+    hub_ni_zagnan: "napHubNiZagnan",
+    hub_ni_ustavljen: "napHubNiUstavljen",
+    prijava_potekla: "napPrijavaPotekla",
+    tv_je_zaslon: "napTvJeZaslon",
+    tv_ne_upravlja: "napTvNeUpravlja",
+    sync_tv_ni_na_voljo: "napSyncTvNiNaVoljo"
   };
 
   var jezik = (function () {
@@ -536,7 +598,6 @@
         besedilo("opombaSeznanitev", t("cakamNaPotrditev"));
         var g = el("gumbSeznani");
         if (g) g.disabled = true;
-        pokazi("gumbKonzola", true);
       } else if (vrsta === "seznanitev") {
         var gumb = el("gumbSeznani");
         if (gumb) gumb.disabled = false;
@@ -580,7 +641,7 @@
       } else if (vrsta === "napaka") {
         // Tehnicnega besedila uporabniku ne kazemo: povemo, kaj to pomeni zanj.
         stanje.tezava = true;
-        var sporocilo = clovesko(String(podatki));
+        var sporocilo = izNapake(podatki);
         besedilo("opombaNaprave", sporocilo);
         besedilo("opombaIskanje", sporocilo);
         besedilo("opombaCast", sporocilo);
@@ -592,6 +653,19 @@
   };
 
   /** Iz tehnicne napake naredi poved, ki uporabniku pove, kaj naj naredi. */
+  /** Napaka pride kot besedilo ali kot {koda, sporocilo}; koda ima prednost. */
+  function izNapake(podatki) {
+    if (podatki && typeof podatki === "object") {
+      var kljuc = NAPAKE[String(podatki.koda || "")];
+      if (kljuc) {
+        var niz = t(kljuc);
+        if (niz) return niz;
+      }
+      return clovesko(String(podatki.sporocilo || ""));
+    }
+    return clovesko(String(podatki));
+  }
+
   function clovesko(sporocilo) {
     var m = (sporocilo || "").toLowerCase();
     if (m.indexOf("unauthorized") >= 0 || m.indexOf("401") >= 0 ||
@@ -675,12 +749,6 @@
     naKlik("gumbSeznani", function () {
       besedilo("opombaSeznanitev", "");
       if (most) most.seznani();
-    });
-
-    naKlik("gumbKonzola", function () {
-      if (!most) return;
-      var naslov = most.naslovKonzole();
-      if (naslov) most.odpri(naslov);
     });
 
     naKlik("gumbOsvezi", poveziSe);
