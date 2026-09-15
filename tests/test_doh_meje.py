@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import core.doh_proxy as doh_proxy  # noqa: E402
 from core.doh_proxy import (  # noqa: E402
-    DOVOLJENA_VRATA,
+    PREPOVEDANA_VRATA,
     LocalDoHProxy,
     je_dovoljena_vrata,
     je_javni_naslov,
@@ -96,16 +96,20 @@ class PreizkusJavnihNaslovov(unittest.TestCase):
 
 class PreizkusVrat(unittest.TestCase):
 
-    def test_brskalniska_vrata_so_dovoljena(self):
-        for vrata in (80, 443, 8080, 8443):
+    def test_vrata_za_brskanje_so_dovoljena(self):
+        # Strani tecejo tudi na nestandardnih vratih; tega ne smemo zlomiti.
+        for vrata in (80, 443, 3000, 8000, 8080, 8443, 9000, 65535):
             with self.subTest(vrata=vrata):
                 self.assertTrue(je_dovoljena_vrata(vrata))
-        self.assertEqual(DOVOLJENA_VRATA, frozenset({80, 443, 8080, 8443}))
 
-    def test_druga_vrata_so_zavrnjena(self):
-        for vrata in (0, 22, 23, 25, 53, 445, 3306, 5432, 6379, 11211, 65535):
+    def test_nevarna_vrata_so_zavrnjena(self):
+        # Seznam sledi standardu Fetch (kot brskalniki), dodane so baze.
+        for vrata in (0, 22, 23, 25, 53, 110, 143, 465, 587, 993, 995,
+                      1433, 3306, 5432, 6379, 11211, 27017, 65536, -1):
             with self.subTest(vrata=vrata):
                 self.assertFalse(je_dovoljena_vrata(vrata))
+        self.assertIn(22, PREPOVEDANA_VRATA)
+        self.assertNotIn(443, PREPOVEDANA_VRATA)
 
     def test_nesmiselna_vrednost_je_zavrnjena(self):
         for vrednost in (None, "", "abc", "443a"):

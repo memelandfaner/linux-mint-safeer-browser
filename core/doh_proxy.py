@@ -3,8 +3,9 @@
 Safeer Browser for Linux Mint - DNS-over-HTTPS (DoH) & Encrypted Proxy Engine
 Encrypted DNS with HTTP/2 support and bounded local HTTP/CONNECT tunneling.
 Public target lookups fail closed; resolver endpoint bootstrap uses the system DNS.
-The local proxy only ever connects outwards to public addresses on browser ports:
-loopback, private, link-local (including cloud metadata) and reserved ranges are refused.
+The local proxy only ever connects outwards to public addresses, never to the Fetch
+bad-port list: loopback, private, link-local (including cloud metadata) and reserved
+ranges are refused.
 """
 
 import socket
@@ -43,9 +44,20 @@ DOH_PROVIDERS = {
     }
 }
 
-# Vrata, na katera lokalni posrednik sploh sme vzpostaviti povezavo.
-# Brskalnik potrebuje samo HTTP(S); vse drugo (SSH, SMTP, baze) je zavrnjeno.
-DOVOLJENA_VRATA = frozenset({80, 443, 8080, 8443})
+# Vrata, na katera lokalni posrednik nikoli ne vzpostavi povezave.
+# Seznam sledi seznamu "bad ports" iz standarda Fetch -- enako delajo brskalniki --
+# in mu doda strezniske baze in predpomnilnike, ki jih brskanje nikoli ne potrebuje.
+# Vsa druga vrata so dovoljena, da strani na nestandardnih vratih delujejo naprej.
+PREPOVEDANA_VRATA = frozenset({
+    1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79,
+    87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137,
+    139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532,
+    540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723,
+    2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669,
+    6679, 6697, 10080,
+    # baze, predpomnilniki in iskalniki
+    1433, 1521, 3306, 5432, 5984, 6379, 9042, 9200, 11211, 27017, 27018,
+})
 
 # Obsegi, ki niso javni internet in jih posrednik nikoli ne sme doseči.
 # ipaddress.is_private pokriva 10/8, 172.16/12, 192.168/16, 100.64/10 (CGNAT),
@@ -86,12 +98,12 @@ def je_javni_naslov(naslov: str) -> bool:
 
 
 def je_dovoljena_vrata(vrata: int) -> bool:
-    """True samo za vrata, prek katerih brskalnik dejansko govori HTTP(S)."""
+    """True za vsa vrata, ki jih brskanje potrebuje; nevarna so zavrnjena."""
     try:
         v = int(vrata)
     except (TypeError, ValueError):
         return False
-    return v in DOVOLJENA_VRATA
+    return 0 < v <= 65535 and v not in PREPOVEDANA_VRATA
 
 
 class DoHResolver:
@@ -285,8 +297,9 @@ class LocalDoHProxy:
     Visoko-zmogljiv lokalni posredniški strežnik (Loopback CONNECT Proxy).
     Prestreza omrežne zahteve brskalnika WebKit2 ter razrešuje vsa imena gostiteljev
     prek DoH brez puščanja DNS podatkov lokalnemu ponudniku interneta.
-    Posreduje samo na javne naslove in na vrata 80/443/8080/8443; povezav v lokalno
-    omrežje, na povratni naslov ali na metapodatkovne naslove oblaka ne vzpostavi.
+    Posreduje samo na javne naslove in nikoli na nevarna vrata (SSH, SMTP, baze);
+    povezav v lokalno omrežje, na povratni naslov ali na metapodatkovne naslove
+    oblaka ne vzpostavi.
     """
 
     def __init__(self, resolver: DoHResolver, bind_host: str = "127.0.0.1", port: int = 0):
