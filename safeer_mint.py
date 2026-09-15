@@ -81,6 +81,53 @@ APP_VERSION = "1.0.26"
 DOCK_WIDTH = 54
 
 
+def je_nasa_notranja_stran(url: str) -> bool:
+    """Ali je to ena od strani, ki smo jih napisali mi in so name na disku?
+
+    Preverimo pravo pot, ne podniza: `file:///tmp/ui/karkoli.html` ni nasa stran,
+    ceprav vsebuje »/ui/«.
+    """
+    if not url:
+        return False
+    u = url.strip()
+    if u in ("safeer://home", "safeer://procesi") or u.startswith("safeer://procesi?"):
+        return True
+    if not u.startswith("file://"):
+        return False
+    try:
+        pot = urllib.parse.unquote(urllib.parse.urlparse(u).path)
+        nasa_mapa = os.path.realpath(os.path.join(BASE_DIR, "ui"))
+        resnicna = os.path.realpath(pot)
+        return resnicna == nasa_mapa or resnicna.startswith(nasa_mapa + os.sep)
+    except Exception:
+        return False
+
+
+def varno_ime_datoteke(ime: str, privzeto: str = "prenos_datoteke") -> str:
+    """Iz imena, ki ga predlaga streznik, naredi ime, ki ne more zapustiti mape.
+
+    Streznik predlaga ime v glavi Content-Disposition in mu ne gre zaupati: lahko
+    vsebuje poti (`../../.bashrc`), absolutno pot (`/etc/cron.d/x`) ali obrnjene
+    posevnice. Vzamemo samo zadnji del poti in zavrzemo vse, kar ni ime datoteke.
+    """
+    if not ime:
+        return privzeto
+    ocisceno = ime.replace("\\", "/").replace("\x00", "")
+    ocisceno = ocisceno.split("/")[-1].strip()
+    # Nadzorni znaki v imenu datoteke nimajo kaj poceti.
+    ocisceno = "".join(z for z in ocisceno if ord(z) >= 32)
+    if ocisceno in ("", ".", ".."):
+        return privzeto
+    # Dolga imena nekatere datotecne sisteme zlomijo (meja je 255 bajtov).
+    if len(ocisceno.encode("utf-8")) > 200:
+        koren, konec = os.path.splitext(ocisceno)
+        konec = konec[:20]
+        while len((koren + konec).encode("utf-8")) > 200 and koren:
+            koren = koren[:-1]
+        ocisceno = (koren + konec) or privzeto
+    return ocisceno
+
+
 def is_safe_web_url(url: str) -> bool:
     """Verifies that an external or navigation URL uses an authorized protocol."""
     if not url:
@@ -90,8 +137,8 @@ def is_safe_web_url(url: str) -> bool:
         return True
     if u == "safeer://procesi" or u.startswith("safeer://procesi?"):
         return True
-    if u.startswith("file://") and "/ui/" in u:
-        return True
+    if u.startswith("file://"):
+        return je_nasa_notranja_stran(u)
     try:
         parsed = urllib.parse.urlparse(u)
         scheme = parsed.scheme.lower()
@@ -495,7 +542,9 @@ class SafeerMintBrowser(Gtk.Window):
             cookie_mgr = self.website_data_manager.get_cookie_manager()
             cookie_path = os.path.join(self.config.config_dir, "cookies.sqlite")
             cookie_mgr.set_persistent_storage(cookie_path, WebKit2.CookiePersistentStorage.SQLITE)
-            cookie_mgr.set_accept_policy(WebKit2.CookieAcceptPolicy.ALWAYS)
+            # Piskotki tretjih oseb so glavno orodje sledenja med stranmi. README to
+            # obljublja, zato mora tako biti tudi v kodi.
+            cookie_mgr.set_accept_policy(WebKit2.CookieAcceptPolicy.NO_THIRD_PARTY)
             self.cookie_mgr = cookie_mgr
         except Exception as e:
             print(f"[Storage] Opozorilo pri nastavitvi shrambe: {e}")
@@ -2129,7 +2178,7 @@ class SafeerMintBrowser(Gtk.Window):
             "✓ YouTube Adblock: Zero-ad hitro preskakovanje oglasov aktivno.\n"
             "✓ YouTube Background Audio: Predvajanje se nemoteno nadaljuje ob menjavi zavihkov.\n"
             "✓ Ambient Mode: Odstranjena zamegljenost in neželeni sivi okvirji.\n"
-            "✓ abuse.ch Botnet Shield: Aktivno blokiranje C2 strežnikov in phishing domen.\n"
+            "✓ Ščit pred grožnjami: podpisani seznami (viri: abuse.ch, Phishing Army, SI-CERT).\n"
             "✓ Čista prijava: Zaščita ne posega v obrazce za prijavo (Facebook, Google, Messenger)."
         )
         dialog.format_secondary_text(msg)
@@ -3244,15 +3293,19 @@ class SafeerMintBrowser(Gtk.Window):
         except Exception:
             pass
 
-        settings.set_enable_developer_extras(True)
+        # Razvijalska orodja niso del vsakdanjega brskanja in stran jih lahko zazna.
+        # Vklopi jih uporabnik sam v nastavitvah.
+        settings.set_enable_developer_extras(bool(self.config.get("developer_tools", False)))
         settings.set_enable_webaudio(True)
         settings.set_enable_webgl(True)
         settings.set_enable_media_stream(True)
         settings.set_enable_smooth_scrolling(True)
         settings.set_enable_html5_local_storage(True)
-        settings.set_enable_html5_database(True)
+        # WebSQL je opuscen in je le se ena shramba, po kateri je mogoce slediti.
+        settings.set_enable_html5_database(False)
         settings.set_enable_javascript(True)
-        settings.set_javascript_can_open_windows_automatically(True)
+        # Okno sme odpreti uporabnikovo dejanje, ne stran sama.
+        settings.set_javascript_can_open_windows_automatically(False)
         settings.set_enable_javascript_markup(True)
         settings.set_allow_modal_dialogs(True)
         settings.set_enable_encrypted_media(True)
@@ -4330,7 +4383,10 @@ class SafeerMintBrowser(Gtk.Window):
 
         content_mgr = wv.get_user_content_manager()
         content_mgr.register_script_message_handler("safeer")
-        content_mgr.connect("script-message-received::safeer", self.on_js_message)
+        # Posiljatelja si zapomnimo tu: on_js_message mora vedeti, katera stran klice,
+        # sicer bi lahko poljubna stran sprozila dejanja nasega vmesnika.
+        content_mgr.connect("script-message-received::safeer",
+                            lambda cm, res, posiljatelj=wv: self.on_js_message(cm, res, posiljatelj))
         self.apply_content_filter(wv)  # 📜 EasyList, once compiled
 
         # 1. Global Privacy Control (GPC) & Do Not Track (DNT) W3C Engine
@@ -5103,6 +5159,8 @@ class SafeerMintBrowser(Gtk.Window):
 
     def get_unique_download_path(self, folder: str, filename: str) -> str:
         """Ustvari unikatno ime datoteke v mapi, če datoteka z istim imenom že obstaja (npr. File (1).tar.gz)."""
+        # Drugi pas: tudi ce klicatelj pozabi, ime nikoli ne sme nesti poti.
+        filename = varno_ime_datoteke(filename)
         base_name, ext = os.path.splitext(filename)
         if base_name.lower().endswith(".tar"):
             base_name, ext2 = os.path.splitext(base_name)
@@ -5129,7 +5187,9 @@ class SafeerMintBrowser(Gtk.Window):
         if not suggested_filename:
             parsed_path = urllib.parse.urlparse(uri).path
             suggested_filename = os.path.basename(parsed_path) or "prenos_datoteke"
-        suggested_filename = urllib.parse.unquote(suggested_filename)
+        # Ime pride s streznika: najprej ga razvozlamo, nato oklestimo na golo ime
+        # datoteke, sicer bi `../../` ali absolutna pot pisala zunaj mape Prenosi.
+        suggested_filename = varno_ime_datoteke(urllib.parse.unquote(suggested_filename))
 
         always_ask = self.config.get("always_ask_download_dir", False)
         target_path = None
@@ -6579,16 +6639,34 @@ class SafeerMintBrowser(Gtk.Window):
         dialog.run()
         dialog.destroy()
 
-    def on_js_message(self, content_mgr, js_result):
+    #: Dejanja, ki spremenijo vmesnik ali berejo uporabnikove datoteke. Sme jih
+    #: sprozíti samo nasa lastna stran (domaca stran, notranje strani v ui/).
+    ZAUPNA_DEJANJA = ("navigate", "set_default_browser", "open_sidebar", "set_language")
+
+    def on_js_message(self, content_mgr, js_result, posiljatelj=None):
         try:
             val = js_result.get_js_value()
             json_str = val.to_json(0)
             data = json.loads(json_str)
             action = data.get("action")
+
+            izvor = ""
+            if posiljatelj is not None:
+                try:
+                    izvor = posiljatelj.get_uri() or ""
+                except Exception:
+                    izvor = ""
+            nasa_stran = je_nasa_notranja_stran(izvor)
+
+            if action in self.ZAUPNA_DEJANJA and not nasa_stran:
+                # Tiho zavrnemo: stran naj ne izve, ali je most sploh tam.
+                print(f"[IPC] Zavrnjeno dejanje '{action}' s tuje strani: {izvor[:120]}")
+                return
+
             if action == "navigate":
                 url = data.get("url")
-                if url:
-                    wv = self.get_active_webview()
+                if url and is_safe_web_url(url):
+                    wv = posiljatelj or self.get_active_webview()
                     if wv:
                         wv.load_uri(url)
             elif action == "set_language":
@@ -6597,13 +6675,17 @@ class SafeerMintBrowser(Gtk.Window):
                 set_language(lang)
                 self.update_ui_language()
             elif action == "increment_ads":
-                count = int(data.get("count", 1))
-                self.config.increment_ads_blocked(count)
-                self.update_shield_button_label()
+                # Poslje ga nas vbrizgani skript na vsaki strani, zato izvora ne
+                # zahtevamo; vrednost omejimo, da stevca ni mogoce napihniti.
+                count = max(0, min(int(data.get("count", 1)), 100))
+                if count:
+                    self.config.increment_ads_blocked(count)
+                    self.update_shield_button_label()
             elif action == "increment_threats":
-                count = int(data.get("count", 1))
-                self.config.increment_threats_blocked(count)
-                self.update_shield_button_label()
+                count = max(0, min(int(data.get("count", 1)), 100))
+                if count:
+                    self.config.increment_threats_blocked(count)
+                    self.update_shield_button_label()
             elif action == "set_default_browser":
                 self.set_as_default_browser(show_dialog=True)
             elif action == "open_sidebar":
