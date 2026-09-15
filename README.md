@@ -6,7 +6,7 @@
 [![Package](https://img.shields.io/badge/Package-.deb_(all)-cyan?style=flat-square)](https://github.com/memelandfaner/linux-mint-safeer-browser/releases/tag/v1.0.26)
 [![Web](https://img.shields.io/badge/Spletna_stran-Linux_Izdaja-87cf3e?style=flat-square)](https://memelandfaner.github.io/-safeer-browser/linux/)
 
-> **Hiter, suveren in energetsko varčen Linux brskalnik, ki se odpre v trenutku, spoštuje zasebnost, blokira sledilce ter ponuja vgrajen YouTube predvajalnik brez oglasov in lokalni ščit pred zlonamernimi domenami.**
+> **Hiter, suveren in energetsko varčen Linux brskalnik, ki se odpre v trenutku, spoštuje zasebnost, blokira sledilce in oglase ter ima lokalni ščit pred zlonamernimi domenami.**
 
 ---
 

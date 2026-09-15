@@ -62,7 +62,7 @@ build_for_distro() {
 safeer-browser (${FULL_VER}) ${DIST}; urgency=medium
 
   * PPA release for Ubuntu ${DIST} (Linux Mint compatible).
-  * Fast native WebKitGTK browsing, zero-ad engine, and threat shield.
+  * Fast native WebKitGTK browsing, ad and tracker filtering, and threat shield.
   * AppStream metainfo for Linux Mint Software Manager (mintinstall).
   * Onboarding setup wizard, bookmarks toolbar, and DuckDuckGo default.
 
