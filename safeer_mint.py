@@ -3228,7 +3228,7 @@ class SafeerMintBrowser(Gtk.Window):
 
         tab4_box.pack_start(card_brave, False, False, 0)
 
-        # Kartica 4.4: Napredno prilagajanje (Uporabniški CSS in Tampermonkey)
+        # Kartica 4.4: Napredno prilagajanje (Uporabniški CSS in uporabniške skripte)
         card_custom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         card_custom.get_style_context().add_class("theme-card-box")
 
@@ -4476,7 +4476,7 @@ class SafeerMintBrowser(Gtk.Window):
         )
         content_mgr.add_script(throttler_script)
 
-        # Custom User Scripts Injection (Tampermonkey Engine)
+        # Custom User Scripts Injection (motor uporabniških skript)
         user_scripts = self.config.get_user_scripts()
         for s in user_scripts:
             if s.get("enabled", True) and s.get("code"):
@@ -5564,7 +5564,7 @@ class SafeerMintBrowser(Gtk.Window):
         dialog.destroy()
 
     def open_customizer_dialog(self):
-        """Dialog za prilagoditev teme, lastnega CSS-ja in uporabniških skript (Tampermonkey)."""
+        """Dialog za prilagoditev teme, lastnega CSS-ja in uporabniških skript."""
         dialog = Gtk.Dialog(
             title=f"🧩 {t('customizer_title')} — Safeer",
             transient_for=self,
@@ -6174,7 +6174,7 @@ class SafeerMintBrowser(Gtk.Window):
         tv = Gtk.TextView()
         tv.get_style_context().add_class("code-editor")
         buf = tv.get_buffer()
-        default_code = script.get("code", "") if is_edit else """// Safeer Uporabniška Skripta (Tampermonkey slog)
+        default_code = script.get("code", "") if is_edit else """// Safeer Uporabniška Skripta
 (function() {
     console.log("Safeer skripta teče na:", window.location.href);
     // Tukaj dodajte svojo JavaScript kodo:

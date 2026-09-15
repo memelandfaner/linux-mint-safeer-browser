@@ -90,7 +90,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
             "id": "sample_banner_cleaner",
             "name": "Primer: Konzola obvestilo",
             "pattern": "*",
-            "code": "// Safeer Uporabniška skripta (Tampermonkey slog)\nconsole.log('🛡️ Safeer Custom Script teče na: ' + window.location.href);",
+            "code": "// Safeer Uporabniška skripta\nconsole.log('🛡️ Safeer Custom Script teče na: ' + window.location.href);",
             "enabled": False,
             "run_at": "end"
         }
@@ -296,7 +296,7 @@ class ConfigManager:
         self.save_settings()
 
     def add_user_script(self, name: str, pattern: str, code: str, run_at: str = "end") -> str:
-        """Doda novo uporabniško skripto (Greasemonkey slog)."""
+        """Doda novo uporabniško skripto."""
         script_id = "script_" + str(uuid.uuid4())[:8]
         new_script = {
             "id": script_id,
